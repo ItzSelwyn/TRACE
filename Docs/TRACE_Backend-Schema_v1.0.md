@@ -9,7 +9,6 @@ _Backend Schema_
 | Document Type | Backend Schema |
 | Derived From | TRACE PRD v1.0, TRACE TRD v1.0, TRACE App/Website Flow v1.0, TRACE UI/UX Brief v1.0 |
 | Database Engine | PostgreSQL + PostGIS extension |
-| Document Owner | Nigesh (Project Lead) |
 | Status | Draft v1.0 |
 
 **Compatibility Note:** Compatible with PRD v1.1, TRD v1.3, and App/Website Flow v1.1. TRD v1.3 added `PATCH /alerts/{id}` to the API contract, but no table or column change was required as a result: the `alerts.reviewed`, `alerts.reviewed_by`, and `alerts.reviewed_at` fields already defined in Section 7.3 below were designed to support exactly this write path. No other revision altered any functional requirement, data field, or API contract this schema depends on.

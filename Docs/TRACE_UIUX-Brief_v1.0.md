@@ -8,7 +8,6 @@ _UI/UX Brief_
 | Project Title | TRACE (Tracking, Recognition, Analytics & City-wide Traffic Enforcement) |
 | Document Type | UI/UX Brief |
 | Derived From | TRACE PRD v1.0, TRACE TRD v1.0, TRACE App/Website Flow v1.0 |
-| Document Owner | Nigesh (Project Lead) |
 | Status | Draft v1.0 |
 
 **Compatibility Note:** Compatible with PRD v1.1, TRD v1.3, and App/Website Flow v1.1. No screen, component, or data field specified here was affected by those revisions — the Alerts screen's "Review" toggle (§2.3, §4.6) was already specified in this brief exactly as-is; TRD v1.3 and Flow v1.1 only added the `PATCH /alerts/{id}` endpoint that backs the interaction this brief already described.

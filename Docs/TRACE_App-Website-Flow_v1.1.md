@@ -8,7 +8,6 @@ _App/Website Flow Document_
 | Project Title | TRACE (Tracking, Recognition, Analytics & City-wide Traffic Enforcement) |
 | Document Type | App/Website Flow |
 | Derived From | TRACE PRD v1.0, TRACE TRD v1.0 |
-| Document Owner | Nigesh (Project Lead) |
 | Status | Revised v1.1 |
 
 **Revision v1.1:** Adds `PATCH /alerts/{id}` to Flow 3 Step 5 and to the Screen Inventory's Alerts row, to reflect the TRD v1.3 API addition that persists the alert-review action this document has always described. No user flow, screen, or persona behavior changed — only the endpoint reference backing an action already specified in Draft v1.0.
