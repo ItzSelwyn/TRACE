@@ -1,0 +1,5 @@
+[
+  {"name": "Operator User", "email": "operator@trace.local", "password": "trace123", "role": "operator"},
+  {"name": "Analyst User", "email": "analyst@trace.local", "password": "trace123", "role": "analyst"},
+  {"name": "Admin User", "email": "admin@trace.local", "password": "trace123", "role": "admin"}
+]

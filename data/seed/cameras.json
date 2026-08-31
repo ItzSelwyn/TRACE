@@ -1,0 +1,142 @@
+[
+  {
+    "camera_id": "c1000000-0000-0000-0000-000000000001",
+    "name": "Silk Board Junction",
+    "latitude": 12.9172,
+    "longitude": 77.6228,
+    "zone": "A",
+    "status": "online",
+    "reliability": {
+      "day_ocr_reliability": 0.95,
+      "night_ocr_reliability": 0.80,
+      "rain_ocr_reliability": 0.70,
+      "angle_ocr_reliability": 0.88
+    }
+  },
+  {
+    "camera_id": "c2000000-0000-0000-0000-000000000002",
+    "name": "Madiwala Checkpost",
+    "latitude": 12.9226,
+    "longitude": 77.6174,
+    "zone": "A",
+    "status": "online",
+    "reliability": {
+      "day_ocr_reliability": 0.90,
+      "night_ocr_reliability": 0.75,
+      "rain_ocr_reliability": 0.65,
+      "angle_ocr_reliability": 0.82
+    }
+  },
+  {
+    "camera_id": "c3000000-0000-0000-0000-000000000003",
+    "name": "Koramangala Sony World",
+    "latitude": 12.9382,
+    "longitude": 77.6228,
+    "zone": "B",
+    "status": "online",
+    "reliability": {
+      "day_ocr_reliability": 0.92,
+      "night_ocr_reliability": 0.78,
+      "rain_ocr_reliability": 0.68,
+      "angle_ocr_reliability": 0.85
+    }
+  },
+  {
+    "camera_id": "c4000000-0000-0000-0000-000000000004",
+    "name": "Indiranagar 100ft Road",
+    "latitude": 12.9784,
+    "longitude": 77.6408,
+    "zone": "B",
+    "status": "online",
+    "reliability": {
+      "day_ocr_reliability": 0.94,
+      "night_ocr_reliability": 0.82,
+      "rain_ocr_reliability": 0.72,
+      "angle_ocr_reliability": 0.89
+    }
+  },
+  {
+    "camera_id": "c5000000-0000-0000-0000-000000000005",
+    "name": "MG Road Trinity Circle",
+    "latitude": 12.9727,
+    "longitude": 77.6163,
+    "zone": "C",
+    "status": "online",
+    "reliability": {
+      "day_ocr_reliability": 0.96,
+      "night_ocr_reliability": 0.85,
+      "rain_ocr_reliability": 0.75,
+      "angle_ocr_reliability": 0.90
+    }
+  },
+  {
+    "camera_id": "c6000000-0000-0000-0000-000000000006",
+    "name": "Richmond Circle",
+    "latitude": 12.9634,
+    "longitude": 77.5971,
+    "zone": "C",
+    "status": "online",
+    "reliability": {
+      "day_ocr_reliability": 0.91,
+      "night_ocr_reliability": 0.76,
+      "rain_ocr_reliability": 0.66,
+      "angle_ocr_reliability": 0.84
+    }
+  },
+  {
+    "camera_id": "c7000000-0000-0000-0000-000000000007",
+    "name": "Majestic Bus Stand",
+    "latitude": 12.9779,
+    "longitude": 77.5714,
+    "zone": "D",
+    "status": "online",
+    "reliability": {
+      "day_ocr_reliability": 0.88,
+      "night_ocr_reliability": 0.72,
+      "rain_ocr_reliability": 0.62,
+      "angle_ocr_reliability": 0.80
+    }
+  },
+  {
+    "camera_id": "c8000000-0000-0000-0000-000000000008",
+    "name": "Malleshwaram 18th Cross",
+    "latitude": 13.0068,
+    "longitude": 77.5701,
+    "zone": "D",
+    "status": "online",
+    "reliability": {
+      "day_ocr_reliability": 0.93,
+      "night_ocr_reliability": 0.79,
+      "rain_ocr_reliability": 0.69,
+      "angle_ocr_reliability": 0.86
+    }
+  },
+  {
+    "camera_id": "c9000000-0000-0000-0000-000000000009",
+    "name": "Hebbal Flyover",
+    "latitude": 13.0355,
+    "longitude": 77.5970,
+    "zone": "A",
+    "status": "online",
+    "reliability": {
+      "day_ocr_reliability": 0.95,
+      "night_ocr_reliability": 0.83,
+      "rain_ocr_reliability": 0.73,
+      "angle_ocr_reliability": 0.88
+    }
+  },
+  {
+    "camera_id": "c1000000-0000-0000-0000-000000000010",
+    "name": "Mekhri Circle",
+    "latitude": 13.0120,
+    "longitude": 77.5855,
+    "zone": "B",
+    "status": "online",
+    "reliability": {
+      "day_ocr_reliability": 0.92,
+      "night_ocr_reliability": 0.77,
+      "rain_ocr_reliability": 0.67,
+      "angle_ocr_reliability": 0.85
+    }
+  }
+]

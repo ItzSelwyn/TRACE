@@ -1,0 +1,146 @@
+[
+  {
+    "edge_id": "e1000000-0000-0000-0000-000000000001",
+    "from_camera_id": "c1000000-0000-0000-0000-000000000001",
+    "to_camera_id": "c2000000-0000-0000-0000-000000000002",
+    "distance_km": 1.2,
+    "min_travel_time_s": 120,
+    "max_travel_time_s": 600,
+    "speed_limit_kmph": 60
+  },
+  {
+    "edge_id": "e2000000-0000-0000-0000-000000000002",
+    "from_camera_id": "c2000000-0000-0000-0000-000000000002",
+    "to_camera_id": "c3000000-0000-0000-0000-000000000003",
+    "distance_km": 2.5,
+    "min_travel_time_s": 240,
+    "max_travel_time_s": 900,
+    "speed_limit_kmph": 50
+  },
+  {
+    "edge_id": "e3000000-0000-0000-0000-000000000003",
+    "from_camera_id": "c3000000-0000-0000-0000-000000000003",
+    "to_camera_id": "c4000000-0000-0000-0000-000000000004",
+    "distance_km": 4.8,
+    "min_travel_time_s": 480,
+    "max_travel_time_s": 1500,
+    "speed_limit_kmph": 50
+  },
+  {
+    "edge_id": "e4000000-0000-0000-0000-000000000004",
+    "from_camera_id": "c4000000-0000-0000-0000-000000000004",
+    "to_camera_id": "c5000000-0000-0000-0000-000000000005",
+    "distance_km": 3.1,
+    "min_travel_time_s": 300,
+    "max_travel_time_s": 1200,
+    "speed_limit_kmph": 60
+  },
+  {
+    "edge_id": "e5000000-0000-0000-0000-000000000005",
+    "from_camera_id": "c5000000-0000-0000-0000-000000000005",
+    "to_camera_id": "c6000000-0000-0000-0000-000000000006",
+    "distance_km": 2.0,
+    "min_travel_time_s": 180,
+    "max_travel_time_s": 750,
+    "speed_limit_kmph": 50
+  },
+  {
+    "edge_id": "e6000000-0000-0000-0000-000000000006",
+    "from_camera_id": "c6000000-0000-0000-0000-000000000006",
+    "to_camera_id": "c7000000-0000-0000-0000-000000000007",
+    "distance_km": 3.5,
+    "min_travel_time_s": 350,
+    "max_travel_time_s": 1200,
+    "speed_limit_kmph": 40
+  },
+  {
+    "edge_id": "e7000000-0000-0000-0000-000000000007",
+    "from_camera_id": "c7000000-0000-0000-0000-000000000007",
+    "to_camera_id": "c8000000-0000-0000-0000-000000000008",
+    "distance_km": 4.1,
+    "min_travel_time_s": 400,
+    "max_travel_time_s": 1300,
+    "speed_limit_kmph": 40
+  },
+  {
+    "edge_id": "e8000000-0000-0000-0000-000000000008",
+    "from_camera_id": "c8000000-0000-0000-0000-000000000008",
+    "to_camera_id": "c1000000-0000-0000-0000-000000000010",
+    "distance_km": 2.8,
+    "min_travel_time_s": 250,
+    "max_travel_time_s": 900,
+    "speed_limit_kmph": 50
+  },
+  {
+    "edge_id": "e9000000-0000-0000-0000-000000000009",
+    "from_camera_id": "c1000000-0000-0000-0000-000000000010",
+    "to_camera_id": "c9000000-0000-0000-0000-000000000009",
+    "distance_km": 3.2,
+    "min_travel_time_s": 300,
+    "max_travel_time_s": 1000,
+    "speed_limit_kmph": 60
+  },
+  {
+    "edge_id": "ea000000-0000-0000-0000-000000000010",
+    "from_camera_id": "c9000000-0000-0000-0000-000000000009",
+    "to_camera_id": "c1000000-0000-0000-0000-000000000010",
+    "distance_km": 3.2,
+    "min_travel_time_s": 300,
+    "max_travel_time_s": 1000,
+    "speed_limit_kmph": 60
+  },
+  {
+    "edge_id": "eb000000-0000-0000-0000-000000000011",
+    "from_camera_id": "c1000000-0000-0000-0000-000000000001",
+    "to_camera_id": "c3000000-0000-0000-0000-000000000003",
+    "distance_km": 3.5,
+    "min_travel_time_s": 300,
+    "max_travel_time_s": 1100,
+    "speed_limit_kmph": 50
+  },
+  {
+    "edge_id": "ec000000-0000-0000-0000-000000000012",
+    "from_camera_id": "c3000000-0000-0000-0000-000000000003",
+    "to_camera_id": "c5000000-0000-0000-0000-000000000005",
+    "distance_km": 4.0,
+    "min_travel_time_s": 360,
+    "max_travel_time_s": 1200,
+    "speed_limit_kmph": 60
+  },
+  {
+    "edge_id": "ed000000-0000-0000-0000-000000000013",
+    "from_camera_id": "c5000000-0000-0000-0000-000000000005",
+    "to_camera_id": "c8000000-0000-0000-0000-000000000008",
+    "distance_km": 5.5,
+    "min_travel_time_s": 500,
+    "max_travel_time_s": 1600,
+    "speed_limit_kmph": 50
+  },
+  {
+    "edge_id": "ee000000-0000-0000-0000-000000000014",
+    "from_camera_id": "c2000000-0000-0000-0000-000000000002",
+    "to_camera_id": "c6000000-0000-0000-0000-000000000006",
+    "distance_km": 5.0,
+    "min_travel_time_s": 450,
+    "max_travel_time_s": 1500,
+    "speed_limit_kmph": 50
+  },
+  {
+    "edge_id": "ef000000-0000-0000-0000-000000000015",
+    "from_camera_id": "c7000000-0000-0000-0000-000000000007",
+    "to_camera_id": "c9000000-0000-0000-0000-000000000009",
+    "distance_km": 6.5,
+    "min_travel_time_s": 550,
+    "max_travel_time_s": 1800,
+    "speed_limit_kmph": 60
+  },
+  {
+    "edge_id": "e0f00000-0000-0000-0000-000000000016",
+    "from_camera_id": "c4000000-0000-0000-0000-000000000004",
+    "to_camera_id": "c1000000-0000-0000-0000-000000000010",
+    "distance_km": 4.2,
+    "min_travel_time_s": 400,
+    "max_travel_time_s": 1300,
+    "speed_limit_kmph": 50
+  }
+]

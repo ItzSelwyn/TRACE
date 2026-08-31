@@ -1,0 +1,45 @@
+
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: trace
+      POSTGRES_PASSWORD: trace
+      POSTGRES_DB: trace
+    ports:
+      - "5432:5432"
+    volumes:
+      - trace_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trace -d trace"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://trace:trace@db:5432/trace
+      DATABASE_URL_SYNC: postgresql://trace:trace@db:5432/trace
+      IMPOSSIBLE_JOURNEY_SPEED_MULTIPLIER: "1.5"
+      IDENTITY_CONFIRM_THRESHOLD: "0.70"
+      IDENTITY_CANDIDATE_THRESHOLD: "0.40"
+      ANALYTICS_WINDOW_SECONDS: "300"
+      JWT_SECRET: changeme
+      JWT_EXPIRY_MINUTES: "480"
+    command: >
+      sh -c "alembic upgrade head && python -m app.db.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    volumes:
+      - ./backend:/app
+
+volumes:
+  trace_pg_data:
