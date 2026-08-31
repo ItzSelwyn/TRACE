@@ -1,0 +1,33 @@
+{
+  "dataset_name": "AICity22 Track 1 MTMC Tracking",
+  "dataset_source_directory": "AICity22_Track1_MTMC_Tracking",
+  "project_use": "TRACE multi-camera vehicle tracking ground truth",
+  "raw_data_tracked_in_git": false,
+  "local_dataset_required": true,
+  "selected_sequences": ["S04"],
+  "selected_cameras": ["c020", "c023", "c029", "c035"],
+  "primary_demo": {
+    "scene_id": "S04",
+    "split": "train",
+    "vehicle_id": 260,
+    "camera_sequence": ["c020", "c023", "c029", "c035"]
+  },
+  "source_files": [
+    "train/S04/c020/vdo.avi",
+    "train/S04/c023/vdo.avi",
+    "train/S04/c029/vdo.avi",
+    "train/S04/c035/vdo.avi",
+    "train/S04/<camera>/gt/gt.txt",
+    "train/S04/<camera>/calibration.txt",
+    "cam_timestamp/S04.txt",
+    "cam_framenum/S04.txt",
+    "cam_loc/S0345.png",
+    "list_cam.txt"
+  ],
+  "limitations": [
+    "CityFlow ground truth provides frame IDs, vehicle IDs and bounding boxes.",
+    "CityFlow ground truth does not provide plate text, OCR confidence, vehicle type or vehicle colour.",
+    "Individual camera GPS coordinates are unavailable.",
+    "Raw videos are not committed."
+  ]
+}
