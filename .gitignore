@@ -37,6 +37,13 @@ dist/
 .docker/
 *.log
 
+# Raw local dataset footage and local-only project data
+/data/footage/
+/data/raw/
+*.avi
+*.mp4
+*.mov
+
 # Database / local runtime
 *.sqlite3
 *.db
