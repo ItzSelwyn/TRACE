@@ -49,3 +49,17 @@ htmlcov/
 # Local generated files
 /tmp/
 *.tmp
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/node_modules/.vite/
+frontend/.cache/
+.npm/
+.pnpm-store/
+.npmrc
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

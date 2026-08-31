@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Hanken Grotesk', sans-serif;
+    background-color: #000000;
+    color: #ffffff;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Lexend', sans-serif;
+  }
+}
+
+/* Custom dark scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2E2E2E;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #F2D04E;
+}
+
+.font-heading {
+  font-family: 'Lexend', sans-serif;
+}
+
+.font-body {
+  font-family: 'Hanken Grotesk', sans-serif;
+}
