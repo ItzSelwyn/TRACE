@@ -277,7 +277,7 @@ def build_vehicle_trajectory(
     seen_cameras: set[str] = set()
     observations: list[dict[str, Any]] = []
 
-    for index, record in enumerate(source_records[:25]):
+    for index, record in enumerate(source_records):
         camera_id = str(record.get("camera_id", camera_templates[index % len(camera_templates)]))
         if camera_id in seen_cameras:
             continue

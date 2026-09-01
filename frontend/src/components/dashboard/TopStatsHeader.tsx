@@ -43,27 +43,27 @@ export const TopStatsHeader: React.FC<TopStatsHeaderProps> = ({ stats, onSearch 
           <span className="text-[11px] font-bold tracking-wider text-[#A0A0A0] font-heading uppercase">
             ACTIVE SCANS
           </span>
-          <span className="text-2xl font-semibold text-[#F2D04E] font-body">
+          <span className="text-2xl font-semibold text-white font-body">
             {stats.activeScans}
           </span>
         </div>
 
-        {/* Blacklists (#AC251D) */}
+        {/* Blacklists */}
         <div className="flex flex-col items-start md:items-center">
           <span className="text-[11px] font-bold tracking-wider text-[#A0A0A0] font-heading uppercase">
             BLACKLISTS
           </span>
-          <span className="text-2xl font-semibold text-[#AC251D] font-body">
+          <span className="text-2xl font-semibold text-white font-body">
             {stats.blacklistsCount}
           </span>
         </div>
 
-        {/* System Status (#1B7A43) */}
+        {/* System Status */}
         <div className="flex flex-col items-start md:items-center">
           <span className="text-[11px] font-bold tracking-wider text-[#A0A0A0] font-heading uppercase">
             SYSTEM STATUS
           </span>
-          <span className="text-2xl font-semibold text-[#1B7A43] font-body">
+          <span className="text-2xl font-semibold text-white font-body">
             {stats.systemStatus}
           </span>
         </div>

@@ -8,6 +8,8 @@ import { NetworkAnalysis } from './NetworkAnalysis';
 
 interface DashboardViewProps {
   data: DashboardDataPayload;
+  selectedCameraId?: string;
+  onSelectCamera?: (cameraId: string) => void;
   onSearchPlate: (plateQuery: string) => void;
   onViewTrace: (plateNumber: string) => void;
   onNavigateSection: (section: 'analytics' | 'alerts' | 'blacklist' | 'cameras') => void;
@@ -15,6 +17,8 @@ interface DashboardViewProps {
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   data,
+  selectedCameraId = 'c020',
+  onSelectCamera,
   onSearchPlate,
   onViewTrace,
   onNavigateSection,
@@ -33,7 +37,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="lg:col-span-7 flex flex-col">
           <CameraGrid
             cameras={data.cameras}
-            onSelectCamera={(id) => console.log('Camera selected:', id)}
+            selectedCameraId={selectedCameraId}
+            onSelectCamera={onSelectCamera}
           />
         </div>
 
@@ -41,12 +46,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="lg:col-span-5 flex flex-col">
           <ModelAnalysis
             data={data.modelAnalysis}
+            selectedCameraId={selectedCameraId}
             onViewTrace={onViewTrace}
           />
         </div>
       </div>
 
-      {/* Bottom Dashboard 2-Column Row (Decreased vertical space) */}
+      {/* Bottom Dashboard 2-Column Row */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-1.5 pt-0.5">
         {/* Left Column: Recent Alerts (7/12 width) */}
         <div className="lg:col-span-7 flex flex-col">

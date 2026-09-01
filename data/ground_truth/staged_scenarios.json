@@ -1,0 +1,147 @@
+{
+  "_comment": "Staged scenarios for M4 QA. Each scenario lists the raw observations fed into reconstruct_trajectory() and the expected outcome flags. Camera IDs match data/seed/cameras.json.",
+  "scenarios": [
+    {
+      "id": "SCN-M4-01",
+      "name": "Normal multi-camera trajectory",
+      "description": "Vehicle observed at 4 cameras in chronological order with plausible travel times.",
+      "observations": [
+        {
+          "camera_id": "c1000000-0000-0000-0000-000000000001",
+          "track_id": "track-001",
+          "fused_plate_text": "TN 37 CY 1234",
+          "fused_confidence": 0.95,
+          "vehicle_type": "SUV",
+          "vehicle_colour": "Blue",
+          "captured_at": "2024-01-01T08:00:00+00:00"
+        },
+        {
+          "camera_id": "c2000000-0000-0000-0000-000000000002",
+          "track_id": "track-001",
+          "fused_plate_text": "TN 37 CY 1234",
+          "fused_confidence": 0.92,
+          "vehicle_type": "SUV",
+          "vehicle_colour": "Blue",
+          "captured_at": "2024-01-01T08:05:00+00:00"
+        },
+        {
+          "camera_id": "c3000000-0000-0000-0000-000000000003",
+          "track_id": "track-001",
+          "fused_plate_text": "TN 37 CY 1234",
+          "fused_confidence": 0.90,
+          "vehicle_type": "SUV",
+          "vehicle_colour": "Blue",
+          "captured_at": "2024-01-01T08:12:00+00:00"
+        },
+        {
+          "camera_id": "c4000000-0000-0000-0000-000000000004",
+          "track_id": "track-001",
+          "fused_plate_text": "TN 37 CY 1234",
+          "fused_confidence": 0.88,
+          "vehicle_type": "SUV",
+          "vehicle_colour": "Blue",
+          "captured_at": "2024-01-01T08:25:00+00:00"
+        }
+      ],
+      "expected": {
+        "anomaly_flags": [],
+        "total_anomalies": 0,
+        "any_impossible_journey": false,
+        "observations_in_order": ["c1000000-0000-0000-0000-000000000001", "c2000000-0000-0000-0000-000000000002", "c3000000-0000-0000-0000-000000000003", "c4000000-0000-0000-0000-000000000004"]
+      }
+    },
+    {
+      "id": "SCN-M4-02",
+      "name": "Impossible journey",
+      "description": "Vehicle appears at c1 then c5, which are 11.6 km apart (via c2+c3+c4), in only 10 seconds — physically impossible.",
+      "observations": [
+        {
+          "camera_id": "c1000000-0000-0000-0000-000000000001",
+          "track_id": "track-ij-001",
+          "fused_plate_text": "KA 05 HG 9999",
+          "fused_confidence": 0.88,
+          "vehicle_type": "Sedan",
+          "vehicle_colour": "White",
+          "captured_at": "2024-01-01T10:00:00+00:00"
+        },
+        {
+          "camera_id": "c5000000-0000-0000-0000-000000000005",
+          "track_id": "track-ij-001",
+          "fused_plate_text": "KA 05 HG 9999",
+          "fused_confidence": 0.86,
+          "vehicle_type": "Sedan",
+          "vehicle_colour": "White",
+          "captured_at": "2024-01-01T10:00:10+00:00"
+        }
+      ],
+      "expected": {
+        "anomaly_flags": ["impossible_journey"],
+        "total_anomalies": 1,
+        "any_impossible_journey": true,
+        "_note": "10s gap for c1→c5 requires crossing c2,c3,c4 — min_travel_time is 120+240+480+300=1140s"
+      }
+    },
+    {
+      "id": "SCN-M4-03",
+      "name": "Duplicate plate",
+      "description": "Same plate seen at c1 and c8 within 30 seconds. min_travel_time c1→c8 via shortest path is much longer — physically impossible to be at both.",
+      "observations": [
+        {
+          "camera_id": "c1000000-0000-0000-0000-000000000001",
+          "track_id": "track-dup-a",
+          "fused_plate_text": "MH 12 AB 5678",
+          "fused_confidence": 0.91,
+          "vehicle_type": "Hatchback",
+          "vehicle_colour": "Red",
+          "captured_at": "2024-01-01T14:00:00+00:00"
+        },
+        {
+          "camera_id": "c8000000-0000-0000-0000-000000000008",
+          "track_id": "track-dup-b",
+          "fused_plate_text": "MH 12 AB 5678",
+          "fused_confidence": 0.89,
+          "vehicle_type": "Hatchback",
+          "vehicle_colour": "Red",
+          "captured_at": "2024-01-01T14:00:30+00:00"
+        }
+      ],
+      "expected": {
+        "anomaly_flags": ["duplicate_plate"],
+        "total_anomalies": 1,
+        "any_duplicate_plate": true,
+        "_note": "30s gap for c1→c8 (c1→c3→c5→c8 shortest): 300+360+500 = 1160s min — impossible"
+      }
+    },
+    {
+      "id": "SCN-M4-04",
+      "name": "Camera inconsistency (backward timestamp)",
+      "description": "Observation B on the same camera and track has an earlier timestamp than observation A — the track moved backward in time.",
+      "observations": [
+        {
+          "camera_id": "c3000000-0000-0000-0000-000000000003",
+          "track_id": "track-incon-001",
+          "fused_plate_text": "DL 01 AB 0001",
+          "fused_confidence": 0.87,
+          "vehicle_type": "Truck",
+          "vehicle_colour": "Grey",
+          "captured_at": "2024-01-01T16:10:00+00:00"
+        },
+        {
+          "camera_id": "c3000000-0000-0000-0000-000000000003",
+          "track_id": "track-incon-001",
+          "fused_plate_text": "DL 01 AB 0001",
+          "fused_confidence": 0.85,
+          "vehicle_type": "Truck",
+          "vehicle_colour": "Grey",
+          "captured_at": "2024-01-01T16:05:00+00:00"
+        }
+      ],
+      "expected": {
+        "anomaly_flags": ["camera_inconsistency"],
+        "total_anomalies": 1,
+        "any_camera_inconsistency": true,
+        "_note": "obs[1].captured_at (16:05) < obs[0].captured_at (16:10) for same camera+track"
+      }
+    }
+  ]
+}

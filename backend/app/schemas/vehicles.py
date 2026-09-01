@@ -1,5 +1,7 @@
 """
 Vehicle schemas — Pydantic models for trajectory and identity evidence responses.
+M3: added EvidenceBreakdown and identity fields.
+M4: added anomaly fields (implied_speed_kmph, anomaly_type) and anomaly_flags on response.
 """
 from __future__ import annotations
 
@@ -32,17 +34,24 @@ class ObservationInTrajectory(BaseModel):
     vehicle_type: str
     vehicle_colour: str
 
-    # Identity fields
+    # Identity fields (M3)
     identity_score: Optional[float] = None
     """Composite match score from the M3 identity scoring formula [0–1]."""
     match_confidence_label: Optional[str] = None
     """One of: 'confirmed' (≥0.70), 'candidate' (0.40–0.70), 'no_match' (<0.40)."""
-    is_impossible_journey: Optional[bool] = None
 
-    # Evidence breakdown (NFR-07 explainability)
+    # Evidence breakdown (M3 — NFR-07 explainability)
     evidence: Optional[EvidenceBreakdown] = None
 
-    # Geospatial (may be None until M4 wires DB locations)
+    # Anomaly fields (M4 — FR-STR-04, FR-PRD-02)
+    is_impossible_journey: Optional[bool] = None
+    """True when implied travel speed exceeds speed_limit × 1.5 (FR-STR-04)."""
+    implied_speed_kmph: Optional[float] = None
+    """Computed travel speed between this and the previous observation."""
+    anomaly_type: Optional[str] = None
+    """One of: 'impossible_journey' | 'duplicate_plate' | 'camera_inconsistency', or None."""
+
+    # Geospatial (M4 wires camera lat/lon from seed data)
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
@@ -52,3 +61,8 @@ class ObservationInTrajectory(BaseModel):
 class TrajectoryResponse(BaseModel):
     plate: str
     observations: List[ObservationInTrajectory]
+    # M4 additions
+    anomaly_flags: List[str] = []
+    """Distinct anomaly types present in this trajectory."""
+    total_anomalies: int = 0
+    """Total count of flagged anomaly events."""

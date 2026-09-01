@@ -99,25 +99,30 @@ def process_camera_cycle(
         timestamp = datetime(2024, 1, 1, tzinfo=timezone.utc) + timedelta(
             seconds=offset_seconds + (frame_id / 10.0)
         )
-        plate_text = f"TRACE-{camera_id}-{vehicle_id}"
+        plate_text = record.get("fused_plate_text") or f"TRACE-{camera_id}-{vehicle_id}"
+        fused_conf = float(record.get("fused_confidence", 0.95))
+        vtype = record.get("vehicle_type", "vehicle")
+        vcolour = record.get("vehicle_colour", "unknown")
+        track_id = record.get("track_id") or f"track-{camera_id}-{vehicle_id}"
+        captured_at_str = record.get("captured_at") or timestamp.isoformat()
 
         observation = {
             "camera_id": camera_id,
-            "track_id": f"track-{camera_id}-{vehicle_id}",
-            "captured_at": timestamp.isoformat(),
+            "track_id": track_id,
+            "captured_at": captured_at_str,
             "fused_plate_text": plate_text,
-            "fused_confidence": 0.95,
-            "vehicle_type": "vehicle",
-            "vehicle_colour": "unknown",
+            "fused_confidence": fused_conf,
+            "vehicle_type": vtype,
+            "vehicle_colour": vcolour,
         }
         observations.append(observation)
 
         ocr_reads.append(
             {
                 "camera_id": camera_id,
-                "frame_timestamp": timestamp.isoformat(),
+                "frame_timestamp": captured_at_str,
                 "raw_plate_text": plate_text,
-                "confidence": 0.95,
+                "confidence": fused_conf,
             }
         )
 

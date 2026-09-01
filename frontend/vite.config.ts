@@ -13,5 +13,35 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true,
+    proxy: {
+      '/perception': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/vehicles': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/analytics': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/alerts': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/blacklist': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/auth': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: 'ws://127.0.0.1:8000',
+        ws: true,
+      },
+    },
   },
 });
