@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "changeme"
     JWT_EXPIRY_MINUTES: int = 480
     JWT_ALGORITHM: str = "HS256"
+    ALLOW_ANON_DEMO: bool = True
 
     model_config = {
         "env_file": ".env",

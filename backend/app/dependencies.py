@@ -12,7 +12,7 @@ from app.config import settings
 from app.db.models import User
 from app.db.session import get_db
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
 def create_access_token(data: dict) -> str:
@@ -25,10 +25,24 @@ def create_access_token(data: dict) -> str:
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    token: str | None = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Decode JWT and return the authenticated User from the database when available."""
+    """Decode JWT and return the authenticated User from the database when available.
+
+    In the local demo environment we allow anonymous access so the dashboard and vehicle
+    trace frontend can query the API without a user login flow.
+    """
+    if token is None and settings.ALLOW_ANON_DEMO:
+        return User(
+            user_id=uuid.uuid4(),
+            name="Demo User",
+            email="demo@trace.local",
+            password_hash="",
+            role="operator",
+            created_at=datetime.now(timezone.utc),
+        )
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
