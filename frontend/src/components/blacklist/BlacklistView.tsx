@@ -267,8 +267,12 @@ export const BlacklistView: React.FC<BlacklistViewProps> = ({
             </button>
 
             {/* Filter Dropdown Menu */}
+            {/* Filter Dropdown Menu (#000000 Main Background) */}
             {isFilterOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-60 bg-[#151515] rounded-[3px] z-50 p-4 text-left animate-fadeIn font-body">
+              <div 
+                className="absolute right-0 top-full mt-1.5 w-60 bg-[#000000] rounded-[3px] z-50 p-4 text-left animate-fadeIn font-body"
+                style={{ boxShadow: '0px 14px 35px rgba(0, 0, 0, 0.3)' }}
+              >
                 {/* Section 1: Timestamp */}
                 <div className="mb-2">
                   <span className="text-white text-xs font-body font-semibold mb-2 block tracking-wide">
@@ -284,11 +288,11 @@ export const BlacklistView: React.FC<BlacklistViewProps> = ({
                           className={`text-xs py-1 px-1 rounded-[3px] cursor-pointer flex items-center justify-between transition-colors font-body ${
                             isSelected
                               ? 'text-white font-medium'
-                              : 'text-[#A0A0A0] hover:text-white'
+                              : 'text-[#AEA793] hover:text-white'
                           }`}
                         >
                           <span>{timeOption}</span>
-                          {isSelected && <span className="text-xs text-white">✓</span>}
+                          {isSelected && <img src="/assets/tick.svg" alt="Tick" className="w-3.5 h-3 object-contain" />}
                         </div>
                       );
                     })}
@@ -313,11 +317,11 @@ export const BlacklistView: React.FC<BlacklistViewProps> = ({
                           className={`text-xs py-1 px-1 rounded-[3px] cursor-pointer flex items-center justify-between transition-colors font-body ${
                             isSelected
                               ? 'text-white font-medium'
-                              : 'text-[#A0A0A0] hover:text-white'
+                              : 'text-[#AEA793] hover:text-white'
                           }`}
                         >
                           <span>{dateOption}</span>
-                          {isSelected && <span className="text-xs text-white">✓</span>}
+                          {isSelected && <img src="/assets/tick.svg" alt="Tick" className="w-3.5 h-3 object-contain" />}
                         </div>
                       );
                     })}

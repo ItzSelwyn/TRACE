@@ -31,12 +31,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside 
-      className={`bg-[#151515] flex flex-col justify-start transition-all duration-300 relative z-20 select-none ${
+      className={`bg-[#151515] h-full flex flex-col justify-start transition-all duration-300 relative z-20 select-none shrink-0 overflow-visible no-scrollbar ${
         isExpanded ? 'w-56' : 'w-16'
       }`}
     >
       {/* Menu Items Stack */}
-      <div className="pt-4 flex flex-col items-stretch gap-2.5">
+      <div className="pt-4 flex flex-col items-stretch gap-2.5 overflow-hidden no-scrollbar">
         {navItems.map((item) => {
           const isActive = currentRoute === item.id;
           return (
@@ -48,10 +48,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   isExpanded ? 'px-3 justify-start' : 'justify-center'
                 } ${
                   isActive
-                    ? 'bg-[#F2D04E] text-black font-bold rounded-lg'
+                    ? 'bg-[#F2D04E] text-black font-bold rounded-[3px]'
                     : item.enabled
-                    ? 'bg-transparent text-[#F2D04E] hover:bg-[#1E1E1E] rounded-lg cursor-pointer'
-                    : 'bg-transparent text-[#F2D04E]/50 cursor-not-allowed opacity-60 rounded-lg'
+                    ? 'bg-transparent text-[#F2D04E] hover:bg-[#1E1E1E] rounded-[3px] cursor-pointer'
+                    : 'bg-transparent text-[#F2D04E]/50 cursor-not-allowed opacity-60 rounded-[3px]'
                 }`}
                 title={item.enabled ? item.label : `${item.label} (UI Pending)`}
                 aria-label={item.label}
@@ -84,7 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </div>
 
-      {/* Much Larger Sidebar Open Toggle Button: Positioned on right border directly below last item (Cameras), borderless */}
+      {/* Sidebar Open Toggle Button */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="absolute -right-6 top-[330px] w-12 h-12 rounded-full flex items-center justify-center bg-[#151515] hover:bg-[#1E1E1E] transition-all border-none outline-none z-30 group cursor-pointer"

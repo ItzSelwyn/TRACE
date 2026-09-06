@@ -369,7 +369,7 @@ export const AnalyticsView: React.FC = () => {
       )}
 
       {/* ================= 1. TOP TABS NAVIGATION BAR (Strokes Removed) ================= */}
-      <div className="bg-[#1E1E1E] rounded-xl p-4 md:px-8 flex items-center justify-around">
+      <div className="bg-[#151515] rounded-[3px] p-4 md:px-8 flex items-center justify-around">
         <button
           onClick={() => setActiveTab('HEATMAP')}
           className={`relative py-2 px-6 font-heading text-lg md:text-xl font-bold tracking-widest transition-all cursor-pointer ${
@@ -378,7 +378,7 @@ export const AnalyticsView: React.FC = () => {
         >
           HEATMAP
           {activeTab === 'HEATMAP' && (
-            <span className="absolute bottom-0 left-0 right-0 h-1 bg-[#F2D04E] rounded-full" />
+            <span className="absolute bottom-0 left-0 right-0 h-1 bg-[#F2D04E] rounded-[3px]" />
           )}
         </button>
 
@@ -390,7 +390,7 @@ export const AnalyticsView: React.FC = () => {
         >
           OD MATRIX
           {activeTab === 'OD_MATRIX' && (
-            <span className="absolute bottom-0 left-0 right-0 h-1 bg-[#F2D04E] rounded-full" />
+            <span className="absolute bottom-0 left-0 right-0 h-1 bg-[#F2D04E] rounded-[3px]" />
           )}
         </button>
 
@@ -402,14 +402,14 @@ export const AnalyticsView: React.FC = () => {
         >
           SEGMENT DETAIL
           {activeTab === 'SEGMENT_DETAIL' && (
-            <span className="absolute bottom-0 left-0 right-0 h-1 bg-[#F2D04E] rounded-full" />
+            <span className="absolute bottom-0 left-0 right-0 h-1 bg-[#F2D04E] rounded-[3px]" />
           )}
         </button>
       </div>
 
       {/* ================= 2. HEATMAP SECTION (Strokes Removed) ================= */}
       {activeTab === 'HEATMAP' && (
-        <div className="bg-[#1E1E1E] rounded-xl p-6 flex flex-col gap-6">
+        <div className="bg-[#151515] rounded-[3px] p-6 flex flex-col gap-6">
           {/* Header Metadata Section */}
           <div className="space-y-4">
             {/* Location Title & Filter Row */}
@@ -423,7 +423,7 @@ export const AnalyticsView: React.FC = () => {
               </div>
 
               {/* Time Filter Controls Bar (Filter Slide Yellow Background Perfectly Fitted) */}
-              <div className="bg-[#151515] p-1 rounded-[3px] flex items-center gap-1 self-start md:self-auto h-9">
+              <div className="bg-[#000000] p-1 rounded-[3px] flex items-center gap-1 self-start md:self-auto h-9">
                 {(['LIVE', '1hr', '6hrs', '12hrs', '24hrs'] as TimeFilter[]).map((filter) => {
                   const isActive = activeFilter === filter;
                   const label = filter === 'LIVE' ? 'LIVE' : `Past ${filter}`;
@@ -470,7 +470,7 @@ export const AnalyticsView: React.FC = () => {
           </div>
 
           {/* Interactive Heatmap Map (MapCN Map - Stroke Removed) */}
-          <div className="relative rounded-xl overflow-hidden bg-[#151515] h-[520px] w-full">
+          <div className="relative rounded-[3px] overflow-hidden bg-[#000000] h-[520px] w-full">
             <Map center={[-73.983, 40.747]} zoom={13.2}>
               <MapHeatmap data={heatmapPoints} radius={40} opacity={0.85} intensity={1.3} />
 
@@ -504,31 +504,42 @@ export const AnalyticsView: React.FC = () => {
 
       {/* ================= 3. OD MATRIX SECTION (Strokes Removed) ================= */}
       {activeTab === 'OD_MATRIX' && (
-        <div className="bg-[#1E1E1E] rounded-xl p-6 md:p-8 flex flex-col gap-6">
-          {/* Header Row: Description & Filter Slide */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <p className="text-sm md:text-base text-[#AEA793] font-body max-w-2xl leading-relaxed">
+        <div className="bg-[#151515] rounded-[3px] p-6 md:p-8 flex flex-col gap-6">
+          {/* Header Row: Location Title, Filter Slide & Description */}
+          <div className="space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              {/* Location Title */}
+              <div className="flex items-center gap-3">
+                <img src="/assets/heatmap_location.svg" alt="Location Pin" className="w-6 h-7 object-contain" />
+                <h1 className="text-2xl md:text-3xl font-bold font-heading text-white tracking-wide">
+                  North Highway 16
+                </h1>
+              </div>
+
+              {/* Time Filter Controls Bar (Filter Slide Yellow Background Perfectly Fitted) */}
+              <div className="bg-[#000000] p-1 rounded-[3px] flex items-center gap-1 self-start md:self-auto h-9">
+                {(['LIVE', '1hr', '6hrs', '12hrs', '24hrs'] as TimeFilter[]).map((filter) => {
+                  const isActive = activeFilter === filter;
+                  const label = filter === 'LIVE' ? 'LIVE' : `Past ${filter}`;
+                  return (
+                    <button
+                      key={filter}
+                      onClick={() => setActiveFilter(filter)}
+                      className={`h-full px-3.5 flex items-center justify-center rounded-[3px] text-xs font-body font-bold transition-all cursor-pointer select-none leading-none ${
+                        isActive ? 'bg-[#F2D04E] text-black' : 'text-[#A0A0A0] hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Subtitle Description */}
+            <p className="text-sm md:text-base text-[#AEA793] font-body max-w-4xl leading-relaxed">
               Cross-sector vehicle velocity, journey counts, and throughput volume computed via multi-camera plate re-identification.
             </p>
-
-            {/* Time Filter Controls Bar (Filter Slide Yellow Background Perfectly Fitted) */}
-            <div className="bg-[#151515] p-1 rounded-[3px] flex items-center gap-1 self-start md:self-auto h-9">
-              {(['LIVE', '1hr', '6hrs', '12hrs', '24hrs'] as TimeFilter[]).map((filter) => {
-                const isActive = activeFilter === filter;
-                const label = filter === 'LIVE' ? 'LIVE' : `Past ${filter}`;
-                return (
-                  <button
-                    key={filter}
-                    onClick={() => setActiveFilter(filter)}
-                    className={`h-full px-3.5 flex items-center justify-center rounded-[3px] text-xs font-body font-bold transition-all cursor-pointer select-none leading-none ${
-                      isActive ? 'bg-[#F2D04E] text-black' : 'text-[#A0A0A0] hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
           </div>
 
           {/* Flow Category Legend Row */}
@@ -548,7 +559,7 @@ export const AnalyticsView: React.FC = () => {
           </div>
 
           {/* OD Matrix Data Table (Strokes/Borders Removed) */}
-          <div className="w-full overflow-x-auto rounded-xl bg-[#151515]">
+          <div className="w-full overflow-x-auto rounded-[3px] bg-[#000000]">
             <table className="w-full border-collapse text-center select-none">
               <thead>
                 <tr className="bg-[#111111]">
@@ -611,7 +622,7 @@ export const AnalyticsView: React.FC = () => {
       {activeTab === 'SEGMENT_DETAIL' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* LEFT COLUMN: MONITORED SEGMENTS LIST (4/12 Width) */}
-          <div className="lg:col-span-4 bg-[#1E1E1E] rounded-xl p-5 flex flex-col gap-4">
+          <div className="lg:col-span-4 bg-[#151515] rounded-[3px] p-5 flex flex-col gap-4">
             <h2 className="text-lg md:text-xl font-bold font-heading text-white uppercase tracking-wider mb-1">
               MONITORED SEGMENTS
             </h2>
@@ -629,7 +640,7 @@ export const AnalyticsView: React.FC = () => {
                   <div
                     key={seg.id}
                     onClick={() => setSelectedSegmentId(seg.id)}
-                    className="bg-[#111111] rounded-xl p-4 cursor-pointer flex items-center justify-between"
+                    className="bg-[#000000] rounded-[3px] p-4 cursor-pointer flex items-center justify-between"
                   >
                     <div className="space-y-1.5">
                       {/* Segment title font set to Hanken Grotesk (font-body) */}
@@ -663,7 +674,7 @@ export const AnalyticsView: React.FC = () => {
           </div>
 
           {/* RIGHT COLUMN: SELECTED SEGMENT GRAPH & DETAILS (8/12 Width) */}
-          <div className="lg:col-span-8 bg-[#1E1E1E] rounded-xl p-6 flex flex-col justify-between min-h-[500px] gap-6">
+          <div className="lg:col-span-8 bg-[#151515] rounded-[3px] p-6 flex flex-col justify-between min-h-[500px] gap-6">
             <div className="space-y-6">
               {/* Header Row: Location Title & Time Filter Slide */}
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -680,7 +691,7 @@ export const AnalyticsView: React.FC = () => {
                 </div>
 
                 {/* Time Filter Controls Bar (Filter Slide Yellow Background Perfectly Fitted) */}
-                <div className="bg-[#151515] p-1 rounded-[3px] flex items-center gap-1 self-start md:self-auto h-9">
+                <div className="bg-[#000000] p-1 rounded-[3px] flex items-center gap-1 self-start md:self-auto h-9">
                   {(['LIVE', '1hr', '6hrs', '12hrs', '24hrs'] as TimeFilter[]).map((filter) => {
                     const isActive = activeFilter === filter;
                     const label = filter === 'LIVE' ? 'LIVE' : `Past ${filter}`;
@@ -729,7 +740,7 @@ export const AnalyticsView: React.FC = () => {
               </div>
 
               {/* Main Segment Speed Live Dynamic Interactive Graph (Strokes Removed) */}
-              <div className="w-full bg-[#111111] rounded-xl p-3 flex items-center justify-center overflow-hidden">
+              <div className="w-full bg-[#000000] rounded-[3px] p-3 flex items-center justify-center overflow-hidden">
                 <SegmentSpeedChart filter={activeFilter} segmentName={selectedSegment.shortName} />
               </div>
             </div>

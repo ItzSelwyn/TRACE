@@ -17,9 +17,9 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
         <section className="h-screen max-h-screen w-full flex flex-col items-center justify-center px-4 select-none bg-[#151515] overflow-hidden">
           {/* Main Logo with Slogan (Fixed Centered) */}
           <div className="max-w-3xl w-full flex justify-center px-4">
-            <img 
-              src="/assets/Logo_Slogan_BG.svg" 
-              alt="TRACE - Tracking Recognition Analysis City Wide Traffic Enforcement" 
+            <img
+              src="/assets/Logo_Slogan_BG.svg"
+              alt="TRACE - Tracking Recognition Analysis City Wide Traffic Enforcement"
               className="w-full max-w-2xl h-auto object-contain"
             />
           </div>
@@ -32,9 +32,9 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
               title="Next Page"
               aria-label="Next Page"
             >
-              <img 
-                src="/assets/down_start.svg" 
-                alt="Next Page" 
+              <img
+                src="/assets/down_start.svg"
+                alt="Next Page"
                 className="w-12 h-12 md:w-14 md:h-14"
               />
             </button>
@@ -46,14 +46,14 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
           {/* Page 2 Top Header */}
           <header className="h-24 bg-[#151515] px-6 md:px-12 flex items-center justify-between z-20">
             {/* Left Logo -> Enlarged size */}
-            <div 
+            <div
               onClick={() => setPageStep(1)}
               className="cursor-pointer flex items-center"
               title="Back to Home Page 1"
             >
-              <img 
-                src="/assets/Logo_BG_enlarged.svg" 
-                alt="TRACE Logo" 
+              <img
+                src="/assets/Logo_BG_enlarged.svg"
+                alt="TRACE Logo"
                 className="h-20 md:h-24 w-auto object-contain"
               />
             </div>
@@ -64,9 +64,9 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
               className="cursor-pointer focus:outline-none"
               title="Start Dashboard"
             >
-              <img 
-                src="/assets/start_button.svg" 
-                alt="Start Dashboard" 
+              <img
+                src="/assets/start_button.svg"
+                alt="Start Dashboard"
                 className="h-7 md:h-8 w-auto object-contain"
               />
             </button>
@@ -87,29 +87,31 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
             {/* 3 Feature Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {/* Card 1: High - Precision OCR */}
-              <div className="bg-[#1E1E1E] rounded-xl p-6 flex flex-col min-h-[350px]">
-                <h3 className="text-xl font-bold font-heading text-[#F2D04E] mb-4">
-                  High - Precision OCR
-                </h3>
-                <div className="mb-4">
-                  <img src="/assets/Scan.svg" alt="OCR Scan Icon" className="w-9 h-9" />
+              <div className="bg-[#000000] rounded-[3px] p-6 flex flex-col justify-between min-h-[350px]">
+                <div>
+                  <h3 className="text-xl font-bold font-heading text-[#F2D04E] mb-4">
+                    High - Precision OCR
+                  </h3>
+                  <div className="mb-4">
+                    <img src="/assets/Scan.svg" alt="OCR Scan Icon" className="w-9 h-9" />
+                  </div>
+                  <p className="text-xs md:text-sm text-[#A0A0A0] leading-relaxed mb-4">
+                    Advanced neural networks deliver &gt;90% accuracy in challenging lighting and weather conditions.
+                  </p>
                 </div>
-                <p className="text-xs md:text-sm text-[#A0A0A0] leading-relaxed mb-4">
-                  Advanced neural networks deliver &gt;90% accuracy in challenging lighting and weather conditions.
-                </p>
 
                 {/* Bottom OCR Tag SVG: Moved somewhat down using mt-8 */}
                 <div className="w-full flex justify-center items-center mt-8">
-                  <img 
-                    src="/assets/ocr.svg" 
-                    alt="OCR Plate Graphic" 
+                  <img
+                    src="/assets/ocr.svg"
+                    alt="OCR Plate Graphic"
                     className="h-10 md:h-11 w-auto object-contain"
                   />
                 </div>
               </div>
 
               {/* Card 2: Vehicle Tracking */}
-              <div className="bg-[#1E1E1E] rounded-xl p-6 flex flex-col justify-between min-h-[350px]">
+              <div className="bg-[#000000] rounded-[3px] p-6 flex flex-col justify-between min-h-[350px]">
                 <div>
                   <h3 className="text-xl font-bold font-heading text-[#F2D04E] mb-4">
                     Vehicle Tracking
@@ -124,10 +126,10 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
 
                 {/* Bottom Vehicle Tracking Graphic */}
                 <div className="w-full flex justify-center items-center pt-4">
-                  <div className="w-full h-24 bg-[#151515] rounded-lg overflow-hidden relative">
-                    <img 
-                      src="/assets/trajectory_map.svg" 
-                      alt="Vehicle Tracking Graphic" 
+                  <div className="w-full h-24 bg-[#151515] rounded-[3px] overflow-hidden relative">
+                    <img
+                      src="/assets/trajectory_map.svg"
+                      alt="Vehicle Tracking Graphic"
                       className="w-full h-full object-cover opacity-80"
                     />
                     <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 200 60">
@@ -140,7 +142,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
               </div>
 
               {/* Card 3: Traffic Analytics */}
-              <div className="bg-[#1E1E1E] rounded-xl p-6 flex flex-col justify-between min-h-[350px]">
+              <div className="bg-[#000000] rounded-[3px] p-6 flex flex-col justify-between min-h-[350px]">
                 <div>
                   <h3 className="text-xl font-bold font-heading text-[#F2D04E] mb-4">
                     Traffic Analytics
@@ -155,10 +157,10 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
 
                 {/* Bottom Traffic Analytics Graphic */}
                 <div className="w-full flex justify-center items-center pt-4">
-                  <img 
-                    src="/assets/traffic_analystics.svg" 
-                    alt="Traffic Analytics Graphic" 
-                    className="h-16 md:h-20 w-auto object-contain" 
+                  <img
+                    src="/assets/traffic_analystics.svg"
+                    alt="Traffic Analytics Graphic"
+                    className="h-16 md:h-20 w-auto object-contain"
                   />
                 </div>
               </div>

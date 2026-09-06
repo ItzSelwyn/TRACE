@@ -32,9 +32,22 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
   onSearchPlate 
 }) => {
   const [searchQuery, setSearchQuery] = useState(data.searchedPlate || '');
-  const [timeWindow, setTimeWindow] = useState(data.selectedTimeWindow || '24hrs');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState('24hrs');
+  const [selectedTimestamps, setSelectedTimestamps] = useState<string[]>(['24 hrs ago']);
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([
+    'North Highway 16',
+    'North Highway 15',
+    'North Highway 14',
+    'North Highway 13',
+  ]);
+
+  const toggleFilter = (list: string[], setList: React.Dispatch<React.SetStateAction<string[]>>, item: string) => {
+    if (list.includes(item)) {
+      setList(list.filter((i) => i !== item));
+    } else {
+      setList([...list, item]);
+    }
+  };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +59,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
   return (
     <div className="space-y-4 max-w-[1600px] mx-auto pb-6 select-none font-body bg-[#000000]">
       {/* Top Search & Time Window Filter Bar */}
-      <div className="bg-[#1E1E1E] rounded-xl p-4 flex items-center justify-between gap-4">
+      <div className="bg-[#151515] rounded-[3px] p-4 flex items-center justify-between gap-4 relative z-30">
         {/* Search Field */}
         <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-2xl">
           <input
@@ -54,7 +67,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search Number Plate (e.g. TN 37 CY 1234)"
-            className="w-full bg-[#151515] text-white placeholder-[#A0A0A0] text-sm rounded-lg py-3 pl-4 pr-12 outline-none font-body"
+            className="w-full bg-[#000000] text-white placeholder-[#A0A0A0] text-sm rounded-[3px] py-3 pl-4 pr-12 outline-none font-body"
           />
           <button
             type="submit"
@@ -65,7 +78,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
           </button>
         </form>
 
-        {/* Filter Box with Toggle Design */}
+        {/* Filter Box Button */}
         <div className="relative">
           <button
             type="button"
@@ -80,37 +93,56 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
             />
           </button>
 
-          {/* Filter Dropdown Menu */}
+          {/* Filter Dropdown Popup Menu */}
           {isFilterOpen && (
-            <div className="absolute right-0 top-full mt-2 z-50 rounded-lg overflow-hidden bg-[#151515] border border-[#333]">
-              <div className="relative">
-                <img
-                  src="/assets/vehicletrace_filter.svg"
-                  alt="Vehicle Trace Filter"
-                  className="w-[340px] sm:w-[400px] h-auto block"
-                />
-                <div className="absolute inset-0 pt-[65px] px-6 space-y-2 flex flex-col justify-start">
-                  {[
-                    { id: '24hrs', label: '24 hrs' },
-                    { id: '7days', label: 'Last 7 days' },
-                    { id: '30days', label: 'Last 30 days' },
-                  ].map((option) => (
-                    <button
-                      key={option.id}
-                      onClick={() => {
-                        setSelectedFilter(option.id);
-                        setTimeWindow(option.label);
-                        setIsFilterOpen(false);
-                      }}
-                      className="w-full text-left py-2 px-3 flex items-center justify-between text-xs font-heading text-white hover:bg-white/10 rounded transition-colors"
+            <div 
+              className="absolute right-0 mt-3 w-64 md:w-72 bg-[#000000] rounded-[3px] z-50 p-4 space-y-4 text-xs font-body"
+              style={{ boxShadow: '0px 14px 35px rgba(0, 0, 0, 0.3)' }}
+            >
+              {/* 1. Timestamp Category */}
+              <div className="space-y-2">
+                <h4 className="text-white font-bold tracking-wider uppercase text-[11px] font-body block mb-1">
+                  Timestamp
+                </h4>
+                {['24 hrs ago', '12 hrs ago', '6 hrs ago'].map((item) => {
+                  const isChecked = selectedTimestamps.includes(item);
+                  return (
+                    <div
+                      key={item}
+                      onClick={() => toggleFilter(selectedTimestamps, setSelectedTimestamps, item)}
+                      className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
                     >
-                      <span>{option.label}</span>
-                      {selectedFilter === option.id && (
-                        <img src="/assets/tick.svg" alt="Tick" className="w-3.5 h-3" />
+                      <span>{item}</span>
+                      {isChecked && (
+                        <img src="/assets/tick.svg" alt="Checked" className="w-3.5 h-3 object-contain" />
                       )}
-                    </button>
-                  ))}
-                </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="border-b border-[#AEA793]" />
+
+              {/* 2. Location Category */}
+              <div className="space-y-2">
+                <h4 className="text-white font-bold tracking-wider uppercase text-[11px] font-body block mb-1">
+                  Location
+                </h4>
+                {['North Highway 16', 'North Highway 15', 'North Highway 14', 'North Highway 13'].map((item) => {
+                  const isChecked = selectedLocations.includes(item);
+                  return (
+                    <div
+                      key={item}
+                      onClick={() => toggleFilter(selectedLocations, setSelectedLocations, item)}
+                      className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                    >
+                      <span>{item}</span>
+                      {isChecked && (
+                        <img src="/assets/tick.svg" alt="Checked" className="w-3.5 h-3 object-contain" />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -120,7 +152,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
       {/* Main 2-Column Section */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[580px]">
         {/* Left Column: TRACE CHRONOLOGY (5/12 width) */}
-        <div className="lg:col-span-5 bg-[#1E1E1E] rounded-xl p-4 flex flex-col justify-between">
+        <div className="lg:col-span-5 bg-[#151515] rounded-[3px] p-4 flex flex-col justify-between">
           {/* Header with Title and Badges */}
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -149,7 +181,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                 return (
                   <div
                     key={item.id}
-                    className="bg-[#151515] rounded-lg p-3.5 flex flex-col justify-between"
+                    className="bg-[#000000] rounded-[3px] p-3.5 flex flex-col justify-between"
                   >
                     {/* Top Row: Plate, Timestamp, Confidence */}
                     <div className="flex items-center justify-between mb-1.5">
@@ -197,31 +229,31 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
         </div>
 
         {/* Right Column: GIS ROUTE MAP (7/12 width) */}
-        <div className="lg:col-span-7 bg-[#1E1E1E] rounded-xl p-4 flex flex-col justify-between relative overflow-hidden min-h-[500px]">
+        <div className="lg:col-span-7 bg-[#151515] rounded-[3px] p-4 flex flex-col justify-between relative overflow-hidden min-h-[500px]">
           {/* Top Map Legends Overlay Row */}
           <div className="flex items-center gap-2 mb-3 z-10 select-none flex-wrap">
             {/* Scanned Legend (#1B7A43) */}
-            <div className="bg-[#151515] px-3 py-1.5 rounded flex items-center gap-2 text-xs font-body text-[#1B7A43]">
+            <div className="bg-[#000000] px-3 py-1.5 rounded-[3px] flex items-center gap-2 text-xs font-body text-[#1B7A43]">
               <span className="w-2.5 h-2.5 rounded-full bg-[#1B7A43]" />
               <span>Scanned</span>
             </div>
 
             {/* Trajectory Legend */}
-            <div className="bg-[#151515] px-3 py-1.5 rounded flex items-center gap-2 text-xs font-body text-[#F2D04E]">
+            <div className="bg-[#000000] px-3 py-1.5 rounded-[3px] flex items-center gap-2 text-xs font-body text-[#F2D04E]">
               <span className="w-4 h-0.5 bg-[#F2D04E]" />
               <span>Trajectory</span>
             </div>
 
             {/* Anomaly / Blacklisted Legend (#971D1B) */}
-            <div className="bg-[#151515] px-3 py-1.5 rounded flex items-center gap-2 text-xs font-body text-[#971D1B]">
+            <div className="bg-[#000000] px-3 py-1.5 rounded-[3px] flex items-center gap-2 text-xs font-body text-[#971D1B]">
               <span className="w-2.5 h-2.5 rounded-full bg-[#971D1B]" />
               <span>Anomaly / Blacklisted</span>
             </div>
           </div>
 
           {/* Map Display Surface (MapCN Route Map) */}
-          <div className="relative flex-1 bg-[#101010] rounded-lg overflow-hidden h-[450px] min-h-[450px]">
-            <Map center={[-73.98, 40.75]} zoom={11.2} className="h-full w-full rounded-lg">
+          <div className="relative flex-1 bg-[#000000] rounded-[3px] overflow-hidden h-[450px] min-h-[450px]">
+            <Map center={[-73.98, 40.75]} zoom={11.2} className="h-full w-full rounded-[3px]">
               <MapRoute coordinates={route} color="#3b82f6" width={4} opacity={0.8} />
 
               {stops.map((stop, index) => (

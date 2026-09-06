@@ -19,7 +19,7 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
   };
 
   return (
-    <div className="bg-[#1E1E1E] rounded-xl p-3.5 flex flex-col h-full select-none">
+    <div className="bg-[#151515] rounded-[3px] p-3.5 flex flex-col select-none">
       {/* Panel Header */}
       <div className="flex items-center justify-between mb-2.5">
         <div className="flex items-center gap-2">
@@ -30,9 +30,9 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
         </div>
       </div>
 
-      {/* 2x2 Camera Video Grid — Strict 16:9 Aspect Ratio with No Cropping */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 flex-1 items-start">
-        {cameras.slice(0, 4).map((cam, index) => {
+      {/* 2 Camera Video Feeds — 2-Column Grid Layout for Compact Footage Size */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {cameras.slice(0, 2).map((cam, index) => {
           const isSelected = cam.id.toLowerCase() === selectedCameraId.toLowerCase();
           const hasError = feedErrors[cam.id];
 
@@ -40,7 +40,7 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
             <div
               key={cam.id}
               onClick={() => onSelectCamera && onSelectCamera(cam.id.toLowerCase())}
-              className={`relative bg-[#0d0d0d] rounded-lg overflow-hidden aspect-video flex flex-col justify-between transition-all duration-200 cursor-pointer ${
+              className={`relative bg-[#000000] rounded-[3px] overflow-hidden aspect-video flex flex-col justify-between transition-all duration-200 cursor-pointer ${
                 isSelected ? 'ring-2 ring-[#1B7A43]' : ''
               }`}
             >

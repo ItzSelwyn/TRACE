@@ -281,7 +281,7 @@ export const App: React.FC = () => {
   const isHomeScreen = currentRoute === 'home';
 
   return (
-    <div className="min-h-screen bg-[#000000] text-white flex flex-col font-sans select-none overflow-x-hidden">
+    <div className="h-screen bg-[#000000] text-white flex flex-col font-sans select-none overflow-hidden">
       {!isHomeScreen && (
         <Header 
           currentRoute={currentRoute} 
@@ -297,61 +297,63 @@ export const App: React.FC = () => {
           />
         )}
 
-        <main className={`flex-1 overflow-y-auto bg-[#000000] ${isHomeScreen ? 'p-0' : 'p-4 md:p-6'}`}>
-          {currentRoute === 'home' && (
-            <HomeView onNavigate={handleNavigate} />
-          )}
+        <main className={`flex-1 overflow-y-auto bg-[#000000] flex flex-col justify-between ${isHomeScreen ? 'p-0' : 'p-4 md:p-6'}`}>
+          <div className="flex-1">
+            {currentRoute === 'home' && (
+              <HomeView onNavigate={handleNavigate} />
+            )}
 
-          {currentRoute === 'dashboard' && (
-            <DashboardView
-              data={dashboardData}
-              selectedCameraId={selectedCameraId}
-              onSelectCamera={handleSelectCamera}
-              onSearchPlate={handleSearchPlate}
-              onViewTrace={handleViewTrace}
-              onNavigateSection={(section) => handleNavigate(section as NavRoute)}
-            />
-          )}
+            {currentRoute === 'dashboard' && (
+              <DashboardView
+                data={dashboardData}
+                selectedCameraId={selectedCameraId}
+                onSelectCamera={handleSelectCamera}
+                onSearchPlate={handleSearchPlate}
+                onViewTrace={handleViewTrace}
+                onNavigateSection={(section) => handleNavigate(section as NavRoute)}
+              />
+            )}
 
-          {currentRoute === 'vehicle-trace' && (
-            <VehicleTraceView
-              data={vehicleTracePayload}
-              onSearchPlate={handleSearchPlate}
-            />
-          )}
+            {currentRoute === 'vehicle-trace' && (
+              <VehicleTraceView
+                data={vehicleTracePayload}
+                onSearchPlate={handleSearchPlate}
+              />
+            )}
 
-          {currentRoute === 'analytics' && (
-            <AnalyticsView />
-          )}
+            {currentRoute === 'analytics' && (
+              <AnalyticsView />
+            )}
 
-          {currentRoute === 'alerts' && (
-            <AlertsView />
-          )}
+            {currentRoute === 'alerts' && (
+              <AlertsView />
+            )}
 
-          {currentRoute === 'blacklist' && (
-            <BlacklistView
-              onSearchPlate={handleSearchPlate}
-              onViewTrace={handleViewTrace}
-            />
-          )}
+            {currentRoute === 'blacklist' && (
+              <BlacklistView
+                onSearchPlate={handleSearchPlate}
+                onViewTrace={handleViewTrace}
+              />
+            )}
 
-          {currentRoute === 'cameras' && (
-            <CamerasView />
-          )}
+            {currentRoute === 'cameras' && (
+              <CamerasView />
+            )}
 
-          {currentRoute === 'admin-cameras' && (
-            <AdminCameraView />
+            {currentRoute === 'admin-cameras' && (
+              <AdminCameraView />
+            )}
+          </div>
+
+          {!isHomeScreen && (
+            <footer className="bg-transparent pt-6 pb-2 text-center select-none z-20">
+              <p className="text-[11px] text-[#A0A0A0] font-body">
+                © 2026 TRACE - Tracking, Recognition, Analytics & City-wide Traffic Enforcement. All Rights Reserved.
+              </p>
+            </footer>
           )}
         </main>
       </div>
-
-      {!isHomeScreen && (
-        <footer className="bg-[#151515] py-2.5 px-4 text-center select-none z-20">
-          <p className="text-[11px] text-[#A0A0A0] font-body">
-            © 2026 TRACE - Tracking, Recognition, Analytics & City-wide Traffic Enforcement. All Rights Reserved.
-          </p>
-        </footer>
-      )}
     </div>
   );
 };

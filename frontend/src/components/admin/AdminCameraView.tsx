@@ -531,7 +531,6 @@ export const AdminCameraView: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-[#1E1E1E] p-4 rounded-[3px] shadow-lg">
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-2.5 h-6 bg-[#F2D04E] rounded-[3px]" />
             <h1 className="text-xl font-bold font-heading uppercase tracking-wider text-white">
               Admin Camera & Scenario Control
             </h1>
@@ -539,7 +538,7 @@ export const AdminCameraView: React.FC = () => {
               ADMIN / DEV
             </span>
           </div>
-          <p className="text-xs text-[#AEA793] font-heading mt-1 ml-5">
+          <p className="text-xs text-[#AEA793] font-body mt-1">
             Dynamically switch camera inputs, synchronize CityFlow multi-camera scenario timing, and inspect perception model crops.
           </p>
         </div>
@@ -609,13 +608,9 @@ export const AdminCameraView: React.FC = () => {
                   className="px-4 py-2 bg-[#F2D04E] text-[#000000] font-heading font-bold text-xs uppercase tracking-wider rounded-[3px] flex items-center gap-2 shadow-md cursor-pointer transition-colors"
                 >
                   {playback?.playback_state === 'playing' ? (
-                    <>
-                      <span>⏸</span> PAUSE SCENARIO
-                    </>
+                    'PAUSE SCENARIO'
                   ) : (
-                    <>
-                      <span>▶</span> PLAY SCENARIO
-                    </>
+                    'PLAY SCENARIO'
                   )}
                 </button>
 
@@ -624,7 +619,7 @@ export const AdminCameraView: React.FC = () => {
                   onClick={handleResetPlayback}
                   className="px-3 py-2 bg-[#151515] hover:bg-white/5 text-[#A0A0A0] hover:text-white font-heading font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors"
                 >
-                  ⏮ RESET 00:00
+                  RESET 00:00
                 </button>
 
                 {/* Speed Multipliers */}
@@ -737,7 +732,6 @@ export const AdminCameraView: React.FC = () => {
                         />
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center text-[#AEA793] space-y-2">
-                          <span className="text-xl">🛑</span>
                           <span className="text-xs font-heading font-bold uppercase tracking-wider">
                             Camera Feed Disabled
                           </span>
@@ -793,7 +787,7 @@ export const AdminCameraView: React.FC = () => {
                       onClick={() => handleOpenSourceModal(cam)}
                       className="flex-1 py-2 px-3 bg-[#F2D04E] text-[#000000] font-heading font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors flex items-center justify-center gap-1.5"
                     >
-                      <span>🔄</span> Change Input
+                      Change Input
                     </button>
 
                     <button
@@ -801,7 +795,7 @@ export const AdminCameraView: React.FC = () => {
                       className="py-2 px-3 bg-[#151515] hover:bg-white/5 text-white font-heading font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors"
                       title="Inspect full resolution snapshot"
                     >
-                      📷 Snapshot
+                      Snapshot
                     </button>
 
                     <button
@@ -826,12 +820,11 @@ export const AdminCameraView: React.FC = () => {
       {activeTab === 'debugger' && (
         <div className="bg-[#1E1E1E] p-5 rounded-[3px] shadow-lg space-y-6">
           <div>
-            <h2 className="text-base font-bold font-heading uppercase tracking-wider text-white flex items-center gap-2">
-              <span className="w-2 h-4 bg-[#F2D04E] rounded-[3px]" />
+            <h2 className="text-base font-bold font-heading uppercase tracking-wider text-white">
               Perception Model Visual Crop & Attribute Debugger
             </h2>
-            <p className="text-xs text-[#AEA793] font-heading mt-1 ml-4">
-              Select any test image from <code className="text-[#F2D04E]">data/</code> to inspect real YOLO vehicle localization, color classifier crops, and PaddleOCR license plate recognition results side-by-side.
+            <p className="text-xs text-[#AEA793] font-body mt-1">
+              Select any test image from <code className="text-[#F2D04E] font-mono">data/</code> to inspect real YOLO vehicle localization, color classifier crops, and PaddleOCR license plate recognition results side-by-side.
             </p>
           </div>
 
@@ -873,7 +866,7 @@ export const AdminCameraView: React.FC = () => {
                 disabled={isDebugRunning || !debugImageInput}
                 className="w-full md:w-auto px-5 py-2.5 bg-[#F2D04E] text-[#000000] font-heading font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isDebugRunning ? 'Processing AI...' : '⚡ Run Perception Pipeline'}
+                {isDebugRunning ? 'Processing AI...' : 'Run Perception Pipeline'}
               </button>
             </div>
           </div>

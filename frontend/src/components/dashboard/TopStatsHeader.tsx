@@ -18,7 +18,7 @@ export const TopStatsHeader: React.FC<TopStatsHeaderProps> = ({ stats, onSearch,
   };
 
   return (
-    <div className="bg-[#1E1E1E] rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 select-none">
+    <div className="bg-[#151515] rounded-[3px] p-4 flex flex-col md:flex-row items-center justify-between gap-4 select-none">
       {/* Search Input Box */}
       <form onSubmit={handleSubmit} className="relative flex-1 w-full max-w-2xl">
         <input
@@ -26,7 +26,7 @@ export const TopStatsHeader: React.FC<TopStatsHeaderProps> = ({ stats, onSearch,
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search Number Plate (e.g. TN 37 CY 1234)"
-          className="w-full bg-[#151515] text-white placeholder-[#A0A0A0] text-sm rounded-lg py-3 pl-4 pr-12 outline-none font-body"
+          className="w-full bg-[#000000] text-white placeholder-[#A0A0A0] text-sm rounded-[3px] py-3 pl-4 pr-12 outline-none font-body"
         />
         <button
           type="submit"

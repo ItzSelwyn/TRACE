@@ -301,7 +301,10 @@ export const CamerasView: React.FC = () => {
 
           {/* Filter Dropdown Drawer (No stroke, Hanken Grotesk, #AEA793 divider, no bg box change on selection, custom tick.svg) */}
           {isFilterOpen && (
-            <div className="absolute right-0 top-full mt-2 w-64 bg-[#151515] rounded-[3px] p-4 z-40 space-y-4 font-body">
+            <div 
+              className="absolute right-0 top-full mt-2 w-64 bg-[#000000] rounded-[3px] p-4 z-40 space-y-4 font-body"
+              style={{ boxShadow: '0px 14px 35px rgba(0, 0, 0, 0.3)' }}
+            >
               {/* Timestamp Category */}
               <div>
                 <h4 className="text-xs font-bold font-body text-white uppercase tracking-wider mb-2">
@@ -312,11 +315,11 @@ export const CamerasView: React.FC = () => {
                     <div
                       key={ts}
                       onClick={() => setSelectedTimestamp(ts)}
-                      className="cursor-pointer py-1.5 px-1 flex items-center justify-between text-white/90 hover:text-white"
+                      className="cursor-pointer py-1.5 px-1 flex items-center justify-between text-[#AEA793] hover:text-white"
                     >
                       <span>{ts}</span>
                       {selectedTimestamp === ts && (
-                        <img src="/assets/camera_tick.svg" alt="Tick" className="w-3.5 h-3 object-contain" />
+                        <img src="/assets/tick.svg" alt="Tick" className="w-3.5 h-3 object-contain" />
                       )}
                     </div>
                   ))}
@@ -341,11 +344,11 @@ export const CamerasView: React.FC = () => {
                     <div
                       key={loc}
                       onClick={() => setSelectedLocation(loc)}
-                      className="cursor-pointer py-1.5 px-1 flex items-center justify-between text-white/90 hover:text-white"
+                      className="cursor-pointer py-1.5 px-1 flex items-center justify-between text-[#AEA793] hover:text-white"
                     >
                       <span>{loc}</span>
                       {selectedLocation === loc && (
-                        <img src="/assets/camera_tick.svg" alt="Tick" className="w-3.5 h-3 object-contain" />
+                        <img src="/assets/tick.svg" alt="Tick" className="w-3.5 h-3 object-contain" />
                       )}
                     </div>
                   ))}

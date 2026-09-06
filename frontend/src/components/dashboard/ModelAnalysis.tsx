@@ -108,7 +108,7 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
       ];
 
   return (
-    <div className="bg-[#1E1E1E] rounded-xl p-3.5 flex flex-col h-full select-none">
+    <div className="bg-[#151515] rounded-[3px] p-3.5 flex flex-col h-full select-none">
       {/* Panel Header */}
       <div className="flex items-center justify-between mb-2.5">
         <div className="flex items-center gap-2">
@@ -124,7 +124,7 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
       </div>
 
       {/* Main Live Detection Frame Video - strict uncropped 16:9 */}
-      <div className="relative bg-[#0d0d0d] rounded-lg overflow-hidden aspect-video mb-2.5 flex items-center justify-center">
+      <div className="relative bg-[#000000] rounded-[3px] overflow-hidden aspect-video mb-2.5 flex items-center justify-center">
         <img
           key={activeCamId}
           src={frameUrl}
@@ -133,8 +133,8 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
         />
       </div>
 
-      {/* Detail Breakdown Card (Original TRACE Style with Dark Box for Track/Obs ID) */}
-      <div className="bg-[#151515] rounded-lg p-3 flex flex-col justify-between flex-1">
+      {/* Detail Breakdown Card */}
+      <div className="bg-[#000000] rounded-[3px] p-3 flex flex-col justify-between flex-1">
         {/* Header with Camera Info & Motion Status */}
         <div className="space-y-0.5 mb-2 font-body">
           <div className="flex items-center justify-between">

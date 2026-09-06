@@ -146,7 +146,7 @@ export const AlertsView: React.FC = () => {
       )}
 
       {/* ================= 1. TOP HEADER & SEARCH / FILTER BAR ================= */}
-      <div className="bg-[#1E1E1E] rounded-xl p-4 md:px-6 flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-30">
+      <div className="bg-[#151515] rounded-[3px] p-4 md:px-6 flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-30">
         {/* Left Side: Search Bar */}
         <div className="relative flex-1 max-w-xl">
           <input
@@ -154,7 +154,7 @@ export const AlertsView: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search Number Plate (e.g. TN 37 CY 1234)"
-            className="w-full bg-[#111111] text-white placeholder-[#A0A0A0] text-sm font-body px-4 py-3 pr-10 rounded-xl focus:outline-none transition-all"
+            className="w-full bg-[#000000] text-white placeholder-[#A0A0A0] text-sm font-body px-4 py-3 pr-10 rounded-[3px] focus:outline-none transition-all"
           />
           <img
             src="/assets/alert_search.svg"
@@ -166,12 +166,12 @@ export const AlertsView: React.FC = () => {
         {/* Right Side: Stats & Filter Dropdown Toggle Button */}
         <div className="flex items-center gap-3 self-end md:self-auto relative">
           {/* Verified Count Pill */}
-          <div className="bg-[#151515] px-5 py-2.5 rounded-xl text-[#A0A0A0] font-body font-bold text-base md:text-lg">
+          <div className="bg-[#000000] px-5 py-2.5 rounded-[3px] text-[#A0A0A0] font-body font-bold text-base md:text-lg">
             {verifiedCount} Verified
           </div>
 
           {/* Unverified Count Pill */}
-          <div className="bg-[#151515] px-5 py-2.5 rounded-xl text-[#A0A0A0] font-body font-bold text-base md:text-lg">
+          <div className="bg-[#000000] px-5 py-2.5 rounded-[3px] text-[#A0A0A0] font-body font-bold text-base md:text-lg">
             {unverifiedCount} Unverified
           </div>
 
@@ -191,10 +191,13 @@ export const AlertsView: React.FC = () => {
 
             {/* ================= ENHANCED MULTI-CATEGORY FILTER PANEL ================= */}
             {isFilterOpen && (
-              <div className="absolute right-0 mt-3 w-64 md:w-72 bg-[#151515] rounded-xl shadow-2xl z-50 p-4 space-y-4 text-xs font-body">
+              <div 
+                className="absolute right-0 mt-3 w-64 md:w-72 bg-[#000000] rounded-[3px] z-50 p-4 space-y-4 text-xs font-body"
+                style={{ boxShadow: '0px 14px 35px rgba(0, 0, 0, 0.3)' }}
+              >
                 {/* 1. Verification Category */}
                 <div className="space-y-2">
-                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px] font-body">
+                  <h4 className="text-white font-bold tracking-wider uppercase text-[11px] font-body block mb-1">
                     Verification
                   </h4>
                   {['Verified', 'Unverified'].map((item) => {
@@ -203,11 +206,11 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedVerifications, setSelectedVerifications, item)}
-                        className="flex items-center justify-between text-white/90 font-medium font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
-                          <img src="/assets/alert_tick_icon.svg" alt="Checked" className="w-3.5 h-2.5 object-contain" />
+                          <img src="/assets/tick.svg" alt="Checked" className="w-3.5 h-3 object-contain" />
                         )}
                       </div>
                     );
@@ -217,7 +220,7 @@ export const AlertsView: React.FC = () => {
 
                 {/* 2. Location Category */}
                 <div className="space-y-2">
-                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px] font-body">
+                  <h4 className="text-white font-bold tracking-wider uppercase text-[11px] font-body block mb-1">
                     Location
                   </h4>
                   {['North Highway 1', 'North Highway 2', 'North Highway 3', 'North Highway 4'].map((item) => {
@@ -226,11 +229,11 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedLocations, setSelectedLocations, item)}
-                        className="flex items-center justify-between text-white/90 font-medium font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
-                          <img src="/assets/alert_tick_icon.svg" alt="Checked" className="w-3.5 h-2.5 object-contain" />
+                          <img src="/assets/tick.svg" alt="Checked" className="w-3.5 h-3 object-contain" />
                         )}
                       </div>
                     );
@@ -240,7 +243,7 @@ export const AlertsView: React.FC = () => {
 
                 {/* 3. CCTV Cameras Category */}
                 <div className="space-y-2">
-                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px] font-body">
+                  <h4 className="text-white font-bold tracking-wider uppercase text-[11px] font-body block mb-1">
                     CCTV Cameras
                   </h4>
                   {['Camera 13', 'Camera 14', 'Camera 15', 'Camera 16'].map((item) => {
@@ -249,11 +252,11 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedCameras, setSelectedCameras, item)}
-                        className="flex items-center justify-between text-white/90 font-medium font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
-                          <img src="/assets/alert_tick_icon.svg" alt="Checked" className="w-3.5 h-2.5 object-contain" />
+                          <img src="/assets/tick.svg" alt="Checked" className="w-3.5 h-3 object-contain" />
                         )}
                       </div>
                     );
@@ -263,7 +266,7 @@ export const AlertsView: React.FC = () => {
 
                 {/* 4. Vehicle Type Category */}
                 <div className="space-y-2">
-                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px] font-body">
+                  <h4 className="text-white font-bold tracking-wider uppercase text-[11px] font-body block mb-1">
                     Vehicle Type
                   </h4>
                   {['SUV', 'TRUCK', 'SEDAN', 'AUTO'].map((item) => {
@@ -272,11 +275,11 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedTypes, setSelectedTypes, item)}
-                        className="flex items-center justify-between text-white/90 font-medium font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
-                          <img src="/assets/alert_tick_icon.svg" alt="Checked" className="w-3.5 h-2.5 object-contain" />
+                          <img src="/assets/tick.svg" alt="Checked" className="w-3.5 h-3 object-contain" />
                         )}
                       </div>
                     );
@@ -286,7 +289,7 @@ export const AlertsView: React.FC = () => {
 
                 {/* 5. Vehicle Color Category */}
                 <div className="space-y-2">
-                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px] font-body">
+                  <h4 className="text-white font-bold tracking-wider uppercase text-[11px] font-body block mb-1">
                     Vehicle Color
                   </h4>
                   {['RED', 'YELLOW', 'ORANGE', 'BLUE', 'BLACK'].map((item) => {
@@ -295,11 +298,11 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedColors, setSelectedColors, item)}
-                        className="flex items-center justify-between text-white/90 font-medium font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
-                          <img src="/assets/alert_tick_icon.svg" alt="Checked" className="w-3.5 h-2.5 object-contain" />
+                          <img src="/assets/tick.svg" alt="Checked" className="w-3.5 h-3 object-contain" />
                         )}
                       </div>
                     );
@@ -309,7 +312,7 @@ export const AlertsView: React.FC = () => {
 
                 {/* 6. Category Section */}
                 <div className="space-y-2">
-                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px] font-body">
+                  <h4 className="text-white font-bold tracking-wider uppercase text-[11px] font-body block mb-1">
                     Category
                   </h4>
                   {['BLACKLIST', 'ANOMALY'].map((item) => {
@@ -318,11 +321,11 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedCategories, setSelectedCategories, item)}
-                        className="flex items-center justify-between text-white/90 font-medium font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
-                          <img src="/assets/alert_tick_icon.svg" alt="Checked" className="w-3.5 h-2.5 object-contain" />
+                          <img src="/assets/tick.svg" alt="Checked" className="w-3.5 h-3 object-contain" />
                         )}
                       </div>
                     );
@@ -347,7 +350,7 @@ export const AlertsView: React.FC = () => {
             return (
               <div
                 key={item.id}
-                className="bg-[#1E1E1E] rounded-xl p-5 md:px-6 flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all"
+                className="bg-[#151515] rounded-[3px] p-5 md:px-6 flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all"
               >
                 {/* Left Section: Car Icon & Primary Meta */}
                 <div className="flex items-center gap-5">
@@ -428,11 +431,11 @@ export const AlertsView: React.FC = () => {
                     {item.confidence} %
                   </div>
 
-                  {/* VERIFY box button: #151515 bg & #A0A0A0 text for unverified, #A0A0A0 bg & #151515 text for verified, corner radius 3 */}
+                  {/* VERIFY box button: #000000 bg & #A0A0A0 text for unverified, #A0A0A0 bg & #151515 text for verified, corner radius 3 */}
                   {isUnverified ? (
                     <button
                       onClick={() => handleVerifyAlert(item.id)}
-                      className="bg-[#151515] hover:bg-white/10 text-[#A0A0A0] font-body font-bold text-xs px-5 py-2 rounded-[3px] transition-all cursor-pointer uppercase tracking-wider"
+                      className="bg-[#000000] hover:bg-white/10 text-[#A0A0A0] font-body font-bold text-xs px-5 py-2 rounded-[3px] transition-all cursor-pointer uppercase tracking-wider"
                     >
                       VERIFY
                     </button>

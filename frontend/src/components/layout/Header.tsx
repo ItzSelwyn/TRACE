@@ -20,7 +20,7 @@ export const Header: React.FC<HeaderProps> = ({ currentRoute, onNavigate }) => {
         <img 
           src="/assets/Logo_BG_enlarged.svg" 
           alt="TRACE Logo" 
-          className="h-20 md:h-24 w-auto object-contain" 
+          className="h-32 md:h-36 max-h-[80px] md:max-h-[88px] w-auto object-contain" 
         />
       </div>
 
@@ -29,10 +29,10 @@ export const Header: React.FC<HeaderProps> = ({ currentRoute, onNavigate }) => {
         {/* Home Page Icon Button */}
         <button
           onClick={() => onNavigate('home')}
-          className={`p-2.5 rounded-lg flex items-center justify-center transition-all ${
+          className={`p-2.5 rounded-[3px] flex items-center justify-center transition-all ${
             isHome
               ? 'bg-[#F2D04E] text-black'
-              : 'bg-[#1E1E1E] hover:bg-[#2A2A2A] text-white'
+              : 'bg-transparent text-white'
           }`}
           title="Home Page"
           aria-label="Home"
