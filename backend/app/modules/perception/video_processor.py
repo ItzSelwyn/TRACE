@@ -106,7 +106,7 @@ class VideoProcessor:
     def __init__(
         self,
         video_path: Path | str,
-        model_path: str = "yolov8n.pt",
+        model_path: str = "models/yolov8n.pt",
         camera_id: str = "c020",
         confidence: float = 0.25,
     ):
@@ -116,12 +116,16 @@ class VideoProcessor:
         self.current_frame = 0
 
         # Resolve model path across backend / root locations
+        backend_dir = Path(__file__).resolve().parents[3]
         model_candidates = [
+            backend_dir / "models" / "yolov8n.pt",
+            backend_dir / "models" / Path(model_path).name,
+            backend_dir / model_path,
+            Path.cwd() / "models" / "yolov8n.pt",
             Path(model_path),
             Path.cwd() / model_path,
-            Path(__file__).resolve().parents[3] / model_path,       # backend/yolov8n.pt
-            Path(__file__).resolve().parents[3] / "yolo8n.pt",
-            Path(__file__).resolve().parents[3] / "yolov8n.pt",
+            backend_dir / "yolov8n.pt",
+            backend_dir / "yolo8n.pt",
             Path(__file__).resolve().parents[4] / "backend" / model_path,
         ]
         resolved_model_path: Optional[Path] = None
@@ -165,7 +169,7 @@ class VideoProcessor:
         if self.model is None:
             return []
 
-        results = self.model(frame, conf=self.confidence, verbose=False)[0]
+        results = self.model(frame, conf=self.confidence, classes=[2, 3, 5, 7], verbose=False)[0]
         detections: List[DetectionResult] = []
         if results.boxes is None:
             return detections

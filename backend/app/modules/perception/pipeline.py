@@ -116,7 +116,7 @@ class PerceptionPipeline:
     def __init__(
         self,
         camera_id: str,
-        yolo_model_path: str = "yolov8n.pt",
+        yolo_model_path: str = "models/yolov8n.pt",
         confidence: float = 0.25,
         enable_ocr: bool = True,
         enable_db_persist: bool = True,
@@ -133,10 +133,14 @@ class PerceptionPipeline:
         
         root = Path(__file__).resolve().parents[4]
         candidates = [
-            Path(yolo_model_path),
+            root / "backend" / "models" / "yolov8n.pt",
+            root / "backend" / "models" / Path(yolo_model_path).name,
             root / "backend" / yolo_model_path,
+            Path.cwd() / "models" / "yolov8n.pt",
+            Path(yolo_model_path),
             root / "backend" / "yolov8n.pt",
             root / "backend" / "yolo8n.pt",
+            Path.cwd() / yolo_model_path,
         ]
         resolved_path = next((c for c in candidates if c.exists()), Path(yolo_model_path))
         self.model = YOLO(str(resolved_path))
@@ -183,6 +187,19 @@ class PerceptionPipeline:
                 vehicle_colour=trk_info.get("color", "white"),
             )
 
+            # Extract track-level appearance embedding if Re-ID is enabled
+            appearance_embedding = None
+            if settings.APPEARANCE_REID_ENABLED and "crops" in trk_info and trk_info["crops"]:
+                try:
+                    from app.modules.appearance import get_appearance_extractor
+                    extractor = get_appearance_extractor()
+                    appearance_embedding = extractor.extract_track_embedding(trk_info["crops"])
+                except Exception as e:
+                    logger.debug(f"Track embedding extraction failed for {track_id_str}: {e}")
+                    appearance_embedding = None
+                finally:
+                    trk_info["crops"].clear()
+
             try:
                 with Session(self._db_engine) as session:
                     obs = persist_fused_observation(
@@ -195,9 +212,15 @@ class PerceptionPipeline:
                         vehicle_type=fused.get("vehicle_type", "car"),
                         vehicle_colour=fused.get("vehicle_colour", "white"),
                         ocr_reads=fused.get("reads_history", []),
+                        appearance_embedding=appearance_embedding,
                     )
                     if obs:
                         self.persisted_tracks.add(track_id_str)
+                        try:
+                            from app.modules.identity import match_new_observation
+                            match_new_observation(session, obs)
+                        except Exception as fuse_err:
+                            logger.debug(f"Online identity fusion error for {track_id_str}: {fuse_err}")
             except Exception as e:
                 logger.warning(f"[DB ERROR] Error persisting track {track_id_str}: {e}")
 
@@ -223,6 +246,7 @@ class PerceptionPipeline:
                 frame,
                 persist=True,
                 tracker="bytetrack.yaml",
+                classes=[2, 3, 5, 7],
                 conf=self.confidence,
                 verbose=False,
             )[0]
@@ -296,10 +320,19 @@ class PerceptionPipeline:
                         "type": vtype,
                         "first_seen": current_time_str,
                         "is_moving": False,
+                        "crops": [],
                     }
                     self.tracked_vehicles[track_id_str] = trk_info
                     disp = 0.0
                     is_moving = False
+
+                # Collect high-quality vehicle crops for track appearance embedding
+                if "crops" not in trk_info:
+                    trk_info["crops"] = []
+                if len(trk_info["crops"]) < settings.APPEARANCE_MAX_TRACK_SAMPLES:
+                    if veh_crop is not None and veh_crop.size > 0:
+                        if veh_crop.shape[0] >= settings.APPEARANCE_MIN_CROP_SIZE and veh_crop.shape[1] >= settings.APPEARANCE_MIN_CROP_SIZE:
+                            trk_info["crops"].append(veh_crop.copy())
 
                 # 2. License Plate Localization & PaddleOCR
                 plate_raw_text = ""

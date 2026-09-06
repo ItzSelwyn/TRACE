@@ -2,11 +2,21 @@
 ================================
 Multi-modal identity scoring for cross-camera vehicle matching and trajectory linking.
 
-Exact Formula (Agent Build Brief §2.1):
-    identity_score = 0.5 * plate_similarity
-                   + 0.3 * ocr_confidence_component
-                   + 0.1 * type_match
-                   + 0.1 * colour_match
+Modes:
+    CityFlowV2 / visual-only (no plate required):
+        appearance_similarity 55%
+        temporal_score        25%
+        camera_transition     15%
+        colour_score           3%
+        type_score             2%
+
+    ANPR-capable (both plates readable):
+        plate_similarity      35%
+        appearance_similarity 30%
+        temporal_score        15%
+        camera_transition     10%
+        colour_score           5%
+        type_score             5%
 
 Thresholds:
     >= 0.70     -> confirmed match
@@ -22,17 +32,16 @@ from typing import Any, Dict, List, Optional
 from app.modules.identity.matcher import (
     _update_canonical_vehicles,
     load_camera_reliability_profiles,
+    match_new_observation,
     match_observation_pair,
     run_identity_fusion_on_database,
 )
 from app.modules.identity.scoring import (
     CANDIDATE_THRESHOLD,
     CONFIRM_THRESHOLD,
-    WEIGHT_COLOUR_MATCH,
-    WEIGHT_OCR_CONFIDENCE,
-    WEIGHT_PLATE_SIMILARITY,
-    WEIGHT_TYPE_MATCH,
     compute_identity_score,
+    compute_temporal_score,
+    compute_camera_transition_score,
     levenshtein_similarity,
     select_reliability,
 )
@@ -41,9 +50,19 @@ from app.modules.identity.scoring import (
 def pair_observations(
     observations: List[Dict[str, Any]],
     camera_profiles: Optional[Dict[str, Dict[str, float]]] = None,
+    appearance_similarities: Optional[Dict[str, float]] = None,
+    road_graph: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
-    """Score every cross-camera pair of observations and return candidate/confirmed matches."""
+    """Score every cross-camera pair and return candidate/confirmed matches.
+
+    Args:
+        observations:           list of observation dicts
+        camera_profiles:        camera reliability profiles keyed by camera_id
+        appearance_similarities: optional dict mapping (obs_i, obs_j) key to similarity
+        road_graph:             pre-loaded road graph (lazy-loaded if None)
+    """
     profiles = camera_profiles or {}
+    app_sims = appearance_similarities or {}
     matches: List[Dict[str, Any]] = []
     n = len(observations)
 
@@ -51,18 +70,23 @@ def pair_observations(
         for j in range(i + 1, n):
             obs_a = observations[i]
             obs_b = observations[j]
-            # skip same-camera pairs
             if obs_a.get("camera_id") == obs_b.get("camera_id"):
                 continue
 
             cam_id_a = str(obs_a.get("camera_id", ""))
             cam_id_b = str(obs_b.get("camera_id", ""))
 
+            app_sim = app_sims.get((i, j)) or app_sims.get((j, i))
+
             result = compute_identity_score(
                 obs_a,
                 obs_b,
                 camera_profile_a=profiles.get(cam_id_a),
                 camera_profile_b=profiles.get(cam_id_b),
+                appearance_similarity=app_sim,
+                camera_id_a=cam_id_a,
+                camera_id_b=cam_id_b,
+                road_graph=road_graph,
             )
 
             if result["identity_score"] >= CANDIDATE_THRESHOLD:
@@ -79,8 +103,9 @@ def build_vehicle_trajectory(
     plate_text: str,
     records: Optional[List[Dict[str, Any]]] = None,
     camera_profiles: Optional[Dict[str, Dict[str, float]]] = None,
+    road_graph: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Build trajectory observations payload with exact multimodal identity scoring."""
+    """Build trajectory observations payload with multi-modal identity evidence."""
     profiles = camera_profiles or {}
     camera_templates = ["c020", "c023", "c029", "c035"]
     source_records = list(records or [])
@@ -117,15 +142,6 @@ def build_vehicle_trajectory(
         rel_profile = profiles.get(camera_id, {})
         cam_reliability = select_reliability(rel_profile, captured_at_str)
 
-        eff_conf = obs_conf * cam_reliability
-        single_score = round(
-            WEIGHT_PLATE_SIMILARITY * 1.0
-            + WEIGHT_OCR_CONFIDENCE * eff_conf
-            + WEIGHT_TYPE_MATCH * 1.0
-            + WEIGHT_COLOUR_MATCH * 1.0,
-            4,
-        )
-
         observations.append({
             "camera_id": camera_id,
             "camera_name": record.get("camera_name") or f"Camera {camera_id.upper()}",
@@ -136,17 +152,21 @@ def build_vehicle_trajectory(
             "vehicle_colour": obs_colour,
             "latitude": record.get("latitude"),
             "longitude": record.get("longitude"),
-            "plate_similarity": 1.0,
-            "ocr_confidence_component": round(eff_conf, 4),
-            "attribute_match": 1.0,
+            # Evidence fields — populated below from cross-camera pair scoring
+            "plate_similarity": None,
+            "ocr_confidence_component": None,
+            "appearance_similarity": None,
+            "temporal_score": None,
+            "camera_transition_score": None,
+            "attribute_match": None,
             "camera_reliability_weight": cam_reliability,
-            "identity_score": single_score,
-            "match_confidence_label": "confirmed" if single_score >= CONFIRM_THRESHOLD else "candidate",
+            "identity_score": None,
+            "match_confidence_label": "candidate",
             "is_impossible_journey": False,
         })
 
     # Score cross-camera pairs
-    pairs = pair_observations(observations, camera_profiles=profiles)
+    pairs = pair_observations(observations, camera_profiles=profiles, road_graph=road_graph)
     best_evidence: Dict[int, Dict[str, Any]] = {}
 
     for pair in pairs:
@@ -157,10 +177,12 @@ def build_vehicle_trajectory(
     for idx, obs in enumerate(observations):
         ev = best_evidence.get(idx)
         if ev:
-            obs["plate_similarity"] = ev["plate_similarity"]
-            obs["ocr_confidence_component"] = ev["ocr_confidence_component"]
-            obs["attribute_match"] = ev["attribute_match"]
-            obs["camera_reliability_weight"] = ev["camera_reliability_weight"]
+            obs["plate_similarity"] = ev.get("plate_similarity")
+            obs["ocr_confidence_component"] = ev.get("ocr_confidence_component")
+            obs["appearance_similarity"] = ev.get("appearance_similarity")
+            obs["temporal_score"] = ev.get("temporal_score")
+            obs["camera_transition_score"] = ev.get("camera_transition_score")
+            obs["attribute_match"] = ev.get("attribute_match")
             obs["identity_score"] = ev["identity_score"]
             obs["match_confidence_label"] = ev["match_confidence_label"]
 
@@ -168,15 +190,13 @@ def build_vehicle_trajectory(
 
 
 __all__ = [
-    "WEIGHT_PLATE_SIMILARITY",
-    "WEIGHT_OCR_CONFIDENCE",
-    "WEIGHT_TYPE_MATCH",
-    "WEIGHT_COLOUR_MATCH",
     "CONFIRM_THRESHOLD",
     "CANDIDATE_THRESHOLD",
     "levenshtein_similarity",
     "select_reliability",
     "compute_identity_score",
+    "compute_temporal_score",
+    "compute_camera_transition_score",
     "pair_observations",
     "build_vehicle_trajectory",
     "load_camera_reliability_profiles",

@@ -235,7 +235,9 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
               return (
                 <div
                   key={rec.id || `rec-${recTrackId}-${idx}`}
-                  className="flex items-center justify-between bg-black/30 hover:bg-black/50 px-2 py-0.5 rounded text-[11px] font-mono border border-white/5 transition-colors"
+                  onClick={() => onViewTrace && onViewTrace(recHasPlate ? recPlate : recTrackId)}
+                  className="flex items-center justify-between bg-black/30 hover:bg-black/50 px-2 py-0.5 rounded text-[11px] font-mono border border-white/5 transition-colors cursor-pointer"
+                  title="Click to view vehicle trace"
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-[#F2D04E] font-bold">{recTrackId}</span>
@@ -260,7 +262,7 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
         {/* Bottom Action: View Reconstructed Trace */}
         <div className="flex justify-end pt-2 mt-1.5 border-t border-white/5">
           <button
-            onClick={() => onViewTrace && onViewTrace(isPlateRead ? displayPlate : 'TN 37 CY 1234')}
+            onClick={() => onViewTrace && onViewTrace(isPlateRead ? displayPlate : (trackId || displayPlate || 'TN 37 CY 1234'))}
             className="bg-[#1E1E1E] hover:bg-[#F2D04E] hover:text-black text-white font-bold font-heading text-xs px-3 py-1 rounded flex items-center gap-1.5 transition-all group border border-white/10"
           >
             <span>VIEW RECONSTRUCTED TRACE</span>

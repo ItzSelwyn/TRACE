@@ -21,3 +21,10 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             yield session
     finally:
         await async_engine.dispose()
+
+
+def get_sync_db():
+    from sqlalchemy.orm import Session
+    with Session(sync_engine) as session:
+        yield session
+

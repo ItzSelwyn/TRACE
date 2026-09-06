@@ -47,6 +47,10 @@ def _get_yolo_model() -> Optional[Any]:
                 from ultralytics import YOLO
 
                 candidates = [
+                    _PROJECT_ROOT / "backend" / "models" / "yolov8n.pt",
+                    _PROJECT_ROOT / "backend" / settings.YOLO_MODEL_PATH,
+                    Path.cwd() / "models" / "yolov8n.pt",
+                    Path.cwd() / settings.YOLO_MODEL_PATH,
                     _PROJECT_ROOT / "backend" / "yolov8n.pt",
                     _PROJECT_ROOT / "backend" / "yolo8n.pt",
                     Path.cwd() / "yolov8n.pt",
@@ -67,6 +71,10 @@ def _create_yolo_model() -> Optional[Any]:
         from ultralytics import YOLO
 
         candidates = [
+            _PROJECT_ROOT / "backend" / "models" / "yolov8n.pt",
+            _PROJECT_ROOT / "backend" / settings.YOLO_MODEL_PATH,
+            Path.cwd() / "models" / "yolov8n.pt",
+            Path.cwd() / settings.YOLO_MODEL_PATH,
             _PROJECT_ROOT / "backend" / "yolov8n.pt",
             _PROJECT_ROOT / "backend" / "yolo8n.pt",
             Path.cwd() / "yolov8n.pt",
@@ -525,6 +533,7 @@ class ManagedCameraWorker:
                     resized_raw,
                     persist=True,
                     tracker="bytetrack.yaml",
+                    classes=[2, 3, 5, 7],
                     conf=0.25,
                     verbose=False,
                 )[0]
@@ -582,8 +591,17 @@ class ManagedCameraWorker:
                                 "types": [cls_type],
                                 "first_seen": current_time_str,
                                 "last_seen": frame_id,
+                                "crops": [],
                             }
                             trk = self.vehicle_tracks[matched_id]
+
+                        # Collect high-quality vehicle crops for track appearance embedding
+                        if "crops" not in trk:
+                            trk["crops"] = []
+                        if len(trk["crops"]) < settings.APPEARANCE_MAX_TRACK_SAMPLES:
+                            if veh_crop is not None and veh_crop.size > 0:
+                                if veh_crop.shape[0] >= settings.APPEARANCE_MIN_CROP_SIZE and veh_crop.shape[1] >= settings.APPEARANCE_MIN_CROP_SIZE:
+                                    trk["crops"].append(veh_crop.copy())
 
                         # Stabilize vehicle attributes with majority voting across frames
                         stable_type = max(set(trk["types"]), key=trk["types"].count)
@@ -645,6 +663,19 @@ class ManagedCameraWorker:
                         # Persist observation to DB
                         if self._db_engine and not is_db_in_backoff() and matched_id not in self.persisted_tracks:
                             if is_moving or trk["frames"] >= 5:
+                                # Extract track appearance embedding if Re-ID is enabled
+                                appearance_embedding = None
+                                if settings.APPEARANCE_REID_ENABLED and "crops" in trk and trk["crops"]:
+                                    try:
+                                        from app.modules.appearance import get_appearance_extractor
+                                        extractor = get_appearance_extractor()
+                                        appearance_embedding = extractor.extract_track_embedding(trk["crops"])
+                                    except Exception as emb_err:
+                                        logger.debug(f"Track embedding extraction failed for {track_id_str}: {emb_err}")
+                                        appearance_embedding = None
+                                    finally:
+                                        trk["crops"].clear()
+
                                 from sqlalchemy.orm import Session
                                 try:
                                     with Session(self._db_engine) as session:
@@ -658,9 +689,15 @@ class ManagedCameraWorker:
                                             vehicle_type=stable_type,
                                             vehicle_colour=stable_color,
                                             ocr_reads=fused_record.get("reads_history", []),
+                                            appearance_embedding=appearance_embedding,
                                         )
                                         if db_obs:
                                             self.persisted_tracks.add(matched_id)
+                                            try:
+                                                from app.modules.identity import match_new_observation
+                                                match_new_observation(session, db_obs)
+                                            except Exception as fuse_err:
+                                                logger.debug(f"Online identity fusion error for {track_id_str}: {fuse_err}")
                                 except Exception as db_err:
                                     record_db_error(str(db_err))
 
@@ -933,7 +970,7 @@ class CameraScenarioManager:
         if model is None:
             raise RuntimeError("YOLO model not loaded")
 
-        results = model(img, conf=0.18, verbose=False)[0]
+        results = model(img, conf=0.18, classes=[2, 3, 5, 7], verbose=False)[0]
         annotated = results.plot()
 
         # Find best vehicle detection (prioritize primary / foreground vehicle by area * conf)

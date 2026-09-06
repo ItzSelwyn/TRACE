@@ -185,17 +185,18 @@ class TestComputeIdentityScore:
         assert 0.0 <= result["identity_score"] <= 1.0
 
     def test_known_formula_result(self):
-        """Verify formula: 0.50*plate_sim + 0.25*ocr_conf + 0.15*attr_match + 0.10*cam_rel"""
-        # Both plates identical → plate_sim = 1.0
+        """Verify multi-modal formula in ANPR mode with proportional redistribution."""
+        # Both plates identical -> plate_sim = 1.0
         # OBS_A conf=0.92, OBS_B conf=0.88, both daytime with SAMPLE_PROFILE_DAY (rel=0.95)
-        # eff_a = 0.92 * 0.95 = 0.874; eff_b = 0.88 * 0.95 = 0.836
-        # ocr_conf = (0.874 + 0.836) / 2 = 0.855
-        # cam_rel = 0.95
-        # attr_match = 1.0 (both type+colour match)
-        # score = 0.5*1.0 + 0.25*0.855 + 0.15*1.0 + 0.10*0.95
-        #       = 0.5 + 0.21375 + 0.15 + 0.095 = 0.95875
+        # ocr_conf = 0.855; plate evidence = 1.0*(0.25 + 0.75*0.855) = 0.89125
+        # temporal (900s > 600s max) = 0.85, transition = 1.0, colour = 1.0, type = 1.0
+        # Total score with appearance redistributed = 0.9135
         result = compute_identity_score(OBS_A, OBS_B, SAMPLE_PROFILE_DAY, SAMPLE_PROFILE_DAY)
-        assert abs(result["identity_score"] - 0.9588) < 0.01
+        assert abs(result["identity_score"] - 0.9135) < 0.01
+        assert result["mode"] == "ANPR"
+        assert result["match_confidence_label"] == "confirmed"
+
+
 
 
 # ---------------------------------------------------------------------------

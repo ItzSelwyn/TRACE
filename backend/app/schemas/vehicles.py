@@ -14,14 +14,24 @@ from pydantic import BaseModel
 
 class EvidenceBreakdown(BaseModel):
     """Explainability evidence for a single identity score (NFR-07)."""
-    plate_similarity: float
+    # Plate evidence (None when plate unavailable — CityFlowV2 mode)
+    plate_similarity: Optional[float] = None
     """Normalized Levenshtein similarity between the two fused plate texts [0–1]."""
-    ocr_confidence_component: float
+    ocr_confidence_component: Optional[float] = None
     """Reliability-weighted average OCR confidence of both observations [0–1]."""
-    attribute_match: float
-    """Average of type_match and colour_match booleans expressed as [0, 0.5, 1]."""
-    camera_reliability_weight: float
+    attribute_match: Optional[float] = None
+    """Average of type and colour soft scores [0–1]."""
+    camera_reliability_weight: Optional[float] = None
     """Average day/night OCR reliability across the two cameras [0–1]."""
+    # New multi-modal evidence fields
+    appearance_similarity: Optional[float] = None
+    """Cosine/re-ID appearance similarity [0–1], or None if pipeline not available."""
+    temporal_score: Optional[float] = None
+    """Temporal plausibility: 1.0=reachable, 0.5=unknown, 0.0=impossible [0–1]."""
+    camera_transition_score: Optional[float] = None
+    """Camera-to-camera transition score: 1.0=direct edge, 0.7=multi-hop, 0.3=unknown."""
+    mode: Optional[str] = None
+    """Scoring mode: 'ANPR' or 'CITYFLOW'."""
 
 
 class ObservationInTrajectory(BaseModel):
@@ -29,10 +39,12 @@ class ObservationInTrajectory(BaseModel):
     camera_id: uuid.UUID
     camera_name: Optional[str] = None
     captured_at: datetime
-    fused_plate_text: str
+    fused_plate_text: Optional[str] = ""
     fused_confidence: float
     vehicle_type: str
     vehicle_colour: str
+    track_id: Optional[str] = None
+    canonical_vehicle_id: Optional[uuid.UUID] = None
 
     # Identity fields (M3)
     identity_score: Optional[float] = None
@@ -59,10 +71,35 @@ class ObservationInTrajectory(BaseModel):
 
 
 class TrajectoryResponse(BaseModel):
-    plate: str
+    plate: Optional[str] = None
+    vehicle_id: Optional[str] = None
+    search_query: Optional[str] = None
+    identifier_type: Optional[str] = None
     observations: List[ObservationInTrajectory]
     # M4 additions
     anomaly_flags: List[str] = []
     """Distinct anomaly types present in this trajectory."""
     total_anomalies: int = 0
     """Total count of flagged anomaly events."""
+
+
+class VehicleSearchResult(BaseModel):
+    """Result item for multi-identifier vehicle search."""
+    identifier: str
+    identifier_type: str  # 'canonical_id' | 'track_id' | 'observation_id' | 'plate'
+    canonical_vehicle_id: Optional[uuid.UUID] = None
+    vehicle_type: str
+    vehicle_colour: str
+    latest_camera: Optional[str] = None
+    latest_timestamp: Optional[datetime] = None
+    has_plate: bool = False
+    observation_count: int = 1
+
+    model_config = {"from_attributes": True}
+
+
+class VehicleSearchResponse(BaseModel):
+    """Response envelope for vehicle search endpoint."""
+    results: List[VehicleSearchResult] = []
+    total: int = 0
+

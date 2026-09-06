@@ -147,9 +147,12 @@ const transformTrajectory = (plate: string, payload: any): VehicleTraceDataPaylo
         statusMsg = `Candidate Match (${((obs.identity_score ?? 0) * 100).toFixed(0)}%)`;
       }
 
+      const hasValidPlate = obs.fused_plate_text && obs.fused_plate_text !== 'NOT READ' && !String(obs.fused_plate_text).startsWith('TRACE-');
+      const displayIdentifier = hasValidPlate ? obs.fused_plate_text : (obs.track_id || payload?.vehicle_id || plate);
+
       return {
         id: `obs-${index}`,
-        plateNumber: obs.fused_plate_text || plate,
+        plateNumber: displayIdentifier,
         timestamp: formatTime(obs.captured_at),
         ocrConfidence: Math.round((obs.fused_confidence ?? 0.9) * 100),
         cameraName: obs.camera_name || `Camera ${index + 1}`,

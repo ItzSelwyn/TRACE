@@ -24,7 +24,7 @@ export const TopStatsHeader: React.FC<TopStatsHeaderProps> = ({ stats, onSearch 
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search Number Plate (e.g. TN 37 CY 1234)"
+          placeholder="Search Number Plate or Vehicle ID (e.g. TN 37 CY 1234 or TRK-260)"
           className="w-full bg-[#151515] focus:border-[#F2D04E] text-white placeholder-[#A0A0A0] text-sm rounded-lg py-3 pl-4 pr-12 outline-none transition-all font-body"
         />
         <button

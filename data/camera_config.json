@@ -13,10 +13,10 @@
       "sync_offset_s": 25.905,
       "frame_count": 473,
       "total_frames": 473,
-      "status": "SYNC DISABLED",
+      "status": "PROCESSING",
       "sync_mode": "independent",
-      "current_frame": 0,
-      "current_local_time": 0.0
+      "current_frame": 4,
+      "current_local_time": 16.92
     },
     "c023": {
       "camera_id": "c023",
@@ -67,5 +67,5 @@
       "current_local_time": 0.0
     }
   },
-  "updated_at": "2026-09-06T05:41:07.203337+00:00"
+  "updated_at": "2026-09-06T20:42:14.250813+00:00"
 }

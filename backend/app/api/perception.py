@@ -53,6 +53,10 @@ def _get_yolo_model() -> Optional[Any]:
                 from ultralytics import YOLO
 
                 candidates = [
+                    _PROJECT_ROOT / "backend" / "models" / "yolov8n.pt",
+                    _PROJECT_ROOT / "backend" / settings.YOLO_MODEL_PATH,
+                    Path.cwd() / "models" / "yolov8n.pt",
+                    Path.cwd() / settings.YOLO_MODEL_PATH,
                     _PROJECT_ROOT / "backend" / "yolov8n.pt",
                     _PROJECT_ROOT / "backend" / "yolo8n.pt",
                     Path.cwd() / "yolov8n.pt",
@@ -73,6 +77,10 @@ def _create_yolo_model() -> Optional[Any]:
         from ultralytics import YOLO
 
         candidates = [
+            _PROJECT_ROOT / "backend" / "models" / "yolov8n.pt",
+            _PROJECT_ROOT / "backend" / settings.YOLO_MODEL_PATH,
+            Path.cwd() / "models" / "yolov8n.pt",
+            Path.cwd() / settings.YOLO_MODEL_PATH,
             _PROJECT_ROOT / "backend" / "yolov8n.pt",
             _PROJECT_ROOT / "backend" / "yolo8n.pt",
             Path.cwd() / "yolov8n.pt",
@@ -224,6 +232,7 @@ class MasterCameraCapture:
                         resized_raw,
                         persist=True,
                         tracker="bytetrack.yaml",
+                        classes=[2, 3, 5, 7],
                         conf=0.25,
                         verbose=False,
                     )[0]

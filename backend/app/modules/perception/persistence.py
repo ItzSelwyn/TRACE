@@ -96,6 +96,7 @@ def persist_fused_observation(
     vehicle_type: str = "car",
     vehicle_colour: str = "white",
     ocr_reads: Optional[List[Dict[str, Any]]] = None,
+    appearance_embedding: Optional[List[float]] = None,
 ) -> Optional[VehicleObservation]:
     """Atomically insert ONE VehicleObservation and its multiple associated OcrRead records into PostgreSQL.
     
@@ -128,6 +129,12 @@ def persist_fused_observation(
 
         conf_val = round(float(fused_confidence), 3) if fused_confidence is not None else 0.000
 
+        # Validate appearance_embedding if provided
+        emb_val = None
+        if appearance_embedding is not None and isinstance(appearance_embedding, (list, tuple)):
+            if len(appearance_embedding) > 0 and all(np.isfinite(v) for v in appearance_embedding):
+                emb_val = [float(v) for v in appearance_embedding]
+
         # 1. Create VehicleObservation record
         obs_id = uuid.uuid4()
         observation = VehicleObservation(
@@ -139,6 +146,7 @@ def persist_fused_observation(
             fused_confidence=conf_val,
             vehicle_type=str(vehicle_type).lower(),
             vehicle_colour=str(vehicle_colour).lower(),
+            appearance_embedding=emb_val,
         )
         session.add(observation)
         session.flush()

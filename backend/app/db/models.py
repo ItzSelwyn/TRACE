@@ -78,6 +78,8 @@ class VehicleObservation(Base):
     fused_confidence: Mapped[float] = mapped_column(Numeric(4,3), nullable=False)
     vehicle_type: Mapped[str] = mapped_column(Text, nullable=False)
     vehicle_colour: Mapped[str] = mapped_column(Text, nullable=False)
+    # Visual appearance / Re-ID feature vector (e.g. 512-dim or 1024-dim L2-normalized vector)
+    appearance_embedding: Mapped[Optional[List[float]]] = mapped_column(JSONB, nullable=True)
 
     __table_args__ = (
         Index('ix_vehicle_obs_camera_time', 'camera_id', 'captured_at'),
@@ -108,10 +110,17 @@ class IdentityMatch(Base):
     match_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     observation_id_a: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("vehicle_observations.observation_id"), nullable=False)
     observation_id_b: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("vehicle_observations.observation_id"), nullable=False)
-    plate_similarity: Mapped[float] = mapped_column(Numeric(4,3), nullable=False)
-    ocr_confidence_component: Mapped[float] = mapped_column(Numeric(4,3), nullable=False)
-    type_match: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    colour_match: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    # Plate evidence — nullable: absent when both plates are unavailable (CityFlowV2)
+    plate_similarity: Mapped[Optional[float]] = mapped_column(Numeric(4,3), nullable=True)
+    ocr_confidence_component: Mapped[Optional[float]] = mapped_column(Numeric(4,3), nullable=True)
+    # Attribute evidence — nullable: absent when vehicle type/colour is unknown
+    type_match: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    colour_match: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    # New multi-modal evidence columns (Layer 2 refactor)
+    appearance_similarity: Mapped[Optional[float]] = mapped_column(Numeric(4,3), nullable=True)
+    temporal_score: Mapped[Optional[float]] = mapped_column(Numeric(4,3), nullable=True)
+    camera_transition_score: Mapped[Optional[float]] = mapped_column(Numeric(4,3), nullable=True)
+    # Composite score and journey flags
     identity_score: Mapped[float] = mapped_column(Numeric(4,3), nullable=False)
     implied_speed_kmph: Mapped[Optional[float]] = mapped_column(Numeric(6,2), nullable=True)
     is_impossible_journey: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -131,7 +140,8 @@ class CanonicalVehicle(Base):
     __tablename__ = "canonical_vehicles"
     
     canonical_vehicle_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    best_plate_text: Mapped[str] = mapped_column(Text, nullable=False)
+    # Nullable: plate-free canonical vehicles are valid (CityFlowV2 mode)
+    best_plate_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

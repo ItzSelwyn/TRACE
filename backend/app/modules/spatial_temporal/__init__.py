@@ -487,3 +487,11 @@ def reconstruct_trajectory(
         "anomaly_flags": sorted(anomaly_types_seen),
         "total_anomalies": len(impossible_indices) + len(duplicates) + len(inconsistencies),
     }
+
+
+# Bottom imports to prevent circular references with reconstruct_trajectory
+from app.modules.spatial_temporal.trajectory_service import (
+    find_and_build_trajectory,
+    resolve_vehicle_identity,
+    search_vehicles,
+)
