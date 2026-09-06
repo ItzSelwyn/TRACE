@@ -3,6 +3,7 @@ import { Header } from './components/layout/Header';
 import { Sidebar, NavRoute } from './components/layout/Sidebar';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { VehicleTraceView } from './components/vehicle-trace/VehicleTraceView';
+import { AdminCameraView } from './components/admin/AdminCameraView';
 import { HomeView } from './components/home/HomeView';
 import { mockDashboardData } from './data/mockDashboardData';
 import { mockVehicleTraceData } from './data/mockVehicleTraceData';
@@ -45,11 +46,46 @@ const transformPerceptionStatus = (payload: any, activeCamId: string = 'c020'): 
     0
   );
 
-  // Pick top passing vehicle from selected camera
+  // Helper to parse clean 3-digit TRK ID without concatenating camera numbers
+  const parseCleanTrackId = (raw: any, fallbackNum: number = 1): string => {
+    if (!raw) return `TRK-${String(fallbackNum).padStart(3, '0')}`;
+    const s = String(raw);
+    if (s.startsWith('TRK-')) {
+      const num = s.replace(/[^0-9]/g, '');
+      return `TRK-${num.padStart(3, '0')}`;
+    }
+    const num = s.split('-').pop()?.replace(/[^0-9]/g, '') || String(fallbackNum);
+    return `TRK-${num.padStart(3, '0')}`;
+  };
+
+  // Pick top passing vehicle strictly from the active selected camera (never bleed from other cameras)
   const targetCamObservations = payload?.cameras?.[activeCamId]?.observations ?? [];
-  const selectedObservation = targetCamObservations[0] || cameras
-    .map((camera) => payload?.cameras?.[camera.id]?.observations?.[0])
-    .find(Boolean);
+  const selectedObservation = targetCamObservations[0];
+
+  const cleanTrackId = parseCleanTrackId(selectedObservation?.track_id, 1);
+  const cleanObsNum = cleanTrackId.replace('TRK-', '');
+  const cleanObsId = `TRACE-${String(activeCamId).toUpperCase()}-${cleanObsNum}`;
+
+  const isFabricatedPlate = !selectedObservation?.fused_plate_text || String(selectedObservation.fused_plate_text).startsWith('TRACE-');
+  const realPlate = isFabricatedPlate ? 'NOT READ' : selectedObservation.fused_plate_text;
+  const ocrConf = isFabricatedPlate ? null : (selectedObservation.fused_confidence ? Math.round(selectedObservation.fused_confidence * 100) : null);
+
+  const recentList = targetCamObservations.slice(0, 5).map((obs: any, idx: number) => {
+    const recIsFab = !obs?.fused_plate_text || String(obs.fused_plate_text).startsWith('TRACE-');
+    const recTrackId = parseCleanTrackId(obs?.track_id, idx + 1);
+    const recObsNum = recTrackId.replace('TRK-', '');
+    return {
+      id: `rec-${idx}`,
+      observationId: `TRACE-${String(obs.camera_id || activeCamId).toUpperCase()}-${recObsNum}`,
+      trackId: recTrackId,
+      vehicleType: (obs.vehicle_type || 'CAR').toUpperCase(),
+      color: (obs.vehicle_colour || 'WHITE').toUpperCase(),
+      plateNumber: recIsFab ? 'NOT READ' : obs.fused_plate_text,
+      ocrConfidence: recIsFab ? null : (obs.fused_confidence ? Math.round(obs.fused_confidence * 100) : null),
+      timestamp: obs.captured_at ? formatTime(obs.captured_at) : 'Live',
+      status: obs.is_moving ? 'PASSING' : 'DETECTED',
+    };
+  });
 
   return {
     topStats: {
@@ -62,14 +98,18 @@ const transformPerceptionStatus = (payload: any, activeCamId: string = 'c020'): 
       ? {
           cameraId: selectedObservation.camera_id || activeCamId,
           cameraName: `Camera ${String(selectedObservation.camera_id || activeCamId).replace('c', '').toUpperCase()}`,
-          location: 'Live Video Feed',
-          plateNumber: selectedObservation.fused_plate_text ?? `TRACE-${activeCamId}-1`,
-          ocrConfidence: Math.round((selectedObservation.fused_confidence ?? 0.85) * 100),
+          location: 'Live Video Feed (CityFlow)',
+          observationId: cleanObsId,
+          trackId: cleanTrackId,
+          plateNumber: realPlate,
+          ocrConfidence: ocrConf,
+          ocrStatus: realPlate === 'NOT READ' ? 'NOT READ' : 'CONFIRMED',
           vehicleType: (selectedObservation.vehicle_type || 'CAR').toUpperCase(),
           color: (selectedObservation.vehicle_colour || 'WHITE').toUpperCase(),
-          timestamp: formatTime(selectedObservation.captured_at),
+          timestamp: selectedObservation.captured_at ? formatTime(selectedObservation.captured_at) : 'Live',
           detectedImageUrl: '/assets/Dashboard.png',
           boundingLabel: 'Vehicle (YOLOv8)',
+          recentDetections: recentList,
         }
       : mockDashboardData.modelAnalysis,
     recentAlerts: [],
@@ -200,7 +240,7 @@ export const App: React.FC = () => {
   }, [currentRoute, vehicleTracePayload.searchedPlate]);
 
   const handleNavigate = (route: NavRoute | string) => {
-    if (route === 'dashboard' || route === 'vehicle-trace' || route === 'home') {
+    if (route === 'dashboard' || route === 'vehicle-trace' || route === 'admin-cameras' || route === 'home') {
       setCurrentRoute(route as NavRoute | 'home');
     }
   };
@@ -265,6 +305,10 @@ export const App: React.FC = () => {
               data={vehicleTracePayload}
               onSearchPlate={handleSearchPlate}
             />
+          )}
+
+          {currentRoute === 'admin-cameras' && (
+            <AdminCameraView />
           )}
         </main>
       </div>

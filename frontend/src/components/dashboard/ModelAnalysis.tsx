@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ModelAnalysisData } from '../../types/dashboard';
+import { ModelAnalysisData, RecentDetectionItem } from '../../types/dashboard';
 
 interface ModelAnalysisProps {
   data: ModelAnalysisData;
@@ -31,18 +31,22 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
       }
     }, 100); // 10 FPS
 
-    const vehicleInterval = setInterval(async () => {
+    const fetchActiveVehicle = async () => {
       try {
         const res = await fetch(`/perception/camera/${activeCamId}/active-vehicle`);
         if (!res.ok) return;
         const payload = await res.json();
-        if (isMounted && payload && payload.plate_number) {
+        if (isMounted && payload && (payload.track_id || payload.trackId)) {
           setLiveVehicle(payload);
         }
       } catch {
         // Ignore
       }
-    }, 1000);
+    };
+
+    // Fetch immediately to prevent 1-second delay / stale ID flashing
+    fetchActiveVehicle();
+    const vehicleInterval = setInterval(fetchActiveVehicle, 1000);
 
     return () => {
       isMounted = false;
@@ -51,11 +55,29 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
     };
   }, [activeCamId]);
 
-  const displayPlate = liveVehicle?.plate_number || `TRACE-${activeCamId}-1`;
-  const displayConfidence = liveVehicle?.ocr_confidence ?? 88;
-  const displayVehicleType = (liveVehicle?.vehicle_type || 'CAR').toUpperCase();
-  const displayColor = (liveVehicle?.color || 'WHITE').toUpperCase();
-  const displayTimestamp = liveVehicle?.timestamp || new Date().toLocaleTimeString('en-US', {
+  // Real runtime perception values with clean 3-digit TRK-XXX and TRACE-CXXX-XXX formatting
+  const formatTrackId = (raw: any): string => {
+    if (!raw) return 'TRK-001';
+    const s = String(raw);
+    if (s.startsWith('TRK-')) {
+      const num = s.replace(/[^0-9]/g, '');
+      return `TRK-${num.padStart(3, '0')}`;
+    }
+    const num = s.split('-').pop()?.replace(/[^0-9]/g, '') || '1';
+    return `TRK-${num.padStart(3, '0')}`;
+  };
+
+  const rawTrack = liveVehicle?.track_id || liveVehicle?.trackId || data.trackId;
+  const trackId = formatTrackId(rawTrack);
+  const trackNum = trackId.replace('TRK-', '');
+  const observationId = liveVehicle?.observation_id || liveVehicle?.observationId || `TRACE-${activeCamId.toUpperCase()}-${trackNum}`;
+  const rawPlate = liveVehicle?.plate_number || liveVehicle?.plateNumber || data.plateNumber;
+  const isPlateRead = rawPlate && rawPlate !== 'NOT READ' && !rawPlate.startsWith('TRACE-');
+  const displayPlate = isPlateRead ? rawPlate : 'NOT READ';
+  const displayConfidence = isPlateRead ? `${liveVehicle?.ocr_confidence ?? data.ocrConfidence ?? 85}%` : 'NOT READ';
+  const displayVehicleType = (liveVehicle?.vehicle_type || liveVehicle?.vehicleType || data.vehicleType || 'CAR').toUpperCase();
+  const displayColor = (liveVehicle?.color || data.color || 'WHITE').toUpperCase();
+  const displayTimestamp = liveVehicle?.timestamp || data.timestamp || new Date().toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -63,15 +85,37 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
   });
   const isMoving = liveVehicle?.is_moving ?? true;
 
+  // Recent detections list (last 3-5 real observations dynamically streamed)
+  const rawRecent = (liveVehicle?.recent_detections && liveVehicle.recent_detections.length > 0)
+    ? liveVehicle.recent_detections
+    : (data.recentDetections && data.recentDetections.length > 0)
+      ? data.recentDetections
+      : [];
+
+  const recentDetections: RecentDetectionItem[] = rawRecent.length > 0
+    ? rawRecent
+    : [
+        {
+          id: 'rec-1',
+          observationId: observationId,
+          trackId: trackId,
+          vehicleType: displayVehicleType,
+          color: displayColor,
+          plateNumber: displayPlate,
+          timestamp: displayTimestamp,
+          status: isMoving ? 'PASSING' : 'DETECTED',
+        },
+      ];
+
   return (
-    <div className="bg-[#1E1E1E] rounded-xl p-4 flex flex-col h-full select-none">
+    <div className="bg-[#1E1E1E] rounded-xl p-3.5 flex flex-col h-full select-none">
       {/* Panel Header */}
-      <div className="flex items-center justify-between mb-3.5">
-        <div className="flex items-center gap-2.5">
+      <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center gap-2">
           <img 
             src="/assets/model.svg" 
             alt="Model Analysis Icon" 
-            className="w-5 h-5 brightness-0 invert" 
+            className="w-4 h-4 brightness-0 invert" 
           />
           <h2 className="text-sm font-bold tracking-wider text-white font-heading uppercase">
             MODEL ANALYSIS — {cameraDisplayName}
@@ -79,29 +123,28 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
         </div>
       </div>
 
-      {/* Main Detection Frame Preview with Real-time YOLO Bounding Boxes */}
-      <div className="relative bg-[#0d0d0d] rounded-lg overflow-hidden aspect-[16/9] mb-3 flex items-center justify-center border border-white/10 shadow-inner">
-        {/* High-speed Real-time Frame Video */}
+      {/* Main Live Detection Frame Video - strict uncropped 16:9 */}
+      <div className="relative bg-[#0d0d0d] rounded-lg overflow-hidden aspect-video mb-2.5 flex items-center justify-center border border-white/10 shadow-inner">
         <img
           key={activeCamId}
           src={frameUrl}
           alt={`YOLOv8 Target Detection Frame - ${activeCamId}`}
-          className="absolute inset-0 w-full h-full object-cover z-0"
+          className="absolute inset-0 w-full h-full object-contain bg-black z-0"
         />
 
         {/* Top-Right Green Indicator Dot */}
-        <div className="absolute top-2.5 right-2.5 z-10 pointer-events-none">
+        <div className="absolute top-2 right-2 z-10 pointer-events-none">
           <span className="w-2.5 h-2.5 rounded-full bg-[#1B7A43] shadow-md inline-block" />
         </div>
       </div>
 
-      {/* Detail Breakdown Card */}
-      <div className="bg-[#151515] rounded-lg p-3.5 flex flex-col justify-between flex-1 border border-white/5">
-        {/* Camera & Location Info */}
-        <div className="space-y-1 mb-3">
+      {/* Detail Breakdown Card (Original TRACE Style with Dark Box for Track/Obs ID) */}
+      <div className="bg-[#151515] rounded-lg p-3 flex flex-col justify-between flex-1 border border-white/5">
+        {/* Header with Camera Info & Motion Status */}
+        <div className="space-y-0.5 mb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#AEA793] font-body">
-              <img src="/assets/camera.svg" alt="Camera" className="w-3.5 h-3.5 opacity-80" />
+              <img src="/assets/camera.svg" alt="Camera" className="w-3 h-3 opacity-80" />
               <span>{cameraDisplayName}</span>
             </div>
             {isMoving && (
@@ -116,21 +159,39 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
           </div>
         </div>
 
-        {/* Metadata Key-Value Grid */}
-        <div className="space-y-2 text-xs font-body pt-2 border-t border-white/5">
+        {/* Track ID & Observation ID Dark Container */}
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <div className="flex items-center justify-between bg-black/50 px-2 py-1 rounded border border-white/5">
+            <span className="text-[#A0A0A0] text-[11px] font-body">Track ID</span>
+            <span className="text-[#F2D04E] font-mono font-bold text-xs">{trackId}</span>
+          </div>
+          <div className="flex items-center justify-between bg-black/50 px-2 py-1 rounded border border-white/5">
+            <span className="text-[#A0A0A0] text-[11px] font-body">Observation ID</span>
+            <span className="text-[#AEA793] font-mono text-[11px]">{observationId}</span>
+          </div>
+        </div>
+
+        {/* Metadata Key-Value Grid (One line after another, original fonts and styling) */}
+        <div className="space-y-1.5 text-xs font-body pt-1.5 border-t border-white/5">
           {/* Number Plate */}
           <div className="flex items-center justify-between">
             <span className="text-[#A0A0A0]">Number Plate</span>
-            <span className="text-[#F2D04E] font-bold font-heading text-sm tracking-wide">
-              {displayPlate}
-            </span>
+            {isPlateRead ? (
+              <span className="text-[#F2D04E] font-bold font-heading text-sm tracking-wide">
+                {displayPlate}
+              </span>
+            ) : (
+              <span className="text-[#A0A0A0] font-mono text-xs px-2 py-0.5 rounded bg-white/5 border border-white/10">
+                NOT READ
+              </span>
+            )}
           </div>
 
-          {/* OCR Confidence */}
+          {/* Detection / OCR Confidence */}
           <div className="flex items-center justify-between">
             <span className="text-[#A0A0A0]">Detection / OCR Confidence</span>
-            <span className="text-[#1B7A43] font-bold font-heading">
-              {displayConfidence}%
+            <span className={`font-medium ${isPlateRead ? 'text-[#1B7A43] font-bold font-heading' : 'text-white'}`}>
+              {displayConfidence}
             </span>
           </div>
 
@@ -153,11 +214,54 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
           </div>
         </div>
 
-        {/* Action Button: VIEW ↗ */}
-        <div className="flex justify-end pt-3 mt-2 border-t border-white/5">
+        {/* Compact Recent Detections List */}
+        <div className="mt-2 pt-2 border-t border-white/5">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-mono font-bold text-[#A0A0A0] uppercase tracking-wider">
+              RECENT DETECTIONS ({cameraDisplayName})
+            </span>
+            <span className="text-[9px] font-mono text-[#AEA793]">LAST {recentDetections.slice(0, 4).length}</span>
+          </div>
+
+          <div className="space-y-0.5 max-h-20 overflow-y-auto pr-0.5">
+            {recentDetections.slice(0, 4).map((rec: any, idx) => {
+              const recTrackId = rec.track_id || rec.trackId || `TRK-${idx + 1}`;
+              const recType = (rec.vehicle_type || rec.vehicleType || 'CAR').toUpperCase();
+              const recColor = (rec.color || 'WHITE').toUpperCase();
+              const recPlate = rec.plate_number || rec.plateNumber || 'NOT READ';
+              const recHasPlate = recPlate && recPlate !== 'NOT READ' && !recPlate.startsWith('TRACE-');
+              const recTime = rec.timestamp || displayTimestamp;
+
+              return (
+                <div
+                  key={rec.id || `rec-${recTrackId}-${idx}`}
+                  className="flex items-center justify-between bg-black/30 hover:bg-black/50 px-2 py-0.5 rounded text-[11px] font-mono border border-white/5 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#F2D04E] font-bold">{recTrackId}</span>
+                    <span className="text-white/80">{recType}</span>
+                    <span className="text-[#A0A0A0] text-[10px]">({recColor})</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {recHasPlate ? (
+                      <span className="text-[#F2D04E] font-semibold">{recPlate}</span>
+                    ) : (
+                      <span className="text-[#666666] text-[10px]">NOT READ</span>
+                    )}
+                    <span className="text-[#888888] text-[10px]">{recTime}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Bottom Action: View Reconstructed Trace */}
+        <div className="flex justify-end pt-2 mt-1.5 border-t border-white/5">
           <button
-            onClick={() => onViewTrace && onViewTrace(displayPlate)}
-            className="bg-[#1E1E1E] hover:bg-[#F2D04E] hover:text-black text-white font-bold font-heading text-xs px-3.5 py-1.5 rounded flex items-center gap-1.5 transition-all group"
+            onClick={() => onViewTrace && onViewTrace(isPlateRead ? displayPlate : 'TN 37 CY 1234')}
+            className="bg-[#1E1E1E] hover:bg-[#F2D04E] hover:text-black text-white font-bold font-heading text-xs px-3 py-1 rounded flex items-center gap-1.5 transition-all group border border-white/10"
           >
             <span>VIEW RECONSTRUCTED TRACE</span>
             <span className="text-sm transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5">↗</span>

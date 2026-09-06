@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export type NavRoute = 'dashboard' | 'vehicle-trace' | 'analytics' | 'alerts' | 'blacklist' | 'cameras' | 'home';
+export type NavRoute = 'dashboard' | 'vehicle-trace' | 'analytics' | 'alerts' | 'blacklist' | 'cameras' | 'admin-cameras' | 'home';
 
 interface SidebarProps {
   currentRoute: NavRoute;
@@ -20,6 +20,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'alerts', label: 'Alerts', icon: '/assets/Alerts.svg', enabled: false, hasRedAlert: true },
     { id: 'blacklist', label: 'Blacklist', icon: '/assets/Blacklist.svg', enabled: false },
     { id: 'cameras', label: 'Cameras', icon: '/assets/camera.svg', enabled: false },
+    { id: 'admin-cameras', label: 'Admin Control', icon: '/assets/model.svg', enabled: true },
   ];
 
   const handleItemClick = (item: typeof navItems[0]) => {

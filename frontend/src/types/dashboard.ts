@@ -22,18 +22,34 @@ export interface CameraFeedItem {
   status: 'online' | 'degraded' | 'down';
 }
 
+export interface RecentDetectionItem {
+  id: string;
+  observationId: string;
+  trackId: string;
+  vehicleType: string;
+  color: string;
+  plateNumber: string;
+  ocrConfidence?: number | null;
+  timestamp: string;
+  status: string;
+}
+
 export interface ModelAnalysisData {
   cameraId: string;
   cameraName: string;
   location: string;
+  observationId?: string;
+  trackId?: string;
   plateNumber: string;
-  ocrConfidence: number; // e.g. 94 for 94%
-  vehicleType: string;   // e.g. "SUV"
-  color: string;         // e.g. "Blue"
+  ocrConfidence: number | null;
+  ocrStatus?: string;
+  vehicleType: string;   // e.g. "CAR"
+  color: string;         // e.g. "WHITE"
   timestamp: string;     // e.g. "10:23:39 am"
   detectedImageUrl: string;
   boundingLabel: string; // e.g. "Vehicle 94%"
   bbox?: { x: number; y: number; width: number; height: number };
+  recentDetections?: RecentDetectionItem[];
 }
 
 export interface DashboardAlertItem {

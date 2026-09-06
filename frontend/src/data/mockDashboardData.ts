@@ -50,14 +50,18 @@ export const mockDashboardData: DashboardDataPayload = {
   modelAnalysis: {
     cameraId: 'c020',
     cameraName: 'Camera 020',
-    location: 'Live Video Feed',
-    plateNumber: 'TRACE-c020-1',
-    ocrConfidence: 88,
+    location: 'Live Video Feed (CityFlow)',
+    observationId: 'TRACE-C020-01',
+    trackId: 'TRK-001',
+    plateNumber: 'NOT READ',
+    ocrConfidence: null,
+    ocrStatus: 'NOT READ',
     vehicleType: 'CAR',
     color: 'WHITE',
     timestamp: 'Live',
     detectedImageUrl: '/assets/Dashboard.png',
     boundingLabel: 'Vehicle (YOLOv8)',
+    recentDetections: [],
   },
   recentAlerts: [
     {

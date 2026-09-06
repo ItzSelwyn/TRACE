@@ -99,11 +99,13 @@ def process_camera_cycle(
         timestamp = datetime(2024, 1, 1, tzinfo=timezone.utc) + timedelta(
             seconds=offset_seconds + (frame_id / 10.0)
         )
-        plate_text = record.get("fused_plate_text") or f"TRACE-{camera_id}-{vehicle_id}"
+        vid_int = int(vehicle_id) if str(vehicle_id).isdigit() else None
+        vid_fmt = f"{vid_int:03d}" if vid_int is not None else str(vehicle_id)
+        plate_text = record.get("fused_plate_text") or f"TRACE-{camera_id.upper()}-{vid_fmt}"
         fused_conf = float(record.get("fused_confidence", 0.95))
         vtype = record.get("vehicle_type", "vehicle")
         vcolour = record.get("vehicle_colour", "unknown")
-        track_id = record.get("track_id") or f"track-{camera_id}-{vehicle_id}"
+        track_id = record.get("track_id") or f"TRK-{vid_fmt}"
         captured_at_str = record.get("captured_at") or timestamp.isoformat()
 
         observation = {

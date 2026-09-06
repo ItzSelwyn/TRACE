@@ -1,0 +1,71 @@
+{
+  "sync_mode": "independent",
+  "loop_scenario": true,
+  "cameras": {
+    "c020": {
+      "camera_id": "c020",
+      "name": "Camera 020",
+      "source_type": "video",
+      "source_path": "footage/c020/vdo.avi",
+      "scenario": "S04",
+      "fps": 10.0,
+      "enabled": true,
+      "sync_offset_s": 25.905,
+      "frame_count": 473,
+      "total_frames": 473,
+      "status": "SYNC DISABLED",
+      "sync_mode": "independent",
+      "current_frame": 0,
+      "current_local_time": 0.0
+    },
+    "c023": {
+      "camera_id": "c023",
+      "name": "Camera 023",
+      "source_type": "video",
+      "source_path": "footage/c023/vdo.avi",
+      "scenario": "S04",
+      "fps": 10.0,
+      "enabled": true,
+      "sync_offset_s": 45.716,
+      "frame_count": 609,
+      "total_frames": 609,
+      "status": "SYNC DISABLED",
+      "sync_mode": "independent",
+      "current_frame": 0,
+      "current_local_time": 0.0
+    },
+    "c029": {
+      "camera_id": "c029",
+      "name": "Camera 029",
+      "source_type": "video",
+      "source_path": "footage/c029/vdo.avi",
+      "scenario": "S04",
+      "fps": 10.0,
+      "enabled": true,
+      "sync_offset_s": 125.788,
+      "frame_count": 260,
+      "total_frames": 260,
+      "status": "SYNC DISABLED",
+      "sync_mode": "independent",
+      "current_frame": 0,
+      "current_local_time": 0.0
+    },
+    "c035": {
+      "camera_id": "c035",
+      "name": "Camera 035",
+      "source_type": "video",
+      "source_path": "footage/c035/vdo.avi",
+      "scenario": "S04",
+      "fps": 10.0,
+      "enabled": true,
+      "sync_offset_s": 165.568,
+      "frame_count": 210,
+      "total_frames": 210,
+      "status": "SYNC DISABLED",
+      "sync_mode": "independent",
+      "current_frame": 0,
+      "current_local_time": 0.0
+    }
+  },
+  "updated_at": "2026-09-06T05:41:07.203337+00:00"
+}
