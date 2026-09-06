@@ -18,7 +18,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'vehicle-trace', label: 'Vehicle Trace', icon: '/assets/route.svg', enabled: true },
     { id: 'analytics', label: 'Analytics', icon: '/assets/Analystics.svg', enabled: false },
     { id: 'alerts', label: 'Alerts', icon: '/assets/Alerts.svg', enabled: false, hasRedAlert: true },
-    { id: 'blacklist', label: 'Blacklist', icon: '/assets/Blacklist.svg', enabled: false },
+    { id: 'blacklist', label: 'Blacklist', icon: '/assets/Blacklist.svg', enabled: true },
     { id: 'cameras', label: 'Cameras', icon: '/assets/camera.svg', enabled: false },
   ];
 

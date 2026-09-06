@@ -26,23 +26,17 @@ export const Header: React.FC<HeaderProps> = ({ currentRoute, onNavigate }) => {
 
       {/* Right Header Section */}
       <div className="flex items-center gap-4">
-        {/* Home Page Icon Button */}
+        {/* Home Page Icon Button matching design screenshot */}
         <button
           onClick={() => onNavigate('home')}
-          className={`p-2.5 rounded-lg flex items-center justify-center transition-all ${
-            isHome
-              ? 'bg-[#F2D04E] text-black shadow-md'
-              : 'bg-[#1E1E1E] hover:bg-[#2A2A2A] text-white'
-          }`}
+          className="p-1.5 flex items-center justify-center transition-transform hover:scale-110 active:scale-95 cursor-pointer outline-none"
           title="Home Page"
           aria-label="Home"
         >
           <img 
             src="/assets/home.svg" 
             alt="Home Icon" 
-            className={`w-5 h-5 transition-transform ${
-              isHome ? 'brightness-0' : ''
-            }`} 
+            className="w-6 h-6 object-contain" 
           />
         </button>
       </div>

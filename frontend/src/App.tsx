@@ -3,6 +3,7 @@ import { Header } from './components/layout/Header';
 import { Sidebar, NavRoute } from './components/layout/Sidebar';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { VehicleTraceView } from './components/vehicle-trace/VehicleTraceView';
+import { BlacklistView } from './components/blacklist/BlacklistView';
 import { HomeView } from './components/home/HomeView';
 import { mockDashboardData } from './data/mockDashboardData';
 import { mockVehicleTraceData } from './data/mockVehicleTraceData';
@@ -14,7 +15,7 @@ export const App: React.FC = () => {
 
   // Navigation router handler
   const handleNavigate = (route: NavRoute | string) => {
-    if (route === 'dashboard' || route === 'vehicle-trace' || route === 'home') {
+    if (route === 'dashboard' || route === 'vehicle-trace' || route === 'blacklist' || route === 'home') {
       setCurrentRoute(route as NavRoute | 'home');
     }
   };
@@ -78,6 +79,13 @@ export const App: React.FC = () => {
             <VehicleTraceView
               data={vehicleTracePayload}
               onSearchPlate={handleSearchPlate}
+            />
+          )}
+
+          {currentRoute === 'blacklist' && (
+            <BlacklistView
+              onSearchPlate={handleSearchPlate}
+              onViewTrace={handleViewTrace}
             />
           )}
         </main>
