@@ -1,4 +1,13 @@
 import React, { useState } from 'react';
+import {
+  Map,
+  MapMarker,
+  MarkerContent,
+  MarkerTooltip,
+  MarkerPopup,
+  MapHeatmap,
+  HeatmapPoint,
+} from '@/components/ui/map';
 
 export type AnalyticsTab = 'HEATMAP' | 'OD_MATRIX' | 'SEGMENT_DETAIL';
 export type TimeFilter = 'LIVE' | '1hr' | '6hrs' | '12hrs' | '24hrs';
@@ -13,22 +22,227 @@ interface MonitoredSegment {
   timestamp: string;
   congestionIndex: string;
   congestionColor: 'red' | 'yellow' | 'green';
+  lng: number;
+  lat: number;
 }
+
+// Live Interactive Chart Component for Segment Details
+const SegmentSpeedChart: React.FC<{ filter: TimeFilter; segmentName: string }> = ({ filter }) => {
+  const [hoveredPoint, setHoveredPoint] = useState<{ time: string; speed: number; x: number; y: number } | null>(null);
+
+  // Dynamic sample data based on time filter
+  const getFilterData = () => {
+    switch (filter) {
+      case 'LIVE':
+        return [
+          { time: '10:00', speed: 75 },
+          { time: '10:05', speed: 68 },
+          { time: '10:10', speed: 52 },
+          { time: '10:15', speed: 38 },
+          { time: '10:20', speed: 28 },
+          { time: '10:23', speed: 32 },
+        ];
+      case '1hr':
+        return [
+          { time: '09:30', speed: 80 },
+          { time: '09:40', speed: 72 },
+          { time: '09:50', speed: 55 },
+          { time: '10:00', speed: 42 },
+          { time: '10:10', speed: 30 },
+          { time: '10:23', speed: 32 },
+        ];
+      case '6hrs':
+        return [
+          { time: '05:00', speed: 88 },
+          { time: '06:00', speed: 70 },
+          { time: '07:00', speed: 45 },
+          { time: '08:00', speed: 25 },
+          { time: '09:00', speed: 35 },
+          { time: '10:00', speed: 32 },
+        ];
+      case '12hrs':
+        return [
+          { time: '22:00', speed: 92 },
+          { time: '01:00', speed: 95 },
+          { time: '04:00', speed: 88 },
+          { time: '07:00', speed: 42 },
+          { time: '09:00', speed: 28 },
+          { time: '10:23', speed: 32 },
+        ];
+      default: // 24hrs
+        return [
+          { time: '00:00', speed: 85 },
+          { time: '04:00', speed: 90 },
+          { time: '08:00', speed: 38 },
+          { time: '12:00', speed: 45 },
+          { time: '16:00', speed: 28 },
+          { time: '20:00', speed: 65 },
+          { time: '24:00', speed: 82 },
+        ];
+    }
+  };
+
+  const points = getFilterData();
+  const svgWidth = 800;
+  const svgHeight = 280;
+  const paddingLeft = 50;
+  const paddingRight = 30;
+  const paddingTop = 25;
+  const paddingBottom = 35;
+
+  const chartWidth = svgWidth - paddingLeft - paddingRight;
+  const chartHeight = svgHeight - paddingTop - paddingBottom;
+  const maxSpeed = 100;
+
+  const coords = points.map((p, i) => {
+    const x = paddingLeft + (i / (points.length - 1)) * chartWidth;
+    const y = paddingTop + (1 - p.speed / maxSpeed) * chartHeight;
+    return { ...p, x, y };
+  });
+
+  const pathD = coords.reduce((acc, pt, i, arr) => {
+    if (i === 0) return `M ${pt.x} ${pt.y}`;
+    const prev = arr[i - 1];
+    const cx1 = prev.x + (pt.x - prev.x) / 2;
+    const cy1 = prev.y;
+    const cx2 = prev.x + (pt.x - prev.x) / 2;
+    const cy2 = pt.y;
+    return `${acc} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${pt.x} ${pt.y}`;
+  }, '');
+
+  const areaD = `${pathD} L ${coords[coords.length - 1].x} ${paddingTop + chartHeight} L ${coords[0].x} ${paddingTop + chartHeight} Z`;
+  const yTicks = [100, 80, 60, 40, 20, 0];
+
+  return (
+    <div className="w-full relative select-none font-body py-2">
+      <svg
+        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+        className="w-full h-auto overflow-visible"
+        onMouseLeave={() => setHoveredPoint(null)}
+      >
+        <defs>
+          <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#F2D04E" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#F2D04E" stopOpacity="0.0" />
+          </linearGradient>
+        </defs>
+
+        {/* Horizontal Grid lines & Y-Axis Ticks */}
+        {yTicks.map((tick) => {
+          const y = paddingTop + (1 - tick / maxSpeed) * chartHeight;
+          return (
+            <g key={tick}>
+              <line
+                x1={paddingLeft}
+                y1={y}
+                x2={svgWidth - paddingRight}
+                y2={y}
+                stroke="#262626"
+                strokeWidth="1"
+              />
+              <text
+                x={paddingLeft - 10}
+                y={y + 4}
+                fill="#808080"
+                fontSize="11"
+                textAnchor="end"
+                className="font-body"
+              >
+                {tick} km/h
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Threshold Critical Reference Line (40 km/h) */}
+        <line
+          x1={paddingLeft}
+          y1={paddingTop + (1 - 40 / maxSpeed) * chartHeight}
+          x2={svgWidth - paddingRight}
+          y2={paddingTop + (1 - 40 / maxSpeed) * chartHeight}
+          stroke="#971D1B"
+          strokeWidth="1.5"
+          strokeDasharray="4 4"
+        />
+
+        {/* Area Gradient Fill */}
+        <path d={areaD} fill="url(#chartGradient)" />
+
+        {/* Live Speed Line */}
+        <path d={pathD} fill="none" stroke="#F2D04E" strokeWidth="3" strokeLinecap="round" />
+
+        {/* Data Point Circles */}
+        {coords.map((pt, i) => (
+          <g key={i}>
+            <circle
+              cx={pt.x}
+              cy={pt.y}
+              r={pt.speed < 40 ? 5 : 4}
+              fill={pt.speed < 40 ? "#971D1B" : "#F2D04E"}
+            />
+            {/* Interactive Mouse Hover Hit Target */}
+            <circle
+              cx={pt.x}
+              cy={pt.y}
+              r="16"
+              fill="transparent"
+              className="cursor-pointer"
+              onMouseEnter={() => setHoveredPoint(pt)}
+            />
+          </g>
+        ))}
+
+        {/* X-Axis Time Labels */}
+        {coords.map((pt, i) => (
+          <text
+            key={i}
+            x={pt.x}
+            y={svgHeight - 8}
+            fill="#808080"
+            fontSize="11"
+            textAnchor="middle"
+            className="font-body"
+          >
+            {pt.time}
+          </text>
+        ))}
+      </svg>
+
+      {/* Hover Tooltip Card */}
+      {hoveredPoint && (
+        <div
+          className="absolute z-30 bg-[#151515] text-white text-xs px-3 py-1.5 rounded pointer-events-none font-body -translate-x-1/2 -translate-y-full mb-2"
+          style={{
+            left: `${(hoveredPoint.x / svgWidth) * 100}%`,
+            top: `${(hoveredPoint.y / svgHeight) * 100}%`,
+          }}
+        >
+          <div className="font-semibold text-white">{hoveredPoint.time}</div>
+          <div className="text-[#F2D04E] font-bold">{hoveredPoint.speed} km/h</div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const AnalyticsView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('HEATMAP');
   const [activeFilter, setActiveFilter] = useState<TimeFilter>('LIVE');
   const [selectedSegmentId, setSelectedSegmentId] = useState<number>(1);
-  const [zoomLevel, setZoomLevel] = useState<number>(1.0);
   const [exportToast, setExportToast] = useState<string | null>(null);
 
-  const handleZoomIn = () => {
-    setZoomLevel((prev) => Math.min(prev + 0.15, 2.2));
-  };
-
-  const handleZoomOut = () => {
-    setZoomLevel((prev) => Math.max(prev - 0.15, 0.8));
-  };
+  // Heatmap Point Data for Maplibre/mapcn
+  const heatmapPoints: HeatmapPoint[] = [
+    { lng: -73.985, lat: 40.748, weight: 1.0 },
+    { lng: -73.986, lat: 40.749, weight: 0.9 },
+    { lng: -73.984, lat: 40.747, weight: 0.8 },
+    { lng: -73.982, lat: 40.750, weight: 0.7 },
+    { lng: -73.987, lat: 40.752, weight: 0.95 },
+    { lng: -73.990, lat: 40.755, weight: 0.6 },
+    { lng: -73.978, lat: 40.744, weight: 0.85 },
+    { lng: -73.975, lat: 40.742, weight: 0.9 },
+    { lng: -73.981, lat: 40.746, weight: 1.0 },
+  ];
 
   // OD Matrix Zones & Data Structure
   const zones = ['Z-NORTH', 'Z-CENTRAL', 'Z-EAST', 'Z-SOUTH', 'Z-PORT', 'Z-INDUS'];
@@ -42,7 +256,7 @@ export const AnalyticsView: React.FC = () => {
     'Z-INDUS': { 'Z-NORTH': 78, 'Z-CENTRAL': 165, 'Z-EAST': 88, 'Z-SOUTH': 240, 'Z-PORT': 490, 'Z-INDUS': null },
   };
 
-  // Monitored Segments List (Matching Design Screenshot Exactly)
+  // Monitored Segments List
   const monitoredSegments: MonitoredSegment[] = [
     {
       id: 1,
@@ -54,6 +268,8 @@ export const AnalyticsView: React.FC = () => {
       timestamp: '10:23:01 am',
       congestionIndex: 'Critical',
       congestionColor: 'red',
+      lng: -73.985,
+      lat: 40.748,
     },
     {
       id: 2,
@@ -65,6 +281,8 @@ export const AnalyticsView: React.FC = () => {
       timestamp: '10:23:01 am',
       congestionIndex: 'Moderate',
       congestionColor: 'yellow',
+      lng: -73.987,
+      lat: 40.752,
     },
     {
       id: 3,
@@ -76,6 +294,8 @@ export const AnalyticsView: React.FC = () => {
       timestamp: '10:23:01 am',
       congestionIndex: 'Optimal',
       congestionColor: 'green',
+      lng: -73.981,
+      lat: 40.744,
     },
     {
       id: 4,
@@ -87,6 +307,8 @@ export const AnalyticsView: React.FC = () => {
       timestamp: '10:23:01 am',
       congestionIndex: 'Optimal',
       congestionColor: 'green',
+      lng: -73.978,
+      lat: 40.741,
     },
   ];
 
@@ -98,12 +320,12 @@ export const AnalyticsView: React.FC = () => {
       return { bg: 'bg-[#151515]', text: 'text-[#666666]', label: '-' };
     }
     if (val < 200) {
-      return { bg: 'bg-[#14291D]/80 hover:bg-[#14291D]', text: 'text-[#26D07C]', label: `${val} v/h` };
+      return { bg: 'bg-[#14291D]/80 hover:bg-[#14291D]', text: 'text-[#1B7A43]', label: `${val} v/h` };
     }
     if (val <= 400) {
       return { bg: 'bg-[#2E2A14]/80 hover:bg-[#2E2A14]', text: 'text-[#F2D04E]', label: `${val} v/h` };
     }
-    return { bg: 'bg-[#3A1717]/80 hover:bg-[#3A1717]', text: 'text-[#FF4D4D]', label: `${val} v/h` };
+    return { bg: 'bg-[#3A1717]/80 hover:bg-[#3A1717]', text: 'text-[#971D1B]', label: `${val} v/h` };
   };
 
   // Export Handlers
@@ -140,14 +362,14 @@ export const AnalyticsView: React.FC = () => {
     <div className="space-y-6 max-w-[1600px] mx-auto pb-6 select-none relative">
       {/* Export Toast Notification */}
       {exportToast && (
-        <div className="fixed top-20 right-8 z-50 bg-[#F2D04E] text-black font-heading font-bold text-sm px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 animate-bounce">
+        <div className="fixed top-20 right-8 z-50 bg-[#F2D04E] text-black font-heading font-bold text-sm px-4 py-2.5 rounded-xl flex items-center gap-2">
           <span>✓</span>
           <span>{exportToast}</span>
         </div>
       )}
 
-      {/* ================= 1. TOP TABS NAVIGATION BAR ================= */}
-      <div className="bg-[#1E1E1E] rounded-xl p-4 md:px-8 flex items-center justify-around border border-white/5 shadow-xl">
+      {/* ================= 1. TOP TABS NAVIGATION BAR (Strokes Removed) ================= */}
+      <div className="bg-[#1E1E1E] rounded-xl p-4 md:px-8 flex items-center justify-around">
         <button
           onClick={() => setActiveTab('HEATMAP')}
           className={`relative py-2 px-6 font-heading text-lg md:text-xl font-bold tracking-widest transition-all cursor-pointer ${
@@ -156,7 +378,7 @@ export const AnalyticsView: React.FC = () => {
         >
           HEATMAP
           {activeTab === 'HEATMAP' && (
-            <span className="absolute bottom-0 left-0 right-0 h-1 bg-[#F2D04E] rounded-full shadow-md" />
+            <span className="absolute bottom-0 left-0 right-0 h-1 bg-[#F2D04E] rounded-full" />
           )}
         </button>
 
@@ -168,7 +390,7 @@ export const AnalyticsView: React.FC = () => {
         >
           OD MATRIX
           {activeTab === 'OD_MATRIX' && (
-            <span className="absolute bottom-0 left-0 right-0 h-1 bg-[#F2D04E] rounded-full shadow-md" />
+            <span className="absolute bottom-0 left-0 right-0 h-1 bg-[#F2D04E] rounded-full" />
           )}
         </button>
 
@@ -180,14 +402,14 @@ export const AnalyticsView: React.FC = () => {
         >
           SEGMENT DETAIL
           {activeTab === 'SEGMENT_DETAIL' && (
-            <span className="absolute bottom-0 left-0 right-0 h-1 bg-[#F2D04E] rounded-full shadow-md" />
+            <span className="absolute bottom-0 left-0 right-0 h-1 bg-[#F2D04E] rounded-full" />
           )}
         </button>
       </div>
 
-      {/* ================= 2. HEATMAP SECTION ================= */}
+      {/* ================= 2. HEATMAP SECTION (Strokes Removed) ================= */}
       {activeTab === 'HEATMAP' && (
-        <div className="bg-[#1E1E1E] rounded-xl p-6 border border-white/5 shadow-2xl flex flex-col gap-6">
+        <div className="bg-[#1E1E1E] rounded-xl p-6 flex flex-col gap-6">
           {/* Header Metadata Section */}
           <div className="space-y-4">
             {/* Location Title & Filter Row */}
@@ -200,8 +422,8 @@ export const AnalyticsView: React.FC = () => {
                 </h1>
               </div>
 
-              {/* Time Filter Controls Bar */}
-              <div className="bg-[#151515] p-1 rounded-lg border border-white/10 flex items-center gap-1 self-start md:self-auto shadow-inner">
+              {/* Time Filter Controls Bar (Filter Slide Yellow Background Perfectly Fitted) */}
+              <div className="bg-[#151515] p-1 rounded-[3px] flex items-center gap-1 self-start md:self-auto h-9">
                 {(['LIVE', '1hr', '6hrs', '12hrs', '24hrs'] as TimeFilter[]).map((filter) => {
                   const isActive = activeFilter === filter;
                   const label = filter === 'LIVE' ? 'LIVE' : `Past ${filter}`;
@@ -209,8 +431,8 @@ export const AnalyticsView: React.FC = () => {
                     <button
                       key={filter}
                       onClick={() => setActiveFilter(filter)}
-                      className={`px-3 py-1.5 rounded text-xs font-heading font-bold transition-all cursor-pointer ${
-                        isActive ? 'bg-[#F2D04E] text-black shadow-md' : 'text-[#A0A0A0] hover:text-white hover:bg-white/5'
+                      className={`h-full px-3.5 flex items-center justify-center rounded-[3px] text-xs font-body font-bold transition-all cursor-pointer select-none leading-none ${
+                        isActive ? 'bg-[#F2D04E] text-black' : 'text-[#A0A0A0] hover:text-white hover:bg-white/5'
                       }`}
                     >
                       {label}
@@ -226,77 +448,71 @@ export const AnalyticsView: React.FC = () => {
             </p>
 
             {/* Info Metrics Grid Row */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-white/5">
-              <div className="space-y-2 text-xs md:text-sm font-body text-[#AEA793]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
+              <div className="text-xs md:text-sm font-body text-[#AEA793] space-y-2">
                 <div className="flex items-center gap-2">
                   <img src="/assets/heatmap_camera.svg" alt="Cameras" className="w-4 h-4 object-contain" />
                   <span>Camera 16, Camera 15, Camera 14</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <img src="/assets/heatmap_vehicles.svg" alt="Vehicles" className="w-4 h-4 object-contain" />
-                  <span className="text-white font-semibold">452 vehicles</span>
+                  <span className="text-[#AEA793] font-semibold font-body">452 vehicles</span>
                 </div>
               </div>
 
               <div className="text-xs md:text-sm font-body text-[#AEA793] flex items-center gap-2">
                 <span>Maximum Capacity:</span>
-                <span className="text-white font-bold font-heading text-sm md:text-base">
+                <span className="text-[#AEA793] font-bold font-body text-sm md:text-base">
                   480 vehicles
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Heatmap Map Graphic & Interactive Controls Overlay */}
-          <div className="relative rounded-xl overflow-hidden bg-[#151515] border border-white/10 shadow-2xl min-h-[520px] flex items-center justify-center">
-            <div className="w-full h-full overflow-hidden flex items-center justify-center">
-              <img
-                src="/assets/heatmap.svg"
-                alt="City Traffic Heatmap"
-                className="w-full h-full object-cover transition-transform duration-300 ease-out transform-gpu"
-                style={{ transform: `scale(${zoomLevel})` }}
-              />
-            </div>
+          {/* Interactive Heatmap Map (MapCN Map - Stroke Removed) */}
+          <div className="relative rounded-xl overflow-hidden bg-[#151515] h-[520px] w-full">
+            <Map center={[-73.983, 40.747]} zoom={13.2}>
+              <MapHeatmap data={heatmapPoints} radius={40} opacity={0.85} intensity={1.3} />
 
-            <div className="absolute bottom-4 left-4 z-10">
+              {monitoredSegments.map((seg) => (
+                <MapMarker key={seg.id} longitude={seg.lng} latitude={seg.lat}>
+                  <MarkerContent>
+                    <div className="w-4 h-4 rounded-full bg-[#971D1B] border-2 border-white animate-pulse" />
+                  </MarkerContent>
+                  <MarkerTooltip>{seg.title}</MarkerTooltip>
+                  <MarkerPopup>
+                    <div className="bg-[#161616] p-3 rounded-lg text-left space-y-1 font-body text-xs min-w-[160px]">
+                      <p className="font-bold text-white font-body">{seg.title}</p>
+                      <p className="text-[#A0A0A0]">Vehicles: <strong className="text-white">{seg.vehiclesTravelling}</strong></p>
+                      <p className="text-[#A0A0A0]">Congestion: <strong className="text-[#971D1B]">{seg.congestionIndex}</strong></p>
+                    </div>
+                  </MarkerPopup>
+                </MapMarker>
+              ))}
+            </Map>
+
+            <div className="absolute bottom-4 left-4 z-10 pointer-events-none">
               <img
                 src="/assets/traffic_congestion_index.svg"
                 alt="Traffic Congestion Index"
-                className="w-auto h-20 md:h-24 drop-shadow-2xl object-contain"
+                className="w-auto h-20 md:h-24 object-contain"
               />
-            </div>
-
-            <div className="absolute bottom-4 right-4 z-10 flex items-center gap-2">
-              <button
-                onClick={handleZoomIn}
-                className="cursor-pointer focus:outline-none transition-transform hover:scale-110 active:scale-95 shadow-xl"
-                title="Zoom In"
-              >
-                <img src="/assets/zoom_in.svg" alt="Zoom In" className="w-9 h-9 object-contain" />
-              </button>
-              <button
-                onClick={handleZoomOut}
-                className="cursor-pointer focus:outline-none transition-transform hover:scale-110 active:scale-95 shadow-xl"
-                title="Zoom Out"
-              >
-                <img src="/assets/zoom_out.svg" alt="Zoom Out" className="w-9 h-9 object-contain" />
-              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ================= 3. OD MATRIX SECTION ================= */}
+      {/* ================= 3. OD MATRIX SECTION (Strokes Removed) ================= */}
       {activeTab === 'OD_MATRIX' && (
-        <div className="bg-[#1E1E1E] rounded-xl p-6 md:p-8 border border-white/5 shadow-2xl flex flex-col gap-6">
+        <div className="bg-[#1E1E1E] rounded-xl p-6 md:p-8 flex flex-col gap-6">
           {/* Header Row: Description & Filter Slide */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <p className="text-sm md:text-base text-[#AEA793] font-body max-w-2xl leading-relaxed">
               Cross-sector vehicle velocity, journey counts, and throughput volume computed via multi-camera plate re-identification.
             </p>
 
-            {/* Time Filter Controls Bar */}
-            <div className="bg-[#151515] p-1 rounded-lg border border-white/10 flex items-center gap-1 self-start md:self-auto shadow-inner">
+            {/* Time Filter Controls Bar (Filter Slide Yellow Background Perfectly Fitted) */}
+            <div className="bg-[#151515] p-1 rounded-[3px] flex items-center gap-1 self-start md:self-auto h-9">
               {(['LIVE', '1hr', '6hrs', '12hrs', '24hrs'] as TimeFilter[]).map((filter) => {
                 const isActive = activeFilter === filter;
                 const label = filter === 'LIVE' ? 'LIVE' : `Past ${filter}`;
@@ -304,8 +520,8 @@ export const AnalyticsView: React.FC = () => {
                   <button
                     key={filter}
                     onClick={() => setActiveFilter(filter)}
-                    className={`px-3 py-1.5 rounded text-xs font-heading font-bold transition-all cursor-pointer ${
-                      isActive ? 'bg-[#F2D04E] text-black shadow-md' : 'text-[#A0A0A0] hover:text-white hover:bg-white/5'
+                    className={`h-full px-3.5 flex items-center justify-center rounded-[3px] text-xs font-body font-bold transition-all cursor-pointer select-none leading-none ${
+                      isActive ? 'bg-[#F2D04E] text-black' : 'text-[#A0A0A0] hover:text-white hover:bg-white/5'
                     }`}
                   >
                     {label}
@@ -316,9 +532,9 @@ export const AnalyticsView: React.FC = () => {
           </div>
 
           {/* Flow Category Legend Row */}
-          <div className="flex flex-wrap items-center gap-6 text-xs md:text-sm font-heading font-medium text-[#AEA793] pt-2">
+          <div className="flex flex-wrap items-center gap-6 text-xs md:text-sm font-body font-medium text-[#AEA793] pt-2">
             <div className="flex items-center gap-2">
-              <span className="w-3.5 h-3.5 rounded-sm bg-[#26D07C]" />
+              <span className="w-3.5 h-3.5 rounded-sm bg-[#1B7A43]" />
               <span>Normal Flow ( &lt; 200 v/h )</span>
             </div>
             <div className="flex items-center gap-2">
@@ -326,33 +542,33 @@ export const AnalyticsView: React.FC = () => {
               <span>Moderate Flow ( 200 - 400 v/h )</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-3.5 h-3.5 rounded-sm bg-[#FF4D4D]" />
+              <span className="w-3.5 h-3.5 rounded-sm bg-[#971D1B]" />
               <span>Heavy Flow ( &gt; 400 v/h )</span>
             </div>
           </div>
 
-          {/* OD Matrix Data Table */}
-          <div className="w-full overflow-x-auto rounded-xl border border-white/10 bg-[#151515] shadow-2xl">
+          {/* OD Matrix Data Table (Strokes/Borders Removed) */}
+          <div className="w-full overflow-x-auto rounded-xl bg-[#151515]">
             <table className="w-full border-collapse text-center select-none">
               <thead>
-                <tr className="border-b border-white/10 bg-[#111111]">
-                  <th className="py-4 px-6 text-xs font-heading font-bold tracking-wider text-[#A0A0A0] text-left uppercase border-r border-white/10">
+                <tr className="bg-[#111111]">
+                  <th className="py-4 px-6 text-xs font-body font-bold tracking-wider text-[#A0A0A0] text-left uppercase">
                     ORIGIN / DEST
                   </th>
                   {zones.map((zone) => (
                     <th
                       key={zone}
-                      className="py-4 px-4 text-xs font-heading font-bold tracking-wider text-white uppercase border-r border-white/5 last:border-r-0"
+                      className="py-4 px-4 text-xs font-body font-bold tracking-wider text-white uppercase"
                     >
                       {zone}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody>
                 {zones.map((originZone) => (
                   <tr key={originZone} className="transition-colors hover:bg-white/[0.02]">
-                    <td className="py-4 px-6 text-xs font-heading font-bold text-white text-left tracking-wider bg-[#111111] border-r border-white/10">
+                    <td className="py-4 px-6 text-xs font-body font-bold text-white text-left tracking-wider bg-[#111111]">
                       {originZone}
                     </td>
 
@@ -362,7 +578,7 @@ export const AnalyticsView: React.FC = () => {
                       return (
                         <td
                           key={`${originZone}-${destZone}`}
-                          className={`py-4 px-4 text-xs font-heading font-semibold tracking-wide border-r border-white/5 last:border-r-0 transition-all ${style.bg} ${style.text}`}
+                          className={`py-4 px-4 text-xs font-body font-semibold tracking-wide transition-all ${style.bg} ${style.text}`}
                         >
                           {style.label}
                         </td>
@@ -378,70 +594,66 @@ export const AnalyticsView: React.FC = () => {
           <div className="flex justify-end pt-2">
             <button
               onClick={handleExportODMatrix}
-              className="cursor-pointer focus:outline-none transition-transform hover:scale-105 active:scale-95 duration-200"
+              className="cursor-pointer focus:outline-none"
               title="Export OD Matrix Data (CSV)"
             >
               <img 
                 src="/assets/od_matrix_export_btn.svg" 
                 alt="Export Button" 
-                className="h-10 md:h-11 w-auto object-contain drop-shadow-xl" 
+                className="h-10 md:h-11 w-auto object-contain" 
               />
             </button>
           </div>
         </div>
       )}
 
-      {/* ================= 4. SEGMENT DETAIL SECTION (Matching UI Screenshot Exactly) ================= */}
+      {/* ================= 4. SEGMENT DETAIL SECTION (Strokes & Hovering Side Arrow Removed, Hanken Grotesk Font) ================= */}
       {activeTab === 'SEGMENT_DETAIL' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* LEFT COLUMN: MONITORED SEGMENTS LIST (4/12 Width) */}
-          <div className="lg:col-span-4 bg-[#1E1E1E] rounded-xl p-5 border border-white/5 shadow-2xl flex flex-col gap-4">
+          <div className="lg:col-span-4 bg-[#1E1E1E] rounded-xl p-5 flex flex-col gap-4">
             <h2 className="text-lg md:text-xl font-bold font-heading text-white uppercase tracking-wider mb-1">
               MONITORED SEGMENTS
             </h2>
 
-            {/* List of 4 Monitored Segment Cards */}
+            {/* List of 4 Monitored Segment Cards (Yellow strokes removed, Hanken Grotesk font) */}
             <div className="space-y-3.5">
               {monitoredSegments.map((seg) => {
                 const isSelected = seg.id === selectedSegmentId;
                 
-                // Color mapping for segment titles based on status
-                let titleColorClass = 'text-[#26D07C]';
-                if (seg.statusColor === 'red') titleColorClass = 'text-[#FF4D4D]';
+                let titleColorClass = 'text-[#1B7A43]';
+                if (seg.statusColor === 'red') titleColorClass = 'text-[#971D1B]';
                 if (seg.statusColor === 'yellow') titleColorClass = 'text-[#F2D04E]';
 
                 return (
                   <div
                     key={seg.id}
                     onClick={() => setSelectedSegmentId(seg.id)}
-                    className={`bg-[#111111] rounded-xl p-4 cursor-pointer transition-all border ${
-                      isSelected
-                        ? 'border-[#F2D04E] shadow-lg shadow-black/80 ring-1 ring-[#F2D04E]/50'
-                        : 'border-white/5 hover:border-white/20'
-                    } flex items-center justify-between group`}
+                    className="bg-[#111111] rounded-xl p-4 cursor-pointer flex items-center justify-between"
                   >
                     <div className="space-y-1.5">
-                      <h3 className={`text-sm md:text-base font-bold font-heading ${titleColorClass}`}>
+                      {/* Segment title font set to Hanken Grotesk (font-body) */}
+                      <h3 className={`text-sm md:text-base font-bold font-body ${titleColorClass}`}>
                         {seg.title}
                       </h3>
                       <div className="text-xs font-body text-white/90 space-y-0.5">
                         <p>
                           <span className="text-[#A0A0A0]">Vehicles Travelling : </span>
-                          <span className="font-semibold text-white">{seg.vehiclesTravelling}</span>
+                          <span className="font-semibold text-[#AEA793]">{seg.vehiclesTravelling}</span>
                         </p>
                         <p>
                           <span className="text-[#A0A0A0]">Maximum Capacity : </span>
-                          <span className="font-semibold text-white">{seg.maxCapacity}</span>
+                          <span className="font-semibold text-[#AEA793]">{seg.maxCapacity}</span>
                         </p>
                       </div>
                     </div>
 
-                    {/* Right Side Arrow Icon */}
+                    {/* Right Side Arrow Icon (Hovering interactive removed) */}
                     <div className="pl-2">
                       <img 
                         src="/assets/segment_side_arrow.svg" 
                         alt="Select Segment" 
-                        className="w-3 h-4 object-contain transition-transform group-hover:translate-x-1"
+                        className="w-3 h-4 object-contain"
                       />
                     </div>
                   </div>
@@ -451,7 +663,7 @@ export const AnalyticsView: React.FC = () => {
           </div>
 
           {/* RIGHT COLUMN: SELECTED SEGMENT GRAPH & DETAILS (8/12 Width) */}
-          <div className="lg:col-span-8 bg-[#1E1E1E] rounded-xl p-6 border border-white/5 shadow-2xl flex flex-col justify-between min-h-[500px] gap-6">
+          <div className="lg:col-span-8 bg-[#1E1E1E] rounded-xl p-6 flex flex-col justify-between min-h-[500px] gap-6">
             <div className="space-y-6">
               {/* Header Row: Location Title & Time Filter Slide */}
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -467,8 +679,8 @@ export const AnalyticsView: React.FC = () => {
                   </h1>
                 </div>
 
-                {/* Time Filter Controls Bar */}
-                <div className="bg-[#151515] p-1 rounded-lg border border-white/10 flex items-center gap-1 self-start md:self-auto shadow-inner">
+                {/* Time Filter Controls Bar (Filter Slide Yellow Background Perfectly Fitted) */}
+                <div className="bg-[#151515] p-1 rounded-[3px] flex items-center gap-1 self-start md:self-auto h-9">
                   {(['LIVE', '1hr', '6hrs', '12hrs', '24hrs'] as TimeFilter[]).map((filter) => {
                     const isActive = activeFilter === filter;
                     const label = filter === 'LIVE' ? 'LIVE' : `Past ${filter}`;
@@ -476,8 +688,8 @@ export const AnalyticsView: React.FC = () => {
                       <button
                         key={filter}
                         onClick={() => setActiveFilter(filter)}
-                        className={`px-3 py-1.5 rounded text-xs font-heading font-bold transition-all cursor-pointer ${
-                          isActive ? 'bg-[#F2D04E] text-black shadow-md' : 'text-[#A0A0A0] hover:text-white hover:bg-white/5'
+                        className={`h-full px-3.5 flex items-center justify-center rounded-[3px] text-xs font-body font-bold transition-all cursor-pointer select-none leading-none ${
+                          isActive ? 'bg-[#F2D04E] text-black' : 'text-[#A0A0A0] hover:text-white hover:bg-white/5'
                         }`}
                       >
                         {label}
@@ -491,37 +703,34 @@ export const AnalyticsView: React.FC = () => {
               <div className="space-y-1.5 text-xs md:text-sm font-body text-white/90">
                 <p>
                   <span className="text-[#A0A0A0]">Vehicles Travelling : </span>
-                  <span className="font-semibold text-white">{selectedSegment.vehiclesTravelling}</span>
+                  <span className="font-semibold text-[#AEA793]">{selectedSegment.vehiclesTravelling}</span>
                 </p>
                 <p>
                   <span className="text-[#A0A0A0]">Maximum Capacity : </span>
-                  <span className="font-semibold text-white">{selectedSegment.maxCapacity}</span>
+                  <span className="font-semibold text-[#AEA793]">{selectedSegment.maxCapacity}</span>
                 </p>
                 <p>
                   <span className="text-[#A0A0A0]">Timestamp : </span>
-                  <span className="font-semibold text-white">{selectedSegment.timestamp}</span>
+                  <span className="font-semibold text-[#AEA793]">{selectedSegment.timestamp}</span>
                 </p>
                 <p>
                   <span className="text-[#A0A0A0]">Traffic Congestion Index : </span>
-                  <span className={`font-bold font-heading ${
+                  {/* Font set to Hanken Grotesk (font-body) */}
+                  <span className={`font-bold font-body ${
                     selectedSegment.congestionColor === 'red'
-                      ? 'text-[#FF4D4D]'
+                      ? 'text-[#971D1B]'
                       : selectedSegment.congestionColor === 'yellow'
                       ? 'text-[#F2D04E]'
-                      : 'text-[#26D07C]'
+                      : 'text-[#1B7A43]'
                   }`}>
                     {selectedSegment.congestionIndex}
                   </span>
                 </p>
               </div>
 
-              {/* Main Segment Speed & Velocity Timeline Graph */}
-              <div className="w-full bg-[#111111] rounded-xl p-3 border border-white/10 shadow-2xl flex items-center justify-center overflow-hidden">
-                <img 
-                  src="/assets/segment_details_graph.svg" 
-                  alt="Segment Speed Timeline Graph" 
-                  className="w-full h-auto max-h-[350px] object-contain"
-                />
+              {/* Main Segment Speed Live Dynamic Interactive Graph (Strokes Removed) */}
+              <div className="w-full bg-[#111111] rounded-xl p-3 flex items-center justify-center overflow-hidden">
+                <SegmentSpeedChart filter={activeFilter} segmentName={selectedSegment.shortName} />
               </div>
             </div>
 
@@ -529,13 +738,13 @@ export const AnalyticsView: React.FC = () => {
             <div className="flex justify-end pt-2">
               <button
                 onClick={handleExportSegmentDetails}
-                className="cursor-pointer focus:outline-none transition-transform hover:scale-105 active:scale-95 duration-200"
+                className="cursor-pointer focus:outline-none"
                 title="Export Segment Details (CSV)"
               >
                 <img 
                   src="/assets/segment_export_btn.svg" 
                   alt="Export Button" 
-                  className="h-10 md:h-11 w-auto object-contain drop-shadow-xl" 
+                  className="h-10 md:h-11 w-auto object-contain" 
                 />
               </button>
             </div>

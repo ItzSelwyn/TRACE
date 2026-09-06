@@ -29,6 +29,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <TopStatsHeader
         stats={data.topStats}
         onSearch={onSearchPlate}
+        onNavigateBlacklist={() => onNavigateSection('blacklist')}
       />
 
       {/* Main Dashboard 2-Column Grid */}

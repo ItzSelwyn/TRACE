@@ -5,6 +5,8 @@ import { DashboardView } from './components/dashboard/DashboardView';
 import { VehicleTraceView } from './components/vehicle-trace/VehicleTraceView';
 import { AnalyticsView } from './components/analytics/AnalyticsView';
 import { AlertsView } from './components/alerts/AlertsView';
+import { BlacklistView } from './components/blacklist/BlacklistView';
+import { CamerasView } from './components/cameras/CamerasView';
 import { AdminCameraView } from './components/admin/AdminCameraView';
 import { HomeView } from './components/home/HomeView';
 import { mockDashboardData } from './data/mockDashboardData';
@@ -247,6 +249,8 @@ export const App: React.FC = () => {
       route === 'vehicle-trace' || 
       route === 'analytics' || 
       route === 'alerts' || 
+      route === 'blacklist' || 
+      route === 'cameras' || 
       route === 'admin-cameras' || 
       route === 'home'
     ) {
@@ -277,7 +281,7 @@ export const App: React.FC = () => {
   const isHomeScreen = currentRoute === 'home';
 
   return (
-    <div className="min-h-screen bg-[#151515] text-white flex flex-col font-sans select-none overflow-x-hidden">
+    <div className="min-h-screen bg-[#000000] text-white flex flex-col font-sans select-none overflow-x-hidden">
       {!isHomeScreen && (
         <Header 
           currentRoute={currentRoute} 
@@ -293,7 +297,7 @@ export const App: React.FC = () => {
           />
         )}
 
-        <main className={`flex-1 overflow-y-auto bg-[#151515] ${isHomeScreen ? 'p-0' : 'p-4 md:p-6'}`}>
+        <main className={`flex-1 overflow-y-auto bg-[#000000] ${isHomeScreen ? 'p-0' : 'p-4 md:p-6'}`}>
           {currentRoute === 'home' && (
             <HomeView onNavigate={handleNavigate} />
           )}
@@ -324,6 +328,17 @@ export const App: React.FC = () => {
             <AlertsView />
           )}
 
+          {currentRoute === 'blacklist' && (
+            <BlacklistView
+              onSearchPlate={handleSearchPlate}
+              onViewTrace={handleViewTrace}
+            />
+          )}
+
+          {currentRoute === 'cameras' && (
+            <CamerasView />
+          )}
+
           {currentRoute === 'admin-cameras' && (
             <AdminCameraView />
           )}
@@ -331,9 +346,9 @@ export const App: React.FC = () => {
       </div>
 
       {!isHomeScreen && (
-        <footer className="bg-[#151515] py-2.5 px-4 text-center select-none z-20 border-t border-white/5">
+        <footer className="bg-[#151515] py-2.5 px-4 text-center select-none z-20">
           <p className="text-[11px] text-[#A0A0A0] font-body">
-            © 2026 TRACE — Tracking, Recognition, Analytics & City-wide Traffic Enforcement. All Rights Reserved.
+            © 2026 TRACE - Tracking, Recognition, Analytics & City-wide Traffic Enforcement. All Rights Reserved.
           </p>
         </footer>
       )}

@@ -20,7 +20,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
             <img 
               src="/assets/Logo_Slogan_BG.svg" 
               alt="TRACE - Tracking Recognition Analysis City Wide Traffic Enforcement" 
-              className="w-full max-w-2xl h-auto object-contain drop-shadow-2xl"
+              className="w-full max-w-2xl h-auto object-contain"
             />
           </div>
 
@@ -28,14 +28,14 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
           <div className="-mt-24 md:-mt-36 z-10">
             <button
               onClick={() => setPageStep(2)}
-              className="cursor-pointer focus:outline-none transition-transform hover:scale-110 active:scale-95 duration-200"
+              className="cursor-pointer focus:outline-none"
               title="Next Page"
               aria-label="Next Page"
             >
               <img 
                 src="/assets/down_start.svg" 
                 alt="Next Page" 
-                className="w-12 h-12 md:w-14 md:h-14 drop-shadow-xl"
+                className="w-12 h-12 md:w-14 md:h-14"
               />
             </button>
           </div>
@@ -44,7 +44,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
         /* ================= PAGE 2 OF HOME SCREEN ================= */
         <div className="min-h-screen flex flex-col justify-between bg-[#151515]">
           {/* Page 2 Top Header */}
-          <header className="h-24 bg-[#151515] border-b border-[#F2D04E] px-6 md:px-12 flex items-center justify-between z-20">
+          <header className="h-24 bg-[#151515] px-6 md:px-12 flex items-center justify-between z-20">
             {/* Left Logo -> Enlarged size */}
             <div 
               onClick={() => setPageStep(1)}
@@ -54,20 +54,20 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
               <img 
                 src="/assets/Logo_BG_enlarged.svg" 
                 alt="TRACE Logo" 
-                className="h-20 md:h-24 w-auto object-contain transition-transform hover:scale-105"
+                className="h-20 md:h-24 w-auto object-contain"
               />
             </div>
 
             {/* Right Action: start_button.svg -> Decreased size */}
             <button
               onClick={() => onNavigate('dashboard')}
-              className="cursor-pointer focus:outline-none transition-transform hover:scale-105 active:scale-95 duration-200"
+              className="cursor-pointer focus:outline-none"
               title="Start Dashboard"
             >
               <img 
                 src="/assets/start_button.svg" 
                 alt="Start Dashboard" 
-                className="h-7 md:h-8 w-auto object-contain drop-shadow-md"
+                className="h-7 md:h-8 w-auto object-contain"
               />
             </button>
           </header>
@@ -87,7 +87,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
             {/* 3 Feature Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {/* Card 1: High - Precision OCR */}
-              <div className="bg-[#1E1E1E] rounded-xl p-6 flex flex-col min-h-[350px] shadow-2xl">
+              <div className="bg-[#1E1E1E] rounded-xl p-6 flex flex-col min-h-[350px]">
                 <h3 className="text-xl font-bold font-heading text-[#F2D04E] mb-4">
                   High - Precision OCR
                 </h3>
@@ -109,7 +109,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
               </div>
 
               {/* Card 2: Vehicle Tracking */}
-              <div className="bg-[#1E1E1E] rounded-xl p-6 flex flex-col justify-between min-h-[350px] shadow-2xl">
+              <div className="bg-[#1E1E1E] rounded-xl p-6 flex flex-col justify-between min-h-[350px]">
                 <div>
                   <h3 className="text-xl font-bold font-heading text-[#F2D04E] mb-4">
                     Vehicle Tracking
@@ -124,14 +124,14 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
 
                 {/* Bottom Vehicle Tracking Graphic */}
                 <div className="w-full flex justify-center items-center pt-4">
-                  <div className="w-full h-24 bg-[#151515] rounded-lg overflow-hidden relative border border-white/5">
+                  <div className="w-full h-24 bg-[#151515] rounded-lg overflow-hidden relative">
                     <img 
                       src="/assets/trajectory_map.svg" 
                       alt="Vehicle Tracking Graphic" 
                       className="w-full h-full object-cover opacity-80"
                     />
                     <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 200 60">
-                      <path d="M 20 40 Q 80 10, 140 45 T 180 20" stroke="#F2D04E" strokeWidth="3" fill="none" />
+                      <path d="M 20 40 Q 80 10, 140 45 T 180 20" fill="none" />
                       <circle cx="20" cy="40" r="4" fill="#AC251D" />
                       <circle cx="180" cy="20" r="4" fill="#1B7A43" />
                     </svg>
@@ -140,7 +140,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
               </div>
 
               {/* Card 3: Traffic Analytics */}
-              <div className="bg-[#1E1E1E] rounded-xl p-6 flex flex-col justify-between min-h-[350px] shadow-2xl">
+              <div className="bg-[#1E1E1E] rounded-xl p-6 flex flex-col justify-between min-h-[350px]">
                 <div>
                   <h3 className="text-xl font-bold font-heading text-[#F2D04E] mb-4">
                     Traffic Analytics
@@ -166,8 +166,8 @@ export const HomeView: React.FC<HomeViewProps> = ({ onNavigate, initialPageStep 
           </main>
 
           {/* Page 2 Footer */}
-          <footer className="py-4 text-center text-[11px] text-[#666666] font-heading border-t border-white/5">
-            © 2026 TRACE — Tracking, Recognition, Analytics & City-wide Traffic Enforcement. All Rights Reserved.
+          <footer className="py-4 text-center text-[11px] text-[#666666] font-heading">
+            © 2026 TRACE - Tracking, Recognition, Analytics & City-wide Traffic Enforcement. All Rights Reserved.
           </footer>
         </div>
       )}

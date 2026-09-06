@@ -22,10 +22,10 @@ export const NetworkAnalysis: React.FC<NetworkAnalysisProps> = ({
         </div>
         <button
           onClick={onNavigateCameras}
-          className="text-[#A0A0A0] hover:text-[#F2D04E] transition-colors p-1"
+          className="text-white p-1 cursor-pointer"
           title="View Camera Network"
         >
-          <span className="text-sm font-bold">↗</span>
+          <img src="/assets/diagonal_arrow.svg" alt="Arrow" className="w-3.5 h-3.5 object-contain brightness-0 invert" />
         </button>
       </div>
 

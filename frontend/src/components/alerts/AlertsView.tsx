@@ -46,7 +46,7 @@ export const AlertsView: React.FC = () => {
       plateNumber: 'TN 57 CY 1314',
       type: 'ANOMALY',
       status: 'UNVERIFIED',
-      confidence: 94,
+      confidence: 84,
       vehicleType: 'SEDAN',
       vehicleColor: 'RED',
       scannedTimestamp: '12:12:12 am (1 hr ago)',
@@ -94,6 +94,13 @@ export const AlertsView: React.FC = () => {
     }
   };
 
+  // Helper for confidence rate background color for unverified boxes
+  const getConfidenceBg = (conf: number) => {
+    if (conf >= 90) return 'bg-[#1B7A43]';
+    if (conf >= 75) return 'bg-[#B8860B]';
+    return 'bg-[#971D1B]';
+  };
+
   // Handle Verify Action
   const handleVerifyAlert = (alertId: string) => {
     setAlerts((prev) =>
@@ -132,14 +139,14 @@ export const AlertsView: React.FC = () => {
     <div className="space-y-6 max-w-[1600px] mx-auto pb-6 select-none relative">
       {/* Toast Notification */}
       {verifyToast && (
-        <div className="fixed top-20 right-8 z-50 bg-[#F2D04E] text-black font-heading font-bold text-sm px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 animate-bounce">
+        <div className="fixed top-20 right-8 z-50 bg-[#F2D04E] text-black font-heading font-bold text-sm px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2">
           <span>✓</span>
           <span>{verifyToast}</span>
         </div>
       )}
 
       {/* ================= 1. TOP HEADER & SEARCH / FILTER BAR ================= */}
-      <div className="bg-[#1E1E1E] rounded-xl p-4 md:px-6 border border-white/5 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-30">
+      <div className="bg-[#1E1E1E] rounded-xl p-4 md:px-6 flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-30">
         {/* Left Side: Search Bar */}
         <div className="relative flex-1 max-w-xl">
           <input
@@ -147,7 +154,7 @@ export const AlertsView: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search Number Plate (e.g. TN 37 CY 1234)"
-            className="w-full bg-[#111111] text-white placeholder-[#A0A0A0] text-sm font-body px-4 py-3 pr-10 rounded-xl border border-white/10 focus:outline-none focus:border-[#F2D04E] transition-all"
+            className="w-full bg-[#111111] text-white placeholder-[#A0A0A0] text-sm font-body px-4 py-3 pr-10 rounded-xl focus:outline-none transition-all"
           />
           <img
             src="/assets/alert_search.svg"
@@ -156,15 +163,15 @@ export const AlertsView: React.FC = () => {
           />
         </div>
 
-        {/* Right Side: Stats & Filter Dropdown Button */}
+        {/* Right Side: Stats & Filter Dropdown Toggle Button */}
         <div className="flex items-center gap-3 self-end md:self-auto relative">
           {/* Verified Count Pill */}
-          <div className="bg-[#111111] px-5 py-2.5 rounded-xl border border-white/10 text-white font-heading font-bold text-base md:text-lg shadow-inner">
+          <div className="bg-[#151515] px-5 py-2.5 rounded-xl text-[#A0A0A0] font-body font-bold text-base md:text-lg">
             {verifiedCount} Verified
           </div>
 
           {/* Unverified Count Pill */}
-          <div className="bg-[#111111] px-5 py-2.5 rounded-xl border border-white/10 text-white font-heading font-bold text-base md:text-lg shadow-inner">
+          <div className="bg-[#151515] px-5 py-2.5 rounded-xl text-[#A0A0A0] font-body font-bold text-base md:text-lg">
             {unverifiedCount} Unverified
           </div>
 
@@ -172,18 +179,22 @@ export const AlertsView: React.FC = () => {
           <div className="relative">
             <button
               onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className="bg-[#F2D04E] hover:bg-[#F8DF7B] text-black font-heading font-bold text-base px-6 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg active:scale-95 cursor-pointer"
+              className="outline-none focus:outline-none flex items-center justify-center cursor-pointer"
+              title="Filter"
             >
-              <span>Filter</span>
-              <span className="text-xs">{isFilterOpen ? '▲' : '▼'}</span>
+              <img
+                src={isFilterOpen ? "/assets/alert_filter_opened.svg" : "/assets/alert_filter.svg"}
+                alt="Filter"
+                className="h-10 w-auto object-contain"
+              />
             </button>
 
             {/* ================= ENHANCED MULTI-CATEGORY FILTER PANEL ================= */}
             {isFilterOpen && (
-              <div className="absolute right-0 mt-3 w-64 md:w-72 bg-[#000000] border border-white/15 rounded-xl shadow-2xl z-50 p-4 space-y-4 text-xs font-heading">
+              <div className="absolute right-0 mt-3 w-64 md:w-72 bg-[#151515] rounded-xl shadow-2xl z-50 p-4 space-y-4 text-xs font-body">
                 {/* 1. Verification Category */}
                 <div className="space-y-2">
-                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px]">
+                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px] font-body">
                     Verification
                   </h4>
                   {['Verified', 'Unverified'].map((item) => {
@@ -192,7 +203,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedVerifications, setSelectedVerifications, item)}
-                        className="flex items-center justify-between text-white/90 font-medium cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-white/90 font-medium font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -202,11 +213,11 @@ export const AlertsView: React.FC = () => {
                     );
                   })}
                 </div>
-                <div className="border-b border-white/10" />
+                <div className="border-b border-[#AEA793]" />
 
                 {/* 2. Location Category */}
                 <div className="space-y-2">
-                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px]">
+                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px] font-body">
                     Location
                   </h4>
                   {['North Highway 1', 'North Highway 2', 'North Highway 3', 'North Highway 4'].map((item) => {
@@ -215,7 +226,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedLocations, setSelectedLocations, item)}
-                        className="flex items-center justify-between text-white/90 font-medium cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-white/90 font-medium font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -225,11 +236,11 @@ export const AlertsView: React.FC = () => {
                     );
                   })}
                 </div>
-                <div className="border-b border-white/10" />
+                <div className="border-b border-[#AEA793]" />
 
                 {/* 3. CCTV Cameras Category */}
                 <div className="space-y-2">
-                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px]">
+                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px] font-body">
                     CCTV Cameras
                   </h4>
                   {['Camera 13', 'Camera 14', 'Camera 15', 'Camera 16'].map((item) => {
@@ -238,7 +249,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedCameras, setSelectedCameras, item)}
-                        className="flex items-center justify-between text-white/90 font-medium cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-white/90 font-medium font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -248,11 +259,11 @@ export const AlertsView: React.FC = () => {
                     );
                   })}
                 </div>
-                <div className="border-b border-white/10" />
+                <div className="border-b border-[#AEA793]" />
 
                 {/* 4. Vehicle Type Category */}
                 <div className="space-y-2">
-                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px]">
+                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px] font-body">
                     Vehicle Type
                   </h4>
                   {['SUV', 'TRUCK', 'SEDAN', 'AUTO'].map((item) => {
@@ -261,7 +272,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedTypes, setSelectedTypes, item)}
-                        className="flex items-center justify-between text-white/90 font-medium cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-white/90 font-medium font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -271,11 +282,11 @@ export const AlertsView: React.FC = () => {
                     );
                   })}
                 </div>
-                <div className="border-b border-white/10" />
+                <div className="border-b border-[#AEA793]" />
 
                 {/* 5. Vehicle Color Category */}
                 <div className="space-y-2">
-                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px]">
+                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px] font-body">
                     Vehicle Color
                   </h4>
                   {['RED', 'YELLOW', 'ORANGE', 'BLUE', 'BLACK'].map((item) => {
@@ -284,7 +295,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedColors, setSelectedColors, item)}
-                        className="flex items-center justify-between text-white/90 font-medium cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-white/90 font-medium font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -294,11 +305,11 @@ export const AlertsView: React.FC = () => {
                     );
                   })}
                 </div>
-                <div className="border-b border-white/10" />
+                <div className="border-b border-[#AEA793]" />
 
                 {/* 6. Category Section */}
                 <div className="space-y-2">
-                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px]">
+                  <h4 className="text-[#A0A0A0] font-bold tracking-wider uppercase text-[11px] font-body">
                     Category
                   </h4>
                   {['BLACKLIST', 'ANOMALY'].map((item) => {
@@ -307,7 +318,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedCategories, setSelectedCategories, item)}
-                        className="flex items-center justify-between text-white/90 font-medium cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-white/90 font-medium font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -326,7 +337,7 @@ export const AlertsView: React.FC = () => {
       {/* ================= 2. ALERTS CARDS LIST ================= */}
       <div className="space-y-4">
         {filteredAlerts.length === 0 ? (
-          <div className="bg-[#1E1E1E] rounded-xl p-12 text-center border border-white/5 text-[#A0A0A0] font-body">
+          <div className="bg-[#1E1E1E] rounded-xl p-12 text-center text-[#A0A0A0] font-body">
             No alerts found matching your selected criteria.
           </div>
         ) : (
@@ -336,7 +347,7 @@ export const AlertsView: React.FC = () => {
             return (
               <div
                 key={item.id}
-                className="bg-[#1E1E1E] rounded-xl p-5 md:px-6 border border-white/5 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all hover:border-white/10"
+                className="bg-[#1E1E1E] rounded-xl p-5 md:px-6 flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all"
               >
                 {/* Left Section: Car Icon & Primary Meta */}
                 <div className="flex items-center gap-5">
@@ -351,7 +362,7 @@ export const AlertsView: React.FC = () => {
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-3">
                       <h2
-                        className={`text-lg md:text-xl font-bold font-heading tracking-wide ${
+                        className={`text-lg md:text-xl font-bold font-body tracking-wide ${
                           isUnverified ? 'text-white' : 'text-white/60 line-through'
                         }`}
                       >
@@ -359,10 +370,10 @@ export const AlertsView: React.FC = () => {
                       </h2>
 
                       <span
-                        className={`text-[10px] font-heading font-bold px-2 py-0.5 rounded tracking-wider ${
+                        className={`text-[10px] font-body font-bold px-2 py-0.5 rounded-[3px] tracking-wider text-[#151515] ${
                           isUnverified
-                            ? 'bg-[#AC251D] text-white'
-                            : 'bg-white/20 text-white/70'
+                            ? 'bg-[#AC251D]'
+                            : 'bg-[#A0A0A0]'
                         }`}
                       >
                         {item.type}
@@ -372,15 +383,15 @@ export const AlertsView: React.FC = () => {
                     <div className="text-xs md:text-sm font-body text-white/90 space-y-0.5">
                       <p>
                         <span className="text-[#A0A0A0]">Vehicle Type : </span>
-                        <span className="font-semibold text-white">{item.vehicleType}</span>
+                        <span className="font-semibold text-[#AEA793]">{item.vehicleType}</span>
                       </p>
                       <p>
                         <span className="text-[#A0A0A0]">Vehicle Color : </span>
-                        <span className="font-semibold text-white">{item.vehicleColor}</span>
+                        <span className="font-semibold text-[#AEA793]">{item.vehicleColor}</span>
                       </p>
                       <p>
                         <span className="text-[#A0A0A0]">Scanned Timestamp : </span>
-                        <span className="font-semibold text-white">{item.scannedTimestamp}</span>
+                        <span className="font-semibold text-[#AEA793]">{item.scannedTimestamp}</span>
                       </p>
                     </div>
                   </div>
@@ -390,41 +401,43 @@ export const AlertsView: React.FC = () => {
                 <div className="space-y-1.5 text-xs md:text-sm font-body text-white/90 min-w-[220px]">
                   <div className="flex items-center gap-2">
                     <img src="/assets/alert_camera.svg" alt="Camera" className="w-4 h-4 object-contain opacity-80" />
-                    <span className="font-semibold text-white">{item.cameraName}</span>
+                    <span className="font-semibold text-[#AEA793]">{item.cameraName}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <img src="/assets/alert_location.svg" alt="Location" className="w-4 h-4 object-contain opacity-80" />
-                    <span className="font-semibold text-white">{item.location}</span>
+                    <span className="font-semibold text-[#AEA793]">{item.location}</span>
                   </div>
                   {item.reason && (
                     <p className="pt-0.5">
                       <span className="text-[#A0A0A0]">Reason : </span>
-                      <span className="font-semibold text-white">{item.reason}</span>
+                      <span className="font-semibold text-[#AEA793]">{item.reason}</span>
                     </p>
                   )}
                 </div>
 
                 {/* Right Section: Confidence Badge & Verify Action Button */}
                 <div className="flex flex-col items-end justify-between gap-4 shrink-0">
+                  {/* Confidence rate box: No stroke, text in #151515, corner radius 3, color as per rate for unverified, #A0A0A0 for verified */}
                   <div
-                    className={`px-3 py-1 rounded-md font-heading font-bold text-sm tracking-wider ${
+                    className={`px-3 py-1 rounded-[3px] font-body font-bold text-sm tracking-wider text-[#151515] ${
                       isUnverified
-                        ? 'bg-[#14291D] text-[#26D07C] border border-[#26D07C]/30'
-                        : 'bg-[#151515] text-white/80 border border-white/10'
+                        ? getConfidenceBg(item.confidence)
+                        : 'bg-[#A0A0A0]'
                     }`}
                   >
                     {item.confidence} %
                   </div>
 
+                  {/* VERIFY box button: #151515 bg & #A0A0A0 text for unverified, #A0A0A0 bg & #151515 text for verified, corner radius 3 */}
                   {isUnverified ? (
                     <button
                       onClick={() => handleVerifyAlert(item.id)}
-                      className="bg-[#111111] hover:bg-[#F2D04E] hover:text-black text-white font-heading font-bold text-xs px-5 py-2 rounded-lg border border-white/20 transition-all shadow-md active:scale-95 cursor-pointer uppercase tracking-wider"
+                      className="bg-[#151515] hover:bg-white/10 text-[#A0A0A0] font-body font-bold text-xs px-5 py-2 rounded-[3px] transition-all cursor-pointer uppercase tracking-wider"
                     >
                       VERIFY
                     </button>
                   ) : (
-                    <div className="bg-[#111111] text-white/80 font-heading font-bold text-xs px-5 py-2 rounded-lg border border-white/10 uppercase tracking-wider">
+                    <div className="bg-[#A0A0A0] text-[#151515] font-body font-bold text-xs px-5 py-2 rounded-[3px] uppercase tracking-wider">
                       VERIFIED
                     </div>
                   )}

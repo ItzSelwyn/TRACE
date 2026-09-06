@@ -1,10 +1,31 @@
 import React, { useState } from 'react';
 import { VehicleTraceDataPayload } from '../../types/vehicleTrace';
+import {
+  Map,
+  MapMarker,
+  MarkerContent,
+  MarkerTooltip,
+  MapRoute,
+} from "@/components/ui/map";
 
 interface VehicleTraceViewProps {
   data: VehicleTraceDataPayload;
   onSearchPlate?: (plateQuery: string) => void;
 }
+
+const route = [
+  [-74.006, 40.7128], // NYC City Hall
+  [-73.9857, 40.7484], // Empire State Building
+  [-73.9772, 40.7527], // Grand Central
+  [-73.9654, 40.7829], // Central Park
+] as [number, number][];
+
+const stops = [
+  { name: "City Hall", lng: -74.006, lat: 40.7128 },
+  { name: "Empire State Building", lng: -73.9857, lat: 40.7484 },
+  { name: "Grand Central Terminal", lng: -73.9772, lat: 40.7527 },
+  { name: "Central Park", lng: -73.9654, lat: 40.7829 },
+];
 
 export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({ 
   data, 
@@ -12,6 +33,8 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState(data.searchedPlate || '');
   const [timeWindow, setTimeWindow] = useState(data.selectedTimeWindow || '24hrs');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [selectedFilter, setSelectedFilter] = useState('24hrs');
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,8 +44,8 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
   };
 
   return (
-    <div className="space-y-4 max-w-[1600px] mx-auto pb-6 select-none font-body bg-[#151515]">
-      {/* Top Search & Time Window Bar */}
+    <div className="space-y-4 max-w-[1600px] mx-auto pb-6 select-none font-body bg-[#000000]">
+      {/* Top Search & Time Window Filter Bar */}
       <div className="bg-[#1E1E1E] rounded-xl p-4 flex items-center justify-between gap-4">
         {/* Search Field */}
         <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-2xl">
@@ -31,7 +54,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search Number Plate (e.g. TN 37 CY 1234)"
-            className="w-full bg-[#151515] focus:border-[#F2D04E] text-white placeholder-[#A0A0A0] text-sm rounded-lg py-3 pl-4 pr-12 outline-none font-body transition-all"
+            className="w-full bg-[#151515] text-white placeholder-[#A0A0A0] text-sm rounded-lg py-3 pl-4 pr-12 outline-none font-body"
           />
           <button
             type="submit"
@@ -42,15 +65,55 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
           </button>
         </form>
 
-        {/* 24hrs Time Filter Dropdown Button */}
+        {/* Filter Box with Toggle Design */}
         <div className="relative">
           <button
-            className="bg-[#F2D04E] hover:bg-[#F8DF7B] text-black font-bold font-heading text-xs px-4 py-2.5 rounded-lg flex items-center gap-2.5 transition-all shadow-sm"
-            title="Select Time Window"
+            type="button"
+            onClick={() => setIsFilterOpen(!isFilterOpen)}
+            className="outline-none focus:outline-none flex items-center justify-center cursor-pointer"
+            title="Filter"
           >
-            <span>{timeWindow}</span>
-            <img src="/assets/dropdown.svg" alt="Dropdown" className="w-3.5 h-2" />
+            <img
+              src={isFilterOpen ? "/assets/filter_opened.svg" : "/assets/filter.svg"}
+              alt="Filter"
+              className="h-10 w-auto object-contain"
+            />
           </button>
+
+          {/* Filter Dropdown Menu */}
+          {isFilterOpen && (
+            <div className="absolute right-0 top-full mt-2 z-50 rounded-lg overflow-hidden bg-[#151515] border border-[#333]">
+              <div className="relative">
+                <img
+                  src="/assets/vehicletrace_filter.svg"
+                  alt="Vehicle Trace Filter"
+                  className="w-[340px] sm:w-[400px] h-auto block"
+                />
+                <div className="absolute inset-0 pt-[65px] px-6 space-y-2 flex flex-col justify-start">
+                  {[
+                    { id: '24hrs', label: '24 hrs' },
+                    { id: '7days', label: 'Last 7 days' },
+                    { id: '30days', label: 'Last 30 days' },
+                  ].map((option) => (
+                    <button
+                      key={option.id}
+                      onClick={() => {
+                        setSelectedFilter(option.id);
+                        setTimeWindow(option.label);
+                        setIsFilterOpen(false);
+                      }}
+                      className="w-full text-left py-2 px-3 flex items-center justify-between text-xs font-heading text-white hover:bg-white/10 rounded transition-colors"
+                    >
+                      <span>{option.label}</span>
+                      {selectedFilter === option.id && (
+                        <img src="/assets/tick.svg" alt="Tick" className="w-3.5 h-3" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -64,13 +127,13 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
               <h2 className="text-base font-bold font-heading text-white tracking-wide">
                 TRACE CHRONOLOGY
               </h2>
-              <div className="flex items-center gap-2 font-heading">
-                {/* 5 Scans Badge - Green #1B7A43 background with #151515 text */}
-                <span className="bg-[#1B7A43] text-[#151515] font-bold text-xs px-3 py-1 rounded-md">
+              <div className="flex items-center gap-2 font-body">
+                {/* Scans Badge - Green #1B7A43 */}
+                <span className="bg-[#1B7A43] text-[#151515] font-bold text-xs px-3 py-1 rounded-[3px]">
                   {data.totalScans} Scans
                 </span>
-                {/* 2 Anomaly Badge - Red #AC251D background with #151515 text */}
-                <span className="bg-[#AC251D] text-[#151515] font-bold text-xs px-3 py-1 rounded-md">
+                {/* Anomaly Badge - Red #971D1B */}
+                <span className="bg-[#971D1B] text-[#151515] font-bold text-xs px-3 py-1 rounded-[3px]">
                   {data.totalAnomalies} Anomaly
                 </span>
               </div>
@@ -86,40 +149,42 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                 return (
                   <div
                     key={item.id}
-                    className="bg-[#151515] hover:bg-[#1A1A1A] rounded-lg p-3.5 flex flex-col justify-between transition-all cursor-pointer group"
+                    className="bg-[#151515] rounded-lg p-3.5 flex flex-col justify-between"
                   >
                     {/* Top Row: Plate, Timestamp, Confidence */}
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-3">
-                        <span className="font-bold text-sm text-white font-heading tracking-wide">
+                        <span className="font-bold text-sm text-white font-body tracking-wide">
                           {item.plateNumber}
                         </span>
                         <span className="text-xs text-[#A0A0A0] font-body">
                           {item.timestamp}
                         </span>
                       </div>
-                      <span className="text-xs font-bold text-[#1B7A43] font-heading">
+                      <span className="text-xs font-bold text-[#1B7A43] font-body">
                         {item.ocrConfidence}%
                       </span>
                     </div>
 
-                    {/* Sub Row: Camera & Location */}
+                    {/* Sub Row: Camera & Location & Side Arrow */}
                     <div className="flex items-center justify-between text-xs text-[#A0A0A0] font-body mb-2">
                       <div className="flex items-center gap-1.5">
-                        <img src="/assets/camera.svg" alt="Camera" className="w-3.5 h-3.5 text-[#A0A0A0] opacity-80" />
+                        <svg width="14" height="14" viewBox="0 0 20 19" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5">
+                          <path d="M16.3235 12.8229L14.3235 11.6647L18 8.90284L20 10.061L16.3235 12.8229ZM10.5294 9.88286L14.3529 7.03189L5.08824 1.74573L2.88235 5.51732L10.5294 9.88286ZM0 19V17.2181H6.17647V9.43739L2 7.06159C1.56726 6.80501 1.28755 6.43893 1.16088 5.96338C1.03402 5.48782 1.09804 5.03226 1.35294 4.5967L3.55882 0.884505C3.81373 0.468739 4.17157 0.196512 4.63235 0.0678227C5.09314 -0.0608666 5.52941 -0.00642109 5.94118 0.231159L17.5588 6.85371L10.6471 11.9914L7.94118 10.4471V17.2181C7.94118 17.7082 7.76843 18.1276 7.42294 18.4764C7.07726 18.8255 6.66176 19 6.17647 19H0Z" fill="#AEA793"/>
+                        </svg>
                         <span>{item.cameraName} ({item.location})</span>
                       </div>
-                      <span className="text-sm font-bold text-[#A0A0A0] group-hover:text-white transition-colors">›</span>
+                      <img src="/assets/side_arrow.svg" alt="Side Arrow" className="w-2.5 h-3.5" />
                     </div>
 
                     {/* Bottom Status Tag Line */}
                     <div className="text-[11px] font-medium font-body">
                       {isWarning ? (
-                        <span className="text-[#AC251D] font-semibold">
+                        <span className="text-[#971D1B] font-semibold">
                           {item.statusMessage}
                         </span>
                       ) : (
-                        <span className="text-[#F2D04E] font-medium">
+                        <span className="text-[#B8860B] font-medium">
                           {item.trackedTimeAgo}
                         </span>
                       )}
@@ -131,7 +196,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
           </div>
         </div>
 
-        {/* Right Column: GIS MAP WITH TRAJECTORY (7/12 width) */}
+        {/* Right Column: GIS ROUTE MAP (7/12 width) */}
         <div className="lg:col-span-7 bg-[#1E1E1E] rounded-xl p-4 flex flex-col justify-between relative overflow-hidden min-h-[500px]">
           {/* Top Map Legends Overlay Row */}
           <div className="flex items-center gap-2 mb-3 z-10 select-none flex-wrap">
@@ -147,45 +212,29 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
               <span>Trajectory</span>
             </div>
 
-            {/* Anomaly / Blacklisted Legend (#AC251D) */}
-            <div className="bg-[#151515] px-3 py-1.5 rounded flex items-center gap-2 text-xs font-body text-[#AC251D]">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#AC251D]" />
+            {/* Anomaly / Blacklisted Legend (#971D1B) */}
+            <div className="bg-[#151515] px-3 py-1.5 rounded flex items-center gap-2 text-xs font-body text-[#971D1B]">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#971D1B]" />
               <span>Anomaly / Blacklisted</span>
             </div>
           </div>
 
-          {/* Map Display Surface */}
-          <div className="relative flex-1 bg-[#101010] rounded-lg overflow-hidden flex items-center justify-center">
-            <img
-              src="/assets/trajectory_map.svg"
-              alt="Trajectory GIS Map"
-              className="w-full h-full object-cover opacity-80"
-            />
+          {/* Map Display Surface (MapCN Route Map) */}
+          <div className="relative flex-1 bg-[#101010] rounded-lg overflow-hidden h-[450px] min-h-[450px]">
+            <Map center={[-73.98, 40.75]} zoom={11.2} className="h-full w-full rounded-lg">
+              <MapRoute coordinates={route} color="#3b82f6" width={4} opacity={0.8} />
 
-            {/* SVG Trajectory Overlay Route Line */}
-            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 800 500" preserveAspectRatio="none">
-              <path
-                d="M 120 180 L 280 270 L 400 370 L 520 370 L 680 430 L 730 390"
-                stroke="#F2D04E"
-                strokeWidth="4"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <circle cx="120" cy="180" r="10" fill="#AC251D" stroke="#FFFFFF" strokeWidth="3" />
-              <circle cx="680" cy="430" r="10" fill="#1B7A43" stroke="#FFFFFF" strokeWidth="3" />
-              <circle cx="730" cy="390" r="10" fill="#AC251D" stroke="#FFFFFF" strokeWidth="3" />
-            </svg>
-
-            {/* Zoom Controls */}
-            <div className="absolute bottom-4 right-4 flex flex-col bg-[#151515] rounded-md overflow-hidden z-10 shadow-lg">
-              <button className="w-8 h-8 flex items-center justify-center text-white hover:bg-[#252525] font-bold text-lg border-b border-[#252525]">
-                +
-              </button>
-              <button className="w-8 h-8 flex items-center justify-center text-white hover:bg-[#252525] font-bold text-lg">
-                −
-              </button>
-            </div>
+              {stops.map((stop, index) => (
+                <MapMarker key={stop.name} longitude={stop.lng} latitude={stop.lat}>
+                  <MarkerContent>
+                    <div className="flex size-4.5 items-center justify-center rounded-full border-2 border-white bg-blue-500 text-xs font-semibold text-white shadow-lg">
+                      {index + 1}
+                    </div>
+                  </MarkerContent>
+                  <MarkerTooltip>{stop.name}</MarkerTooltip>
+                </MapMarker>
+              ))}
+            </Map>
           </div>
         </div>
       </div>

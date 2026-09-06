@@ -3,6 +3,11 @@
 @tailwind utilities;
 
 @layer base {
+  *, *::before, *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
   body {
     font-family: 'Hanken Grotesk', sans-serif;
     background-color: #000000;
@@ -39,4 +44,16 @@
 
 .font-body {
   font-family: 'Hanken Grotesk', sans-serif;
+}
+
+/* Invert colors of map zoom in & zoom out buttons across all maps */
+.maplibregl-ctrl-group {
+  filter: invert(1) !important;
+  border-radius: 6px !important;
+  overflow: hidden !important;
+  border: none !important;
+}
+
+.maplibregl-ctrl-group button {
+  border: none !important;
 }

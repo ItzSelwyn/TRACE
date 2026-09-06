@@ -24,10 +24,10 @@ export const RecentAlerts: React.FC<RecentAlertsProps> = ({
         </div>
         <button
           onClick={onNavigateAlerts}
-          className="text-[#A0A0A0] hover:text-[#F2D04E] transition-colors p-1"
+          className="text-white p-1 cursor-pointer"
           title="View All Alerts"
         >
-          <span className="text-sm font-bold">↗</span>
+          <img src="/assets/diagonal_arrow.svg" alt="Arrow" className="w-3.5 h-3.5 object-contain brightness-0 invert" />
         </button>
       </div>
 
@@ -62,7 +62,7 @@ export const RecentAlerts: React.FC<RecentAlertsProps> = ({
               {/* Subtitle: Camera & Location */}
               <div className="flex items-center justify-between text-xs text-[#A0A0A0] font-body mb-3">
                 <div className="flex items-center gap-1.5 truncate">
-                  <img src="/assets/camera.svg" alt="Camera" className="w-3.5 h-3.5 opacity-80" />
+                  <img src="/assets/camera_aea793.svg" alt="Camera" className="w-3.5 h-3.5" />
                   <span className="truncate">
                     {alert.cameraName} ({alert.location})
                   </span>
@@ -73,10 +73,10 @@ export const RecentAlerts: React.FC<RecentAlertsProps> = ({
               <div className="flex justify-end pt-1">
                 <button
                   onClick={() => onViewAlertTrace && onViewAlertTrace(alert.plateNumber)}
-                  className="bg-[#1E1E1E] hover:bg-[#F2D04E] hover:text-black text-white font-bold font-heading text-[11px] px-3 py-1 rounded flex items-center gap-1 transition-all group"
+                  className="bg-[#1E1E1E] text-[#AEA793] font-bold font-body text-[11px] px-3 py-1 rounded flex items-center gap-1 cursor-pointer"
                 >
                   <span>VIEW</span>
-                  <span className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5">↗</span>
+                  <img src="/assets/diagonal_arrow.svg" alt="Arrow" className="w-2.5 h-2.5 object-contain" />
                 </button>
               </div>
             </div>
