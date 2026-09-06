@@ -16,8 +16,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems: { id: NavRoute; label: string; icon: string; enabled: boolean; hasRedAlert?: boolean }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: '/assets/Dashboard.svg', enabled: true },
     { id: 'vehicle-trace', label: 'Vehicle Trace', icon: '/assets/route.svg', enabled: true },
-    { id: 'analytics', label: 'Analytics', icon: '/assets/Analystics.svg', enabled: false },
-    { id: 'alerts', label: 'Alerts', icon: '/assets/Alerts.svg', enabled: false, hasRedAlert: true },
+    { id: 'analytics', label: 'Analytics', icon: '/assets/Analystics.svg', enabled: true },
+    { id: 'alerts', label: 'Alerts', icon: '/assets/Alerts.svg', enabled: true, hasRedAlert: true },
     { id: 'blacklist', label: 'Blacklist', icon: '/assets/Blacklist.svg', enabled: false },
     { id: 'cameras', label: 'Cameras', icon: '/assets/camera.svg', enabled: false },
     { id: 'admin-cameras', label: 'Admin Control', icon: '/assets/model.svg', enabled: true },
@@ -50,7 +50,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   isActive
                     ? 'bg-[#F2D04E] text-black font-bold rounded-lg shadow-sm'
                     : item.enabled
-                    ? 'bg-transparent text-[#F2D04E] hover:bg-[#1E1E1E] rounded-lg'
+                    ? 'bg-transparent text-[#F2D04E] hover:bg-[#1E1E1E] rounded-lg cursor-pointer'
                     : 'bg-transparent text-[#F2D04E]/50 cursor-not-allowed opacity-60 rounded-lg'
                 }`}
                 title={item.enabled ? item.label : `${item.label} (UI Pending)`}
@@ -87,7 +87,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Much Larger Sidebar Open Toggle Button: Positioned on right border directly below last item (Cameras), borderless */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="absolute -right-6 top-[330px] w-12 h-12 rounded-full flex items-center justify-center bg-[#151515] hover:bg-[#1E1E1E] transition-all shadow-2xl shadow-black/90 border-none outline-none z-30 group"
+        className="absolute -right-6 top-[330px] w-12 h-12 rounded-full flex items-center justify-center bg-[#151515] hover:bg-[#1E1E1E] transition-all shadow-2xl shadow-black/90 border-none outline-none z-30 group cursor-pointer"
         title={isExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
       >
         <img 

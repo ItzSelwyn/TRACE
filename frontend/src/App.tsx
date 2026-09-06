@@ -3,6 +3,8 @@ import { Header } from './components/layout/Header';
 import { Sidebar, NavRoute } from './components/layout/Sidebar';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { VehicleTraceView } from './components/vehicle-trace/VehicleTraceView';
+import { AnalyticsView } from './components/analytics/AnalyticsView';
+import { AlertsView } from './components/alerts/AlertsView';
 import { AdminCameraView } from './components/admin/AdminCameraView';
 import { HomeView } from './components/home/HomeView';
 import { mockDashboardData } from './data/mockDashboardData';
@@ -240,7 +242,14 @@ export const App: React.FC = () => {
   }, [currentRoute, vehicleTracePayload.searchedPlate]);
 
   const handleNavigate = (route: NavRoute | string) => {
-    if (route === 'dashboard' || route === 'vehicle-trace' || route === 'admin-cameras' || route === 'home') {
+    if (
+      route === 'dashboard' || 
+      route === 'vehicle-trace' || 
+      route === 'analytics' || 
+      route === 'alerts' || 
+      route === 'admin-cameras' || 
+      route === 'home'
+    ) {
       setCurrentRoute(route as NavRoute | 'home');
     }
   };
@@ -305,6 +314,14 @@ export const App: React.FC = () => {
               data={vehicleTracePayload}
               onSearchPlate={handleSearchPlate}
             />
+          )}
+
+          {currentRoute === 'analytics' && (
+            <AnalyticsView />
+          )}
+
+          {currentRoute === 'alerts' && (
+            <AlertsView />
           )}
 
           {currentRoute === 'admin-cameras' && (
