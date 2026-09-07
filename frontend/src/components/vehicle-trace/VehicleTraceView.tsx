@@ -110,7 +110,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                     <div
                       key={item}
                       onClick={() => toggleFilter(selectedTimestamps, setSelectedTimestamps, item)}
-                      className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                      className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                     >
                       <span>{item}</span>
                       {isChecked && (
@@ -121,7 +121,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                 })}
               </div>
 
-              <div className="border-b border-[#AEA793]" />
+              <div className="border-b border-[#A0A0A0]" />
 
               {/* 2. Location Category */}
               <div className="space-y-2">
@@ -134,7 +134,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                     <div
                       key={item}
                       onClick={() => toggleFilter(selectedLocations, setSelectedLocations, item)}
-                      className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                      className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                     >
                       <span>{item}</span>
                       {isChecked && (
@@ -202,7 +202,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                     <div className="flex items-center justify-between text-xs text-[#A0A0A0] font-body mb-2">
                       <div className="flex items-center gap-1.5">
                         <svg width="14" height="14" viewBox="0 0 20 19" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5">
-                          <path d="M16.3235 12.8229L14.3235 11.6647L18 8.90284L20 10.061L16.3235 12.8229ZM10.5294 9.88286L14.3529 7.03189L5.08824 1.74573L2.88235 5.51732L10.5294 9.88286ZM0 19V17.2181H6.17647V9.43739L2 7.06159C1.56726 6.80501 1.28755 6.43893 1.16088 5.96338C1.03402 5.48782 1.09804 5.03226 1.35294 4.5967L3.55882 0.884505C3.81373 0.468739 4.17157 0.196512 4.63235 0.0678227C5.09314 -0.0608666 5.52941 -0.00642109 5.94118 0.231159L17.5588 6.85371L10.6471 11.9914L7.94118 10.4471V17.2181C7.94118 17.7082 7.76843 18.1276 7.42294 18.4764C7.07726 18.8255 6.66176 19 6.17647 19H0Z" fill="#AEA793"/>
+                          <path d="M16.3235 12.8229L14.3235 11.6647L18 8.90284L20 10.061L16.3235 12.8229ZM10.5294 9.88286L14.3529 7.03189L5.08824 1.74573L2.88235 5.51732L10.5294 9.88286ZM0 19V17.2181H6.17647V9.43739L2 7.06159C1.56726 6.80501 1.28755 6.43893 1.16088 5.96338C1.03402 5.48782 1.09804 5.03226 1.35294 4.5967L3.55882 0.884505C3.81373 0.468739 4.17157 0.196512 4.63235 0.0678227C5.09314 -0.0608666 5.52941 -0.00642109 5.94118 0.231159L17.5588 6.85371L10.6471 11.9914L7.94118 10.4471V17.2181C7.94118 17.7082 7.76843 18.1276 7.42294 18.4764C7.07726 18.8255 6.66176 19 6.17647 19H0Z" fill="#A0A0A0"/>
                         </svg>
                         <span>{item.cameraName} ({item.location})</span>
                       </div>

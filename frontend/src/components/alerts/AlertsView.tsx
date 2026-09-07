@@ -17,7 +17,6 @@ export interface AlertItem {
 export const AlertsView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
-  const [verifyToast, setVerifyToast] = useState<string | null>(null);
 
   // Multi-Category Selected Filter States matching design defaults
   const [selectedVerifications, setSelectedVerifications] = useState<string[]>(['Verified', 'Unverified']);
@@ -106,8 +105,6 @@ export const AlertsView: React.FC = () => {
     setAlerts((prev) =>
       prev.map((a) => (a.id === alertId ? { ...a, status: 'VERIFIED' } : a))
     );
-    setVerifyToast('Alert marked as VERIFIED successfully!');
-    setTimeout(() => setVerifyToast(null), 3000);
   };
 
   // Multi-Category Real-time Filter Logic
@@ -137,14 +134,6 @@ export const AlertsView: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-6 select-none relative">
-      {/* Toast Notification */}
-      {verifyToast && (
-        <div className="fixed top-20 right-8 z-50 bg-[#F2D04E] text-black font-heading font-bold text-sm px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2">
-          <span>✓</span>
-          <span>{verifyToast}</span>
-        </div>
-      )}
-
       {/* ================= 1. TOP HEADER & SEARCH / FILTER BAR ================= */}
       <div className="bg-[#151515] rounded-[3px] p-4 md:px-6 flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-30">
         {/* Left Side: Search Bar */}
@@ -206,7 +195,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedVerifications, setSelectedVerifications, item)}
-                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -216,7 +205,7 @@ export const AlertsView: React.FC = () => {
                     );
                   })}
                 </div>
-                <div className="border-b border-[#AEA793]" />
+                <div className="border-b border-[#A0A0A0]" />
 
                 {/* 2. Location Category */}
                 <div className="space-y-2">
@@ -229,7 +218,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedLocations, setSelectedLocations, item)}
-                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -239,7 +228,7 @@ export const AlertsView: React.FC = () => {
                     );
                   })}
                 </div>
-                <div className="border-b border-[#AEA793]" />
+                <div className="border-b border-[#A0A0A0]" />
 
                 {/* 3. CCTV Cameras Category */}
                 <div className="space-y-2">
@@ -252,7 +241,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedCameras, setSelectedCameras, item)}
-                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -262,7 +251,7 @@ export const AlertsView: React.FC = () => {
                     );
                   })}
                 </div>
-                <div className="border-b border-[#AEA793]" />
+                <div className="border-b border-[#A0A0A0]" />
 
                 {/* 4. Vehicle Type Category */}
                 <div className="space-y-2">
@@ -275,7 +264,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedTypes, setSelectedTypes, item)}
-                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -285,7 +274,7 @@ export const AlertsView: React.FC = () => {
                     );
                   })}
                 </div>
-                <div className="border-b border-[#AEA793]" />
+                <div className="border-b border-[#A0A0A0]" />
 
                 {/* 5. Vehicle Color Category */}
                 <div className="space-y-2">
@@ -298,7 +287,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedColors, setSelectedColors, item)}
-                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -308,7 +297,7 @@ export const AlertsView: React.FC = () => {
                     );
                   })}
                 </div>
-                <div className="border-b border-[#AEA793]" />
+                <div className="border-b border-[#A0A0A0]" />
 
                 {/* 6. Category Section */}
                 <div className="space-y-2">
@@ -321,7 +310,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedCategories, setSelectedCategories, item)}
-                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -386,15 +375,15 @@ export const AlertsView: React.FC = () => {
                     <div className="text-xs md:text-sm font-body text-white/90 space-y-0.5">
                       <p>
                         <span className="text-[#A0A0A0]">Vehicle Type : </span>
-                        <span className="font-semibold text-[#AEA793]">{item.vehicleType}</span>
+                        <span className="font-semibold text-[#A0A0A0]">{item.vehicleType}</span>
                       </p>
                       <p>
                         <span className="text-[#A0A0A0]">Vehicle Color : </span>
-                        <span className="font-semibold text-[#AEA793]">{item.vehicleColor}</span>
+                        <span className="font-semibold text-[#A0A0A0]">{item.vehicleColor}</span>
                       </p>
                       <p>
                         <span className="text-[#A0A0A0]">Scanned Timestamp : </span>
-                        <span className="font-semibold text-[#AEA793]">{item.scannedTimestamp}</span>
+                        <span className="font-semibold text-[#A0A0A0]">{item.scannedTimestamp}</span>
                       </p>
                     </div>
                   </div>
@@ -404,16 +393,16 @@ export const AlertsView: React.FC = () => {
                 <div className="space-y-1.5 text-xs md:text-sm font-body text-white/90 min-w-[220px]">
                   <div className="flex items-center gap-2">
                     <img src="/assets/alert_camera.svg" alt="Camera" className="w-4 h-4 object-contain opacity-80" />
-                    <span className="font-semibold text-[#AEA793]">{item.cameraName}</span>
+                    <span className="font-semibold text-[#A0A0A0]">{item.cameraName}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <img src="/assets/alert_location.svg" alt="Location" className="w-4 h-4 object-contain opacity-80" />
-                    <span className="font-semibold text-[#AEA793]">{item.location}</span>
+                    <span className="font-semibold text-[#A0A0A0]">{item.location}</span>
                   </div>
                   {item.reason && (
                     <p className="pt-0.5">
                       <span className="text-[#A0A0A0]">Reason : </span>
-                      <span className="font-semibold text-[#AEA793]">{item.reason}</span>
+                      <span className="font-semibold text-[#A0A0A0]">{item.reason}</span>
                     </p>
                   )}
                 </div>

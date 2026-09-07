@@ -246,7 +246,7 @@ export const CamerasView: React.FC = () => {
                       />
                       <span className="truncate">{cam.location}</span>
                     </div>
-                    <div className="space-y-1 text-[11px] border-t border-[#AEA793]/30 pt-1.5 font-body">
+                    <div className="space-y-1 text-[11px] border-t border-[#A0A0A0]/30 pt-1.5 font-body">
                       <div className="flex justify-between items-center text-[#A0A0A0]">
                         <span>Uptime</span>
                         <span className="text-white/90">{cam.uptime || '6 hrs'}</span>
@@ -299,7 +299,7 @@ export const CamerasView: React.FC = () => {
             />
           </button>
 
-          {/* Filter Dropdown Drawer (No stroke, Hanken Grotesk, #AEA793 divider, no bg box change on selection, custom tick.svg) */}
+          {/* Filter Dropdown Drawer (No stroke, Hanken Grotesk, #A0A0A0 divider, no bg box change on selection, custom tick.svg) */}
           {isFilterOpen && (
             <div 
               className="absolute right-0 top-full mt-2 w-64 bg-[#000000] rounded-[3px] p-4 z-40 space-y-4 font-body"
@@ -315,7 +315,7 @@ export const CamerasView: React.FC = () => {
                     <div
                       key={ts}
                       onClick={() => setSelectedTimestamp(ts)}
-                      className="cursor-pointer py-1.5 px-1 flex items-center justify-between text-[#AEA793] hover:text-white"
+                      className="cursor-pointer py-1.5 px-1 flex items-center justify-between text-[#A0A0A0] hover:text-white"
                     >
                       <span>{ts}</span>
                       {selectedTimestamp === ts && (
@@ -326,8 +326,8 @@ export const CamerasView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Horizontal Divider in #AEA793 */}
-              <div className="border-b border-[#AEA793]" />
+              {/* Horizontal Divider in #A0A0A0 */}
+              <div className="border-b border-[#A0A0A0]" />
 
               {/* Location Category */}
               <div>
@@ -344,7 +344,7 @@ export const CamerasView: React.FC = () => {
                     <div
                       key={loc}
                       onClick={() => setSelectedLocation(loc)}
-                      className="cursor-pointer py-1.5 px-1 flex items-center justify-between text-[#AEA793] hover:text-white"
+                      className="cursor-pointer py-1.5 px-1 flex items-center justify-between text-[#A0A0A0] hover:text-white"
                     >
                       <span>{loc}</span>
                       {selectedLocation === loc && (

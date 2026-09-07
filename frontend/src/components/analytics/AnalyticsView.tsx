@@ -229,7 +229,6 @@ export const AnalyticsView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('HEATMAP');
   const [activeFilter, setActiveFilter] = useState<TimeFilter>('LIVE');
   const [selectedSegmentId, setSelectedSegmentId] = useState<number>(1);
-  const [exportToast, setExportToast] = useState<string | null>(null);
 
   // Heatmap Point Data for Maplibre/mapcn
   const heatmapPoints: HeatmapPoint[] = [
@@ -338,9 +337,6 @@ export const AnalyticsView: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
-    setExportToast(`${filename.replace(/_/g, ' ')} exported successfully!`);
-    setTimeout(() => setExportToast(null), 3000);
   };
 
   const handleExportODMatrix = () => {
@@ -360,14 +356,6 @@ export const AnalyticsView: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-6 select-none relative">
-      {/* Export Toast Notification */}
-      {exportToast && (
-        <div className="fixed top-20 right-8 z-50 bg-[#F2D04E] text-black font-heading font-bold text-sm px-4 py-2.5 rounded-xl flex items-center gap-2">
-          <span>✓</span>
-          <span>{exportToast}</span>
-        </div>
-      )}
-
       {/* ================= 1. TOP TABS NAVIGATION BAR (Strokes Removed) ================= */}
       <div className="bg-[#151515] rounded-[3px] p-4 md:px-8 flex items-center justify-around">
         <button
@@ -443,26 +431,26 @@ export const AnalyticsView: React.FC = () => {
             </div>
 
             {/* Subtitle Description */}
-            <p className="text-sm md:text-base text-[#AEA793] font-body leading-relaxed max-w-4xl">
+            <p className="text-sm md:text-base text-[#A0A0A0] font-body leading-relaxed max-w-4xl">
               Flow velocity is 85% below optimal. Queue propagation originating from intersection node CAM-W-402.
             </p>
 
             {/* Info Metrics Grid Row */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-              <div className="text-xs md:text-sm font-body text-[#AEA793] space-y-2">
+              <div className="text-xs md:text-sm font-body text-[#A0A0A0] space-y-2">
                 <div className="flex items-center gap-2">
                   <img src="/assets/heatmap_camera.svg" alt="Cameras" className="w-4 h-4 object-contain" />
                   <span>Camera 16, Camera 15, Camera 14</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <img src="/assets/heatmap_vehicles.svg" alt="Vehicles" className="w-4 h-4 object-contain" />
-                  <span className="text-[#AEA793] font-semibold font-body">452 vehicles</span>
+                  <span className="text-[#A0A0A0] font-semibold font-body">452 vehicles</span>
                 </div>
               </div>
 
-              <div className="text-xs md:text-sm font-body text-[#AEA793] flex items-center gap-2">
+              <div className="text-xs md:text-sm font-body text-[#A0A0A0] flex items-center gap-2">
                 <span>Maximum Capacity:</span>
-                <span className="text-[#AEA793] font-bold font-body text-sm md:text-base">
+                <span className="text-[#A0A0A0] font-bold font-body text-sm md:text-base">
                   480 vehicles
                 </span>
               </div>
@@ -537,13 +525,13 @@ export const AnalyticsView: React.FC = () => {
             </div>
 
             {/* Subtitle Description */}
-            <p className="text-sm md:text-base text-[#AEA793] font-body max-w-4xl leading-relaxed">
+            <p className="text-sm md:text-base text-[#A0A0A0] font-body max-w-4xl leading-relaxed">
               Cross-sector vehicle velocity, journey counts, and throughput volume computed via multi-camera plate re-identification.
             </p>
           </div>
 
           {/* Flow Category Legend Row */}
-          <div className="flex flex-wrap items-center gap-6 text-xs md:text-sm font-body font-medium text-[#AEA793] pt-2">
+          <div className="flex flex-wrap items-center gap-6 text-xs md:text-sm font-body font-medium text-[#A0A0A0] pt-2">
             <div className="flex items-center gap-2">
               <span className="w-3.5 h-3.5 rounded-sm bg-[#1B7A43]" />
               <span>Normal Flow ( &lt; 200 v/h )</span>
@@ -650,11 +638,11 @@ export const AnalyticsView: React.FC = () => {
                       <div className="text-xs font-body text-white/90 space-y-0.5">
                         <p>
                           <span className="text-[#A0A0A0]">Vehicles Travelling : </span>
-                          <span className="font-semibold text-[#AEA793]">{seg.vehiclesTravelling}</span>
+                          <span className="font-semibold text-[#A0A0A0]">{seg.vehiclesTravelling}</span>
                         </p>
                         <p>
                           <span className="text-[#A0A0A0]">Maximum Capacity : </span>
-                          <span className="font-semibold text-[#AEA793]">{seg.maxCapacity}</span>
+                          <span className="font-semibold text-[#A0A0A0]">{seg.maxCapacity}</span>
                         </p>
                       </div>
                     </div>
@@ -714,15 +702,15 @@ export const AnalyticsView: React.FC = () => {
               <div className="space-y-1.5 text-xs md:text-sm font-body text-white/90">
                 <p>
                   <span className="text-[#A0A0A0]">Vehicles Travelling : </span>
-                  <span className="font-semibold text-[#AEA793]">{selectedSegment.vehiclesTravelling}</span>
+                  <span className="font-semibold text-[#A0A0A0]">{selectedSegment.vehiclesTravelling}</span>
                 </p>
                 <p>
                   <span className="text-[#A0A0A0]">Maximum Capacity : </span>
-                  <span className="font-semibold text-[#AEA793]">{selectedSegment.maxCapacity}</span>
+                  <span className="font-semibold text-[#A0A0A0]">{selectedSegment.maxCapacity}</span>
                 </p>
                 <p>
                   <span className="text-[#A0A0A0]">Timestamp : </span>
-                  <span className="font-semibold text-[#AEA793]">{selectedSegment.timestamp}</span>
+                  <span className="font-semibold text-[#A0A0A0]">{selectedSegment.timestamp}</span>
                 </p>
                 <p>
                   <span className="text-[#A0A0A0]">Traffic Congestion Index : </span>

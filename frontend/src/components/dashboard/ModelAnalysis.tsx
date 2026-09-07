@@ -138,7 +138,7 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
         {/* Header with Camera Info & Motion Status */}
         <div className="space-y-0.5 mb-2 font-body">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#AEA793] font-body">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#A0A0A0] font-body">
               <img src="/assets/camera_aea793.svg" alt="Camera" className="w-3 h-3" />
               <span>{cameraDisplayName}</span>
             </div>
@@ -148,7 +148,7 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-[#AEA793] font-body">
+          <div className="flex items-center gap-1.5 text-[11px] text-[#A0A0A0] font-body">
             <img src="/assets/route_aea793.svg" alt="Location" className="w-3.5 h-3.5" />
             <span>Live Video Feed (CityFlow)</span>
           </div>
@@ -162,7 +162,7 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
           </div>
           <div className="flex items-center justify-between py-0.5">
             <span className="text-[#A0A0A0] text-xs font-body">Observation ID</span>
-            <span className="text-[#AEA793] font-body text-xs">{observationId}</span>
+            <span className="text-[#A0A0A0] font-body text-xs">{observationId}</span>
           </div>
         </div>
 
@@ -209,7 +209,7 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
             <span className="text-[10px] font-body font-bold text-[#A0A0A0] uppercase tracking-wider">
               RECENT DETECTIONS ({cameraDisplayName})
             </span>
-            <span className="text-[9px] font-body text-[#AEA793]">LAST {recentDetections.slice(0, 4).length}</span>
+            <span className="text-[9px] font-body text-[#A0A0A0]">LAST {recentDetections.slice(0, 4).length}</span>
           </div>
 
           <div className="space-y-0.5 max-h-20 overflow-y-auto pr-0.5 font-body">
@@ -246,11 +246,11 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
           </div>
         </div>
 
-        {/* Bottom Action: View Reconstructed Trace (Hanken Grotesk, #AEA793 color, diagonal_arrow.svg, no hover interactive) */}
+        {/* Bottom Action: View Reconstructed Trace (Hanken Grotesk, #A0A0A0 color, diagonal_arrow.svg, no hover interactive) */}
         <div className="flex justify-end pt-2 mt-1.5">
           <button
             onClick={() => onViewTrace && onViewTrace(isPlateRead ? displayPlate : 'TN 37 CY 1234')}
-            className="bg-[#1E1E1E] text-[#AEA793] font-bold font-body text-xs px-3 py-1 rounded flex items-center gap-1.5 cursor-pointer"
+            className="bg-[#1E1E1E] text-[#A0A0A0] font-bold font-body text-xs px-3 py-1 rounded flex items-center gap-1.5 cursor-pointer"
           >
             <span>VIEW RECONSTRUCTED TRACE</span>
             <img src="/assets/diagonal_arrow.svg" alt="Arrow" className="w-3 h-3 object-contain" />
