@@ -13,10 +13,37 @@ class HeatmapSegment(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class CameraTrafficStat(BaseModel):
+    camera_id: str
+    name: str
+    short_name: Optional[str] = None
+    location: str
+    latitude: float
+    longitude: float
+    vehicle_count: int
+    traffic_density: float
+    congestion_level: str
+    weight: float
+    status_color: Optional[str] = "green"
+    max_capacity: Optional[int] = 200
+
+class HeatmapCoordinate(BaseModel):
+    lng: float
+    lat: float
+    weight: float
+
 class HeatmapResponse(BaseModel):
     window_start: Optional[datetime] = None
     window_end: Optional[datetime] = None
-    segments: List[HeatmapSegment]
+    segments: List[HeatmapSegment] = []
+    corridor_name: Optional[str] = "Grandview & Highway 20 Corridor"
+    subtitle: Optional[str] = None
+    cameras_label: Optional[str] = "Camera 020, Camera 023, Camera 029, Camera 035"
+    total_vehicles: int = 0
+    max_capacity: int = 480
+    congestion_index: str = "Critical"
+    camera_stats: List[CameraTrafficStat] = []
+    heatmap_points: List[HeatmapCoordinate] = []
 
 class ODEntry(BaseModel):
     origin_zone: str
