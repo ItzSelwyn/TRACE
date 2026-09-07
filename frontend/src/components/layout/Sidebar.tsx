@@ -16,11 +16,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems: { id: NavRoute; label: string; icon: string; enabled: boolean; hasRedAlert?: boolean }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: '/assets/Dashboard.svg', enabled: true },
     { id: 'vehicle-trace', label: 'Vehicle Trace', icon: '/assets/route.svg', enabled: true },
-    { id: 'analytics', label: 'Analytics', icon: '/assets/Analystics.svg', enabled: false },
-    { id: 'alerts', label: 'Alerts', icon: '/assets/Alerts.svg', enabled: false, hasRedAlert: true },
-    { id: 'blacklist', label: 'Blacklist', icon: '/assets/Blacklist.svg', enabled: false },
-    { id: 'cameras', label: 'Cameras', icon: '/assets/camera.svg', enabled: false },
-    { id: 'admin-cameras', label: 'Admin Control', icon: '/assets/model.svg', enabled: true },
+    { id: 'analytics', label: 'Analytics', icon: '/assets/Analystics.svg', enabled: true },
+    { id: 'alerts', label: 'Alerts', icon: '/assets/Alerts.svg', enabled: true, hasRedAlert: true },
+    { id: 'blacklist', label: 'Blacklist', icon: '/assets/Blacklist.svg', enabled: true },
+    { id: 'cameras', label: 'Cameras', icon: '/assets/camera.svg', enabled: true },
+    { id: 'admin-cameras', label: 'Admin Control', icon: '/assets/profile.svg', enabled: true },
   ];
 
   const handleItemClick = (item: typeof navItems[0]) => {
@@ -31,12 +31,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside 
-      className={`bg-[#151515] flex flex-col justify-start transition-all duration-300 relative z-20 select-none ${
+      className={`bg-[#151515] h-full flex flex-col justify-start transition-all duration-300 relative z-20 select-none shrink-0 overflow-visible no-scrollbar ${
         isExpanded ? 'w-56' : 'w-16'
       }`}
     >
       {/* Menu Items Stack */}
-      <div className="pt-4 flex flex-col items-stretch gap-2.5">
+      <div className="pt-4 flex flex-col items-stretch gap-2.5 overflow-hidden no-scrollbar">
         {navItems.map((item) => {
           const isActive = currentRoute === item.id;
           return (
@@ -48,10 +48,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   isExpanded ? 'px-3 justify-start' : 'justify-center'
                 } ${
                   isActive
-                    ? 'bg-[#F2D04E] text-black font-bold rounded-lg shadow-sm'
+                    ? 'bg-[#F2D04E] text-black font-bold rounded-[3px]'
                     : item.enabled
-                    ? 'bg-transparent text-[#F2D04E] hover:bg-[#1E1E1E] rounded-lg'
-                    : 'bg-transparent text-[#F2D04E]/50 cursor-not-allowed opacity-60 rounded-lg'
+                    ? 'bg-transparent text-[#F2D04E] hover:bg-[#1E1E1E] rounded-[3px] cursor-pointer'
+                    : 'bg-transparent text-[#F2D04E]/50 cursor-not-allowed opacity-60 rounded-[3px]'
                 }`}
                 title={item.enabled ? item.label : `${item.label} (UI Pending)`}
                 aria-label={item.label}
@@ -67,7 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                 {/* Red notification badge on Alerts (#AC251D) */}
                 {item.hasRedAlert && !isActive && (
-                  <span className="absolute top-2 right-3 w-2 h-2 rounded-full bg-[#AC251D] shadow-sm" />
+                  <span className="absolute top-2 right-3 w-2 h-2 rounded-full bg-[#AC251D]" />
                 )}
 
                 {/* Sidebar open text labels */}
@@ -84,16 +84,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </div>
 
-      {/* Much Larger Sidebar Open Toggle Button: Positioned on right border directly below last item (Cameras), borderless */}
+      {/* Sidebar Open Toggle Button */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="absolute -right-6 top-[330px] w-12 h-12 rounded-full flex items-center justify-center bg-[#151515] hover:bg-[#1E1E1E] transition-all shadow-2xl shadow-black/90 border-none outline-none z-30 group"
+        className="absolute -right-6 top-[330px] w-12 h-12 rounded-full flex items-center justify-center bg-[#151515] hover:bg-[#1E1E1E] transition-all border-none outline-none z-30 group cursor-pointer"
         title={isExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
       >
         <img 
           src="/assets/sidebar_open.svg" 
           alt="Sidebar Toggle" 
-          className={`w-7 h-7 transition-transform duration-300 group-hover:scale-110 ${isExpanded ? 'rotate-180' : ''}`}
+          className={`w-7 h-7 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
         />
       </button>
     </aside>

@@ -38,6 +38,7 @@ class ObservationInTrajectory(BaseModel):
     observation_id: uuid.UUID
     camera_id: uuid.UUID
     camera_name: Optional[str] = None
+    location: Optional[str] = None
     captured_at: datetime
     fused_plate_text: Optional[str] = ""
     fused_confidence: float

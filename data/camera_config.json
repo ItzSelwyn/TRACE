@@ -5,6 +5,10 @@
     "c020": {
       "camera_id": "c020",
       "name": "Camera 020",
+      "location": "W Locust & Grandview",
+      "latitude": 42.5039,
+      "longitude": -90.6865,
+      "resolution": "1080P",
       "source_type": "video",
       "source_path": "footage/c020/vdo.avi",
       "scenario": "S04",
@@ -13,14 +17,19 @@
       "sync_offset_s": 25.905,
       "frame_count": 473,
       "total_frames": 473,
-      "status": "PROCESSING",
+      "status": "ONLINE",
+      "raw_status": "SYNC DISABLED",
       "sync_mode": "independent",
-      "current_frame": 4,
-      "current_local_time": 16.92
+      "current_frame": 0,
+      "current_local_time": 0.0
     },
     "c023": {
       "camera_id": "c023",
       "name": "Camera 023",
+      "location": "Grandview & Delhi",
+      "latitude": 42.5055,
+      "longitude": -90.6784,
+      "resolution": "1080P",
       "source_type": "video",
       "source_path": "footage/c023/vdo.avi",
       "scenario": "S04",
@@ -29,7 +38,8 @@
       "sync_offset_s": 45.716,
       "frame_count": 609,
       "total_frames": 609,
-      "status": "SYNC DISABLED",
+      "status": "ONLINE",
+      "raw_status": "SYNC DISABLED",
       "sync_mode": "independent",
       "current_frame": 0,
       "current_local_time": 0.0
@@ -37,6 +47,10 @@
     "c029": {
       "camera_id": "c029",
       "name": "Camera 029",
+      "location": "N Grandview & University",
+      "latitude": 42.5085,
+      "longitude": -90.671,
+      "resolution": "1080P",
       "source_type": "video",
       "source_path": "footage/c029/vdo.avi",
       "scenario": "S04",
@@ -45,7 +59,8 @@
       "sync_offset_s": 125.788,
       "frame_count": 260,
       "total_frames": 260,
-      "status": "SYNC DISABLED",
+      "status": "ONLINE",
+      "raw_status": "SYNC DISABLED",
       "sync_mode": "independent",
       "current_frame": 0,
       "current_local_time": 0.0
@@ -53,6 +68,10 @@
     "c035": {
       "camera_id": "c035",
       "name": "Camera 035",
+      "location": "Highway 20 Corridor",
+      "latitude": 42.5115,
+      "longitude": -90.6635,
+      "resolution": "1080P",
       "source_type": "video",
       "source_path": "footage/c035/vdo.avi",
       "scenario": "S04",
@@ -61,11 +80,12 @@
       "sync_offset_s": 165.568,
       "frame_count": 210,
       "total_frames": 210,
-      "status": "SYNC DISABLED",
+      "status": "ONLINE",
+      "raw_status": "SYNC DISABLED",
       "sync_mode": "independent",
       "current_frame": 0,
       "current_local_time": 0.0
     }
   },
-  "updated_at": "2026-09-06T20:42:14.250813+00:00"
+  "updated_at": "2026-09-07T05:15:12.184194+00:00"
 }

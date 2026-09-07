@@ -46,10 +46,16 @@ def list_cameras():
     """Return all managed cameras and their runtime status."""
     mgr = get_camera_manager()
     cams = mgr.list_cameras()
+    active = sum(1 for c in cams if c.get("enabled", True) and c.get("status") not in ["DISABLED", "FAILED", "OFFLINE"])
+    down = len(cams) - active
     return {
         "status": "ok",
         "cameras": cams,
         "count": len(cams),
+        "total_cameras": len(cams),
+        "active_cameras": active,
+        "down_cameras": down,
+        "uptime_hours": 28,
     }
 
 

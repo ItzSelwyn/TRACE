@@ -19,7 +19,7 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
   };
 
   return (
-    <div className="bg-[#1E1E1E] rounded-xl p-3.5 flex flex-col h-full select-none">
+    <div className="bg-[#151515] rounded-[3px] p-3.5 flex flex-col select-none">
       {/* Panel Header */}
       <div className="flex items-center justify-between mb-2.5">
         <div className="flex items-center gap-2">
@@ -30,9 +30,9 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
         </div>
       </div>
 
-      {/* 2x2 Camera Video Grid — Strict 16:9 Aspect Ratio with No Cropping */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 flex-1 items-start">
-        {cameras.slice(0, 4).map((cam, index) => {
+      {/* Camera Video Feeds — 2x2 Grid Layout */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {cameras.map((cam, index) => {
           const isSelected = cam.id.toLowerCase() === selectedCameraId.toLowerCase();
           const hasError = feedErrors[cam.id];
 
@@ -40,10 +40,8 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
             <div
               key={cam.id}
               onClick={() => onSelectCamera && onSelectCamera(cam.id.toLowerCase())}
-              className={`relative bg-[#0d0d0d] rounded-lg overflow-hidden aspect-video flex flex-col justify-between transition-all duration-200 cursor-pointer shadow-md ${
-                isSelected
-                  ? 'border-2 border-[#1B7A43] ring-1 ring-[#1B7A43]/40'
-                  : 'border border-white/10 hover:border-white/30'
+              className={`relative bg-[#000000] rounded-[3px] overflow-hidden aspect-video flex flex-col justify-between transition-all duration-200 cursor-pointer ${
+                isSelected ? 'ring-2 ring-[#1B7A43]' : ''
               }`}
             >
               {/* Live Video Stream from Backend - strictly uncropped 16:9 */}
@@ -59,9 +57,9 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
               {/* Fallback Placeholder if Video is offline */}
               {hasError && (
                 <>
-                  <div className="absolute inset-0 bg-[radial-gradient(#222_1px,transparent_1px)] [background-size:16px_16px] opacity-40 pointer-events-none" />
+                  <div className="absolute inset-0 bg-[#0A0A0A] pointer-events-none" />
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <div className="w-9 h-9 rounded-full bg-[#1A1A1A] border border-[#F2D04E]/30 flex items-center justify-center shadow-lg">
+                    <div className="w-9 h-9 rounded-full bg-[#1A1A1A] flex items-center justify-center">
                       <img 
                         src="/assets/camera.svg" 
                         alt="Camera Footage Icon" 
@@ -75,17 +73,8 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
                 </>
               )}
 
-              {/* Top-Right Dot Overlay: Yellow when idle, Green when clicked/selected */}
-              <div className="relative z-10 p-2 flex items-center justify-end pointer-events-none">
-                <span
-                  className={`w-2.5 h-2.5 rounded-full shadow-md transition-colors duration-200 ${
-                    isSelected ? 'bg-[#1B7A43]' : 'bg-[#F2D04E]'
-                  }`}
-                />
-              </div>
-
               {/* Bottom Clean Camera Number */}
-              <div className="relative z-10 p-2 text-[11px] font-heading font-semibold text-white/90 drop-shadow-md pointer-events-none">
+              <div className="relative z-10 p-2 text-[11px] font-heading font-semibold text-white/90 pointer-events-none">
                 <span>{cam.name}</span>
               </div>
             </div>

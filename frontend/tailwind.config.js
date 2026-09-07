@@ -6,6 +6,15 @@ export default {
   ],
   theme: {
     extend: {
+      borderRadius: {
+        DEFAULT: '3px',
+        sm: '3px',
+        md: '3px',
+        lg: '3px',
+        xl: '3px',
+        '2xl': '3px',
+        '3xl': '3px',
+      },
       colors: {
         dark: {
           bg: '#000000',

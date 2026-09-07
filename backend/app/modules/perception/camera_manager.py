@@ -34,6 +34,37 @@ logger = logging.getLogger("trace.perception.camera_manager")
 CONFIG_FILE_NAME = "camera_config.json"
 _PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
+_CAMERA_GEO_METADATA: Dict[str, Dict[str, Any]] = {
+    "c020": {
+        "name": "Camera 020 (W Locust & Grandview)",
+        "location": "W Locust & Grandview",
+        "latitude": 42.5039,
+        "longitude": -90.6865,
+        "resolution": "1080P",
+    },
+    "c023": {
+        "name": "Camera 023 (Grandview & Delhi)",
+        "location": "Grandview & Delhi",
+        "latitude": 42.5055,
+        "longitude": -90.6784,
+        "resolution": "1080P",
+    },
+    "c029": {
+        "name": "Camera 029 (N Grandview & University)",
+        "location": "N Grandview & University",
+        "latitude": 42.5085,
+        "longitude": -90.6710,
+        "resolution": "1080P",
+    },
+    "c035": {
+        "name": "Camera 035 (Highway 20 Corridor)",
+        "location": "Highway 20 Corridor",
+        "latitude": 42.5115,
+        "longitude": -90.6635,
+        "resolution": "1080P",
+    },
+}
+
 _YOLO_MODEL: Optional[Any] = None
 _YOLO_LOCK = threading.Lock()
 
@@ -179,10 +210,18 @@ class ManagedCameraWorker:
         self.controller = controller
         self._lock = threading.Lock()
         self._running = False
+        self._generation: int = 0
+        self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
+        self._cap: Optional[cv2.VideoCapture] = None
 
         # Configuration properties
-        self.name: str = config.get("name", f"Camera {self.camera_id.upper()}")
+        geo = _CAMERA_GEO_METADATA.get(self.camera_id, {})
+        self.name: str = config.get("name") or geo.get("name") or f"Camera {self.camera_id.upper()}"
+        self.location: str = config.get("location") or geo.get("location") or "CityFlow S04 Corridor"
+        self.latitude: float = float(config.get("latitude") or geo.get("latitude") or 42.507)
+        self.longitude: float = float(config.get("longitude") or geo.get("longitude") or -90.675)
+        self.resolution: str = config.get("resolution") or geo.get("resolution") or "1080P"
         self.source_type: str = config.get("source_type", "video").lower()
         self.source_path: str = config.get("source_path", "")
         self.scenario: str = config.get("scenario", "S04")
@@ -235,23 +274,51 @@ class ManagedCameraWorker:
 
     def start(self):
         with self._lock:
-            if not self._running:
-                self._running = True
-                self._thread = threading.Thread(target=self._worker_loop, daemon=True)
-                self._thread.start()
+            if self._running and self._thread and self._thread.is_alive():
+                return
+            self._running = True
+            self._generation += 1
+            current_gen = self._generation
+            self._stop_event = threading.Event()
+            stop_evt = self._stop_event
+            self._thread = threading.Thread(
+                target=self._worker_loop,
+                args=(current_gen, stop_evt),
+                name=f"CameraWorker-{self.camera_id}-g{current_gen}",
+                daemon=True,
+            )
+            self._thread.start()
 
     def stop(self):
         with self._lock:
             self._running = False
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=1.0)
+            self._generation += 1
+            if hasattr(self, "_stop_event"):
+                self._stop_event.set()
+            if self._cap is not None:
+                try:
+                    self._cap.release()
+                except Exception:
+                    pass
+                self._cap = None
+            thread_to_join = self._thread
+            self._thread = None
+
+        if thread_to_join and thread_to_join.is_alive():
+            thread_to_join.join(timeout=2.0)
 
     def to_dict(self) -> Dict[str, Any]:
         with self._lock:
             sync_active = (self.controller.sync_mode == "synchronized")
+            is_active = self.enabled and self.status_label not in ["DISABLED", "FAILED", "OFFLINE"]
+            status = "ONLINE" if is_active else ("DISABLED" if not self.enabled else self.status_label)
             return {
                 "camera_id": self.camera_id,
                 "name": self.name,
+                "location": self.location,
+                "latitude": self.latitude,
+                "longitude": self.longitude,
+                "resolution": self.resolution,
                 "source_type": self.source_type,
                 "source_path": self.source_path,
                 "scenario": self.scenario,
@@ -260,7 +327,8 @@ class ManagedCameraWorker:
                 "sync_offset_s": self.sync_offset_s,
                 "frame_count": self.frame_count,
                 "total_frames": self.total_frames,
-                "status": "DISABLED" if not self.enabled else self.status_label,
+                "status": status,
+                "raw_status": self.status_label,
                 "sync_mode": self.controller.sync_mode,
                 "current_frame": self.current_frame_idx,
                 "current_local_time": round(self.current_local_time_s, 2),
@@ -295,26 +363,35 @@ class ManagedCameraWorker:
             except Exception:
                 pass
 
-    def _worker_loop(self):
+    def _worker_loop(self, generation: int, stop_event: threading.Event):
         """Dedicated execution loop for video or image source."""
         resolved_path = self._resolve_full_path()
-        model = _get_yolo_model()
 
         # Handle Still Image source
         if self.source_type == "image":
-            self._run_image_loop(resolved_path)
+            self._run_image_loop(resolved_path, generation, stop_event)
             return
 
         # Handle Video source
         if not resolved_path.exists():
             with self._lock:
-                self.status_label = "OFFLINE"
+                if self._generation == generation:
+                    self.status_label = "OFFLINE"
             return
 
         cap = cv2.VideoCapture(str(resolved_path))
+        with self._lock:
+            if stop_event.is_set() or self._generation != generation or not self._running:
+                cap.release()
+                return
+            self._cap = cap
+
         if not cap.isOpened():
             with self._lock:
-                self.status_label = "FAILED"
+                if self._generation == generation:
+                    self.status_label = "FAILED"
+                if self._cap is cap:
+                    self._cap = None
             return
 
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or (self.frame_count or 9999)
@@ -324,123 +401,129 @@ class ManagedCameraWorker:
 
         last_rendered_frame_idx = -1
 
-        while self._running:
-            loop_start = time.time()
+        try:
+            while not stop_event.is_set() and self._running and self._generation == generation:
+                loop_start = time.time()
 
-            if not self.enabled:
-                with self._lock:
-                    self.status_label = "DISABLED"
-                time.sleep(0.2)
-                continue
+                if not self.enabled:
+                    with self._lock:
+                        self.status_label = "DISABLED"
+                    stop_event.wait(0.2)
+                    continue
 
-            master_time = self.controller.master_time_s
-            sync_mode = self.controller.sync_mode
-            play_state = self.controller.playback_state
+                master_time = self.controller.master_time_s
+                sync_mode = self.controller.sync_mode
+                play_state = self.controller.playback_state
 
-            # 1. Handle Reset 00:00 or Timeline Seek in BOTH Independent and Sync modes
-            if self.last_seek_version != self.controller.seek_version:
-                self.last_seek_version = self.controller.seek_version
-                self._reset_tracking_state()
+                # 1. Handle Reset 00:00 or Timeline Seek in BOTH Independent and Sync modes
+                if self.last_seek_version != self.controller.seek_version:
+                    self.last_seek_version = self.controller.seek_version
+                    self._reset_tracking_state()
+                    if sync_mode == "synchronized":
+                        local_time = master_time - self.sync_offset_s
+                        self.current_local_time_s = max(0.0, local_time)
+                        if local_time < 0.0:
+                            with self._lock:
+                                self.status_label = "WAITING"
+                            self._render_waiting_frame(countdown=-local_time)
+                            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                            last_rendered_frame_idx = -1
+                            self.current_frame_idx = 0
+                            stop_event.wait(0.05)
+                            continue
+                        else:
+                            target_f = min(total_frames - 1, max(0, int(local_time * self.fps)))
+                            cap.set(cv2.CAP_PROP_POS_FRAMES, target_f)
+                            last_rendered_frame_idx = target_f - 1
+                            self.current_frame_idx = target_f
+                    else:
+                        # Independent Mode: clicking Reset immediately rewinds video to frame 0
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                        last_rendered_frame_idx = -1
+                        self.current_frame_idx = 0
+                        self.current_local_time_s = 0.0
+
+                if play_state == "paused":
+                    stop_event.wait(0.08)
+                    continue
+
+                if play_state == "stopped":
+                    stop_event.wait(0.08)
+                    continue
+
                 if sync_mode == "synchronized":
+                    # CityFlow synchronization formula: T_local = T_master - T_start
                     local_time = master_time - self.sync_offset_s
                     self.current_local_time_s = max(0.0, local_time)
+
                     if local_time < 0.0:
+                        # Camera waiting for its scenario entry time
                         with self._lock:
                             self.status_label = "WAITING"
                         self._render_waiting_frame(countdown=-local_time)
-                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                        last_rendered_frame_idx = -1
-                        self.current_frame_idx = 0
-                        time.sleep(0.05)
+                        if last_rendered_frame_idx != -1:
+                            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                            last_rendered_frame_idx = -1
+                            self.current_frame_idx = 0
+                        stop_event.wait(0.05)
                         continue
-                    else:
-                        target_f = min(total_frames - 1, max(0, int(local_time * self.fps)))
-                        cap.set(cv2.CAP_PROP_POS_FRAMES, target_f)
-                        last_rendered_frame_idx = target_f - 1
-                        self.current_frame_idx = target_f
-                else:
-                    # Independent Mode: clicking Reset immediately rewinds video to frame 0
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                    last_rendered_frame_idx = -1
-                    self.current_frame_idx = 0
-                    self.current_local_time_s = 0.0
 
-            if play_state == "paused":
-                time.sleep(0.08)
-                continue
+                    if last_rendered_frame_idx >= total_frames - 1:
+                        # Reached end of scenario footage -> hold cleanly on last frame
+                        with self._lock:
+                            self.status_label = "SOURCE ENDED"
+                        stop_event.wait(0.1)
+                        continue
 
-            if play_state == "stopped":
-                time.sleep(0.08)
-                continue
-
-            if sync_mode == "synchronized":
-                # CityFlow synchronization formula: T_local = T_master - T_start
-                local_time = master_time - self.sync_offset_s
-                self.current_local_time_s = max(0.0, local_time)
-
-                if local_time < 0.0:
-                    # Camera waiting for its scenario entry time
                     with self._lock:
-                        self.status_label = "WAITING"
-                    self._render_waiting_frame(countdown=-local_time)
-                    if last_rendered_frame_idx != -1:
-                        # Reset video position so when entry time arrives, it starts at frame 0
+                        self.status_label = "PROCESSING"
+                else:
+                    # Independent Testing Mode: loop independently at native FPS
+                    with self._lock:
+                        self.status_label = "SYNC DISABLED"
+
+                # Sequential frame read
+                ret, frame = cap.read()
+                if not ret:
+                    if sync_mode == "independent":
                         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                         last_rendered_frame_idx = -1
-                        self.current_frame_idx = 0
-                    time.sleep(0.05)
+                        self._reset_tracking_state()
+                        ret, frame = cap.read()
+                    else:
+                        with self._lock:
+                            self.status_label = "SOURCE ENDED"
+                        stop_event.wait(0.1)
+                        continue
+
+                if not ret or frame is None:
+                    stop_event.wait(0.05)
                     continue
 
-                if last_rendered_frame_idx >= total_frames - 1:
-                    # Reached end of scenario footage -> hold cleanly on last frame
-                    with self._lock:
-                        self.status_label = "SOURCE ENDED"
-                    time.sleep(0.1)
-                    continue
+                if stop_event.is_set() or self._generation != generation or not self._running:
+                    break
 
-                with self._lock:
-                    self.status_label = "PROCESSING"
-            else:
-                # Independent Testing Mode: loop independently at native FPS
-                with self._lock:
-                    self.status_label = "SYNC DISABLED"
+                last_rendered_frame_idx += 1
+                self.current_frame_idx = last_rendered_frame_idx
+                if sync_mode != "synchronized":
+                    self.current_local_time_s = round(self.current_frame_idx / self.fps, 2)
 
-            # Sequential frame read — zero frame skipping during normal forward playback!
-            ret, frame = cap.read()
-            if not ret:
-                if sync_mode == "independent":
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                    last_rendered_frame_idx = -1
-                    self._reset_tracking_state()
-                    ret, frame = cap.read()
-                else:
-                    with self._lock:
-                        self.status_label = "SOURCE ENDED"
-                    time.sleep(0.1)
-                    continue
+                # Process frame through perception pipeline
+                self._process_and_cache_frame(frame, self.current_frame_idx, generation, stop_event)
 
-            if not ret or frame is None:
-                time.sleep(0.05)
-                continue
+                # Throttle loop interval subtracting actual elapsed inference time
+                target_fps = max(1.0, self.fps * self.controller.playback_speed)
+                target_interval = 1.0 / target_fps
+                elapsed = time.time() - loop_start
+                sleep_time = target_interval - elapsed
 
-            last_rendered_frame_idx += 1
-            self.current_frame_idx = last_rendered_frame_idx
-            if sync_mode != "synchronized":
-                self.current_local_time_s = round(self.current_frame_idx / self.fps, 2)
-
-            # Process frame through perception pipeline
-            self._process_and_cache_frame(frame, self.current_frame_idx)
-
-            # Throttle loop interval subtracting actual elapsed inference time
-            target_fps = max(1.0, self.fps * self.controller.playback_speed)
-            target_interval = 1.0 / target_fps
-            elapsed = time.time() - loop_start
-            sleep_time = target_interval - elapsed
-
-            if sleep_time > 0:
-                time.sleep(sleep_time)
-
-        cap.release()
+                if sleep_time > 0:
+                    stop_event.wait(sleep_time)
+        finally:
+            cap.release()
+            with self._lock:
+                if self._cap is cap:
+                    self._cap = None
 
     def _render_waiting_frame(self, countdown: float):
         """Render a clean camera standby frame while waiting for CityFlow sync start."""
@@ -472,25 +555,35 @@ class ManagedCameraWorker:
                 self.cached_raw_jpeg = raw_bytes
                 self.cached_yolo_jpeg = raw_bytes
 
-    def _run_image_loop(self, image_path: Path):
+    def _run_image_loop(self, image_path: Path, generation: int, stop_event: threading.Event):
         """Execution loop for Still Image camera sources."""
         if not image_path.exists():
             with self._lock:
-                self.status_label = "IMAGE NOT FOUND"
+                if self._generation == generation:
+                    self.status_label = "IMAGE NOT FOUND"
             return
 
         img = cv2.imread(str(image_path))
         if img is None:
             with self._lock:
-                self.status_label = "FAILED"
+                if self._generation == generation:
+                    self.status_label = "FAILED"
             return
 
-        frame_idx = 0
-        while self._running:
+        with self._lock:
+            if self._generation == generation:
+                self.status_label = "IMAGE ACTIVE"
+
+        # Process the image once for initial YOLO, OCR, and DB persistence
+        self.current_frame_idx = 1
+        self._process_and_cache_frame(img.copy(), 1, generation, stop_event)
+
+        frame_idx = 1
+        while not stop_event.is_set() and self._running and self._generation == generation:
             if not self.enabled:
                 with self._lock:
                     self.status_label = "DISABLED"
-                time.sleep(0.3)
+                stop_event.wait(0.3)
                 continue
 
             with self._lock:
@@ -498,11 +591,39 @@ class ManagedCameraWorker:
 
             frame_idx += 1
             self.current_frame_idx = frame_idx
-            self._process_and_cache_frame(img.copy(), frame_idx)
-            time.sleep(1.0 / max(1.0, self.fps))
 
-    def _process_and_cache_frame(self, frame: np.ndarray, frame_id: int):
+            # Update OSD timestamp on raw frame smoothly
+            resized_raw = cv2.resize(img, (640, 360), interpolation=cv2.INTER_AREA)
+            sync_label = "SYNC" if self.controller.sync_mode == "synchronized" else "INDEP"
+            cv2.putText(
+                resized_raw,
+                f"CAM {self.camera_id.upper()} [{sync_label}] - F:{frame_idx} - {time.strftime('%H:%M:%S')}",
+                (12, 24),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (242, 208, 78),
+                1,
+                cv2.LINE_AA,
+            )
+            _, raw_buf = cv2.imencode(".jpg", resized_raw, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            if _:
+                with self._lock:
+                    if self._generation == generation and self._running and not stop_event.is_set():
+                        self.cached_raw_jpeg = raw_buf.tobytes()
+
+            stop_event.wait(1.0 / max(1.0, self.fps))
+
+    def _process_and_cache_frame(
+        self,
+        frame: np.ndarray,
+        frame_id: int,
+        generation: int = 0,
+        stop_event: Optional[threading.Event] = None,
+    ):
         """Run YOLOv8, ByteTrack, Plate Localization, PaddleOCR, and caching on the frame."""
+        if (stop_event is not None and (stop_event.is_set() or self._generation != generation)) or not self._running:
+            return
+
         resized_raw = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_AREA)
 
         # 1. Raw OSD frame
@@ -520,6 +641,9 @@ class ManagedCameraWorker:
         )
         _, raw_buf = cv2.imencode(".jpg", raw_osd, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
         raw_bytes = raw_buf.tobytes() if _ else None
+        if raw_bytes is not None:
+            with self._lock:
+                self.cached_raw_jpeg = raw_bytes
 
         # 2. YOLO + ByteTrack Inference
         yolo_frame = resized_raw.copy()
@@ -745,6 +869,8 @@ class ManagedCameraWorker:
         yolo_bytes = yolo_buf.tobytes() if _ else None
 
         with self._lock:
+            if (stop_event is not None and (stop_event.is_set() or self._generation != generation)) or not self._running:
+                return
             if raw_bytes is not None:
                 self.cached_raw_jpeg = raw_bytes
             if yolo_bytes is not None:
@@ -872,7 +998,7 @@ class CameraScenarioManager:
         if clean_id in sync_meta.get(detected_scenario, {}):
             detected_offset = sync_meta[detected_scenario][clean_id].get("start_timestamp_s", 0.0)
 
-        # 3. Update configuration
+        # 3. Update configuration and purge old video state
         with worker._lock:
             worker.source_path = source_path
             worker.source_type = source_type.lower()
@@ -885,6 +1011,23 @@ class CameraScenarioManager:
             worker.cached_yolo_jpeg = None
             worker.vehicle_tracks.clear()
             worker.recent_detections.clear()
+            worker.persisted_tracks.clear()
+            worker.fusion = TemporalOCRFusion()
+            worker.active_vehicle_data = {
+                "camera_id": worker.camera_id,
+                "camera_name": worker.name,
+                "observation_id": f"TRACE-{worker.camera_id.upper()}-01",
+                "track_id": "TRK-001",
+                "plate_number": "NOT READ",
+                "ocr_confidence": None,
+                "ocr_status": "NOT READ",
+                "vehicle_type": "CAR",
+                "color": "WHITE",
+                "timestamp": time.strftime("%I:%M:%S %p"),
+                "is_moving": False,
+                "status": "MONITORING",
+                "recent_detections": [],
+            }
 
         # 4. Restart worker
         worker.start()

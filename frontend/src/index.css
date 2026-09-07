@@ -3,6 +3,11 @@
 @tailwind utilities;
 
 @layer base {
+  *, *::before, *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
   body {
     font-family: 'Hanken Grotesk', sans-serif;
     background-color: #000000;
@@ -33,10 +38,31 @@
   background: #F2D04E;
 }
 
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
 .font-heading {
   font-family: 'Lexend', sans-serif;
 }
 
 .font-body {
   font-family: 'Hanken Grotesk', sans-serif;
+}
+
+/* Invert colors of map zoom in & zoom out buttons across all maps */
+.maplibregl-ctrl-group {
+  filter: invert(1) !important;
+  border-radius: 6px !important;
+  overflow: hidden !important;
+  border: none !important;
+}
+
+.maplibregl-ctrl-group button {
+  border: none !important;
 }

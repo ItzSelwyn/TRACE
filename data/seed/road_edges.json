@@ -3,28 +3,28 @@
     "edge_id": "e1000000-0000-0000-0000-000000000001",
     "from_camera_id": "c1000000-0000-0000-0000-000000000001",
     "to_camera_id": "c2000000-0000-0000-0000-000000000002",
-    "distance_km": 1.2,
-    "min_travel_time_s": 120,
+    "distance_km": 0.69,
+    "min_travel_time_s": 20,
     "max_travel_time_s": 600,
-    "speed_limit_kmph": 60
+    "speed_limit_kmph": 70
   },
   {
     "edge_id": "e2000000-0000-0000-0000-000000000002",
     "from_camera_id": "c2000000-0000-0000-0000-000000000002",
     "to_camera_id": "c3000000-0000-0000-0000-000000000003",
-    "distance_km": 2.5,
-    "min_travel_time_s": 240,
-    "max_travel_time_s": 900,
-    "speed_limit_kmph": 50
+    "distance_km": 0.69,
+    "min_travel_time_s": 20,
+    "max_travel_time_s": 600,
+    "speed_limit_kmph": 60
   },
   {
     "edge_id": "e3000000-0000-0000-0000-000000000003",
     "from_camera_id": "c3000000-0000-0000-0000-000000000003",
     "to_camera_id": "c4000000-0000-0000-0000-000000000004",
-    "distance_km": 4.8,
-    "min_travel_time_s": 480,
-    "max_travel_time_s": 1500,
-    "speed_limit_kmph": 50
+    "distance_km": 0.70,
+    "min_travel_time_s": 20,
+    "max_travel_time_s": 600,
+    "speed_limit_kmph": 70
   },
   {
     "edge_id": "e4000000-0000-0000-0000-000000000004",
@@ -142,5 +142,32 @@
     "min_travel_time_s": 400,
     "max_travel_time_s": 1300,
     "speed_limit_kmph": 50
+  },
+  {
+    "edge_id": "e1b00000-0000-0000-0000-000000000017",
+    "from_camera_id": "c2000000-0000-0000-0000-000000000002",
+    "to_camera_id": "c1000000-0000-0000-0000-000000000001",
+    "distance_km": 0.69,
+    "min_travel_time_s": 20,
+    "max_travel_time_s": 600,
+    "speed_limit_kmph": 70
+  },
+  {
+    "edge_id": "e2b00000-0000-0000-0000-000000000018",
+    "from_camera_id": "c3000000-0000-0000-0000-000000000003",
+    "to_camera_id": "c2000000-0000-0000-0000-000000000002",
+    "distance_km": 0.69,
+    "min_travel_time_s": 20,
+    "max_travel_time_s": 600,
+    "speed_limit_kmph": 60
+  },
+  {
+    "edge_id": "e3b00000-0000-0000-0000-000000000019",
+    "from_camera_id": "c4000000-0000-0000-0000-000000000004",
+    "to_camera_id": "c3000000-0000-0000-0000-000000000003",
+    "distance_km": 0.70,
+    "min_travel_time_s": 20,
+    "max_travel_time_s": 600,
+    "speed_limit_kmph": 70
   }
 ]

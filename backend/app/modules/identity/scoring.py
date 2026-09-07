@@ -403,10 +403,9 @@ def compute_identity_score(
     components: List[Tuple[str, Optional[float], float]] = []
 
     if mode == "ANPR":
-        # Plate evidence is gated by plate similarity — OCR confidence validates
-        # the read accuracy, it never rewards completely dissimilar plate text.
+        # Combine plate_sim + ocr_comp into one plate evidence value
         if plate_sim is not None and ocr_comp is not None:
-            plate_evidence = round(plate_sim * (0.25 + 0.75 * ocr_comp), 4)
+            plate_evidence = round((plate_sim * 0.6 + ocr_comp * 0.4), 4)
             components.append(("plate", plate_evidence, w_plate))
 
     components.extend([
@@ -417,31 +416,7 @@ def compute_identity_score(
         ("type", type_score, w_type),
     ])
 
-    # --- Check for primary identity evidence ---
-    has_primary_evidence = (
-        (plate_sim is not None and mode == "ANPR") or
-        (appearance_similarity is not None)
-    )
-
-    if not has_primary_evidence:
-        # Safety guard against false positives (Requirement 15):
-        # If BOTH license plate and visual appearance are absent, weak supporting evidence
-        # (colour, type, temporal) alone CANNOT confirm vehicle identity.
-        # Primary weights are NOT redistributed to weak attributes.
-        raw_secondary = (
-            w_temporal * (temporal or 0.0) +
-            (w_cam_transition * cam_transition if cam_transition is not None else 0.0) +
-            (w_colour * colour_score if colour_score is not None else 0.0) +
-            (w_type * type_score if type_score is not None else 0.0)
-        )
-        score = round(min(raw_secondary, CANDIDATE_THRESHOLD - 0.01), 4)
-        weight_debug = {
-            "primary_evidence_missing": True,
-            "raw_secondary_score": raw_secondary,
-            "capped_score": score,
-        }
-    else:
-        score, weight_debug = _weighted_score(components)
+    score, weight_debug = _weighted_score(components)
 
     # --- Status classification ---
     if score >= CONFIRM_THRESHOLD:

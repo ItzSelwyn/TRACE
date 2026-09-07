@@ -4,9 +4,10 @@ import { TopSummaryStats } from '../../types/dashboard';
 interface TopStatsHeaderProps {
   stats: TopSummaryStats;
   onSearch?: (plateQuery: string) => void;
+  onNavigateBlacklist?: () => void;
 }
 
-export const TopStatsHeader: React.FC<TopStatsHeaderProps> = ({ stats, onSearch }) => {
+export const TopStatsHeader: React.FC<TopStatsHeaderProps> = ({ stats, onSearch, onNavigateBlacklist }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -17,7 +18,7 @@ export const TopStatsHeader: React.FC<TopStatsHeaderProps> = ({ stats, onSearch 
   };
 
   return (
-    <div className="bg-[#1E1E1E] rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 select-none">
+    <div className="bg-[#151515] rounded-[3px] p-4 flex flex-col md:flex-row items-center justify-between gap-4 select-none">
       {/* Search Input Box */}
       <form onSubmit={handleSubmit} className="relative flex-1 w-full max-w-2xl">
         <input
@@ -25,7 +26,7 @@ export const TopStatsHeader: React.FC<TopStatsHeaderProps> = ({ stats, onSearch 
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search Number Plate or Vehicle ID (e.g. TN 37 CY 1234 or TRK-260)"
-          className="w-full bg-[#151515] focus:border-[#F2D04E] text-white placeholder-[#A0A0A0] text-sm rounded-lg py-3 pl-4 pr-12 outline-none transition-all font-body"
+          className="w-full bg-[#000000] focus:border-[#F2D04E] text-white placeholder-[#A0A0A0] text-sm rounded-[3px] py-3 pl-4 pr-12 outline-none transition-all font-body"
         />
         <button
           type="submit"
@@ -43,17 +44,21 @@ export const TopStatsHeader: React.FC<TopStatsHeaderProps> = ({ stats, onSearch 
           <span className="text-[11px] font-bold tracking-wider text-[#A0A0A0] font-heading uppercase">
             ACTIVE SCANS
           </span>
-          <span className="text-2xl font-semibold text-white font-body">
+          <span className="text-2xl font-semibold text-[#1B7A43] font-body">
             {stats.activeScans}
           </span>
         </div>
 
         {/* Blacklists */}
-        <div className="flex flex-col items-start md:items-center">
+        <div 
+          onClick={onNavigateBlacklist}
+          className={`flex flex-col items-start md:items-center ${onNavigateBlacklist ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+          title={onNavigateBlacklist ? "View Blacklist" : undefined}
+        >
           <span className="text-[11px] font-bold tracking-wider text-[#A0A0A0] font-heading uppercase">
             BLACKLISTS
           </span>
-          <span className="text-2xl font-semibold text-white font-body">
+          <span className="text-2xl font-semibold text-[#971D1B] font-body">
             {stats.blacklistsCount}
           </span>
         </div>
@@ -63,7 +68,7 @@ export const TopStatsHeader: React.FC<TopStatsHeaderProps> = ({ stats, onSearch 
           <span className="text-[11px] font-bold tracking-wider text-[#A0A0A0] font-heading uppercase">
             SYSTEM STATUS
           </span>
-          <span className="text-2xl font-semibold text-white font-body">
+          <span className="text-2xl font-semibold text-[#F2D04E] font-body">
             {stats.systemStatus}
           </span>
         </div>

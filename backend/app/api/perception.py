@@ -535,6 +535,24 @@ async def get_perception_status(
         }
 
 
+@router.get("/perception/cameras")
+def get_perception_cameras():
+    """Return all corridor cameras with their geo-coordinates, live status, and aggregate metrics."""
+    mgr = get_camera_manager()
+    cams = mgr.list_cameras()
+    active = sum(1 for c in cams if c.get("enabled", True) and c.get("status") not in ["DISABLED", "FAILED", "OFFLINE"])
+    down = len(cams) - active
+    return {
+        "status": "ok",
+        "cameras": cams,
+        "count": len(cams),
+        "total_cameras": len(cams),
+        "active_cameras": active,
+        "down_cameras": down,
+        "uptime_hours": 28,
+    }
+
+
 @router.get("/perception/camera/{camera_id}/frame")
 def get_camera_frame(camera_id: str, annotate: bool = False):
     """Return the latest JPEG frame for a camera instantly without persistent connection pooling."""

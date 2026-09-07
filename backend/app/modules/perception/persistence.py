@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import logging
+import math
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import numpy as np
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Camera, OcrRead, VehicleObservation
+from app.db.models import Alert, BlacklistEntry, Camera, OcrRead, VehicleObservation
 
 logger = logging.getLogger("trace.perception.persistence")
 
@@ -180,6 +182,40 @@ def persist_fused_observation(
                 )
                 session.add(ocr_read_record)
                 inserted_reads_count += 1
+
+        # 3. Check for active blacklist matches and create Alert if hit
+        if plate_str and plate_str != "NOT READ":
+            try:
+                from app.modules.perception.normalization import normalize_plate_text
+                from sqlalchemy import func, or_
+                norm_p = normalize_plate_text(plate_str)
+                bl_entries = session.execute(
+                    select(BlacklistEntry).where(
+                        BlacklistEntry.active == True,
+                        or_(
+                            func.upper(BlacklistEntry.plate_text) == plate_str.upper(),
+                            func.upper(BlacklistEntry.plate_text) == norm_p.upper(),
+                            BlacklistEntry.plate_text == str(track_id),
+                        ),
+                    )
+                ).scalars().all()
+
+                for bl in bl_entries:
+                    alert = Alert(
+                        alert_id=uuid.uuid4(),
+                        type="blacklist_hit",
+                        plate_text=bl.plate_text,
+                        camera_id=cam_uuid,
+                        blacklist_id=bl.blacklist_id,
+                        triggered_at=cap_dt,
+                        reviewed=False,
+                    )
+                    session.add(alert)
+                    logger.warning(
+                        f"[ALERT] Blacklisted vehicle '{bl.plate_text}' detected on camera {cam_uuid}!"
+                    )
+            except Exception as bl_err:
+                logger.error(f"[BLACKLIST CHECK ERROR] {bl_err}")
 
         session.commit()
         logger.info(

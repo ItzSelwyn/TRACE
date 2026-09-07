@@ -34,75 +34,66 @@ VEHICLE_CLASS_MAP = {
 
 
 def _detect_crop_color(crop: np.ndarray) -> str:
-    """Classify dominant vehicle body color using robust HSV/RGB analysis on painted panels.
+    """Classify dominant vehicle color using robust RGB/HSV analysis on vehicle core crop.
     
-    Returns one of: RED, ORANGE, YELLOW, GREEN, BLUE, WHITE, SILVER, BLACK.
+    Accurately identifies: RED, ORANGE, YELLOW, GREEN, BLUE, BLACK, WHITE, SILVER.
+    Filters specular highlights and windshield/ground noise.
     """
     if crop is None or crop.size == 0 or crop.shape[0] < 6 or crop.shape[1] < 6:
         return "SILVER"
     try:
         h, w = crop.shape[:2]
-        # Focus on vehicle body: 25% to 75% height, 15% to 85% width
-        # Excludes windshield/roof sky reflections and ground/tire dirt
-        body = crop[int(h * 0.25):int(h * 0.75), int(w * 0.15):int(w * 0.85)]
-        if body.size == 0:
-            body = crop
+        ch1, ch2 = int(h * 0.15), int(h * 0.80)
+        cw1, cw2 = int(w * 0.15), int(w * 0.85)
+        core = crop[ch1:ch2, cw1:cw2]
+        if core.size == 0:
+            core = crop
 
-        hsv = cv2.cvtColor(body, cv2.COLOR_BGR2HSV)
+        hsv = cv2.cvtColor(core, cv2.COLOR_BGR2HSV)
         H = hsv[:, :, 0]
         S = hsv[:, :, 1]
         V = hsv[:, :, 2]
 
-        b, g, r = cv2.split(body)
-        diff = np.maximum.reduce([r, g, b]) - np.minimum.reduce([r, g, b])
-        brightness = (r.astype(float) + g.astype(float) + b.astype(float)) / 3.0
-
-        # Discard extreme highlights (sun glare) and extreme pitch black
-        valid_mask = (V >= 25) & (V <= 250)
-        if not np.any(valid_mask):
+        # Filter out extreme specular highlights (pure white glare/headlights)
+        glare_mask = (V > 240) & (S < 30)
+        valid_mask = ~glare_mask
+        if np.sum(valid_mask) < 20:
             valid_mask = np.ones_like(V, dtype=bool)
 
-        # Identify chromatic paint pixels: high saturation and channel contrast
-        chroma_mask = valid_mask & (S >= 55) & (diff >= 35) & (V >= 40)
-        chroma_count = int(np.count_nonzero(chroma_mask))
-        total_valid = int(np.count_nonzero(valid_mask))
-        chroma_ratio = chroma_count / max(1, total_valid)
+        H_v = H[valid_mask]
+        S_v = S[valid_mask]
+        V_v = V[valid_mask]
 
-        if chroma_ratio >= 0.12 and chroma_count >= 15:
-            # Chromatic vehicle: calculate dominant Hue using circular distance around 0/180
-            chroma_h = H[chroma_mask]
-            angles = chroma_h.astype(float) * (2.0 * np.pi / 180.0)
-            mean_sin = np.mean(np.sin(angles))
-            mean_cos = np.mean(np.cos(angles))
-            mean_angle = np.arctan2(mean_sin, mean_cos)
-            if mean_angle < 0:
-                mean_angle += 2.0 * np.pi
-            dom_h = mean_angle * (180.0 / (2.0 * np.pi))
+        # Chromatic check: sufficient saturation (S >= 45) on body pixels
+        chroma_mask = S_v >= 45
+        chroma_ratio = float(np.sum(chroma_mask)) / max(1, len(S_v))
 
-            if dom_h < 10 or dom_h >= 165:
-                return "RED"
-            elif 10 <= dom_h < 24:
-                return "ORANGE"
-            elif 24 <= dom_h < 35:
-                return "YELLOW"
-            elif 35 <= dom_h < 85:
-                return "GREEN"
-            elif 85 <= dom_h < 140:
-                return "BLUE"
-            else:
-                return "RED"
+        if chroma_ratio >= 0.16:
+            h_chroma = H_v[chroma_mask]
+            red_count = int(np.sum((h_chroma <= 10) | (h_chroma >= 165)))
+            orange_count = int(np.sum((h_chroma >= 11) & (h_chroma <= 24)))
+            yellow_count = int(np.sum((h_chroma >= 25) & (h_chroma <= 35)))
+            green_count = int(np.sum((h_chroma >= 36) & (h_chroma <= 85)))
+            blue_count = int(np.sum((h_chroma >= 86) & (h_chroma <= 140)))
 
-        # Achromatic vehicle: Black, White, Silver/Grey
-        body_bright = brightness[valid_mask]
-        med_bright = float(np.median(body_bright))
-        p25 = float(np.percentile(body_bright, 25))
-        p75 = float(np.percentile(body_bright, 75))
+            counts = {
+                "RED": red_count,
+                "ORANGE": orange_count,
+                "YELLOW": yellow_count,
+                "GREEN": green_count,
+                "BLUE": blue_count,
+            }
+            best_col, best_n = max(counts.items(), key=lambda x: x[1])
+            if best_n > 0:
+                return best_col
 
-        # Black car: median brightness is low, or lower quartile is dark
-        if med_bright < 70 or (p25 < 50 and med_bright < 85):
+        # Achromatic: BLACK, WHITE, SILVER
+        med_v = float(np.median(V_v))
+        p75_v = float(np.percentile(V_v, 75))
+
+        if med_v < 75 and p75_v < 118:
             return "BLACK"
-        # White car: upper quartile is very bright and median is well above silver
-        elif p75 > 190 or (med_bright > 165 and p75 > 180):
+        elif med_v > 155:
             return "WHITE"
         else:
             return "SILVER"
@@ -116,7 +107,7 @@ class PerceptionPipeline:
     def __init__(
         self,
         camera_id: str,
-        yolo_model_path: str = "models/yolov8n.pt",
+        yolo_model_path: str = "yolov8n.pt",
         confidence: float = 0.25,
         enable_ocr: bool = True,
         enable_db_persist: bool = True,
@@ -133,14 +124,10 @@ class PerceptionPipeline:
         
         root = Path(__file__).resolve().parents[4]
         candidates = [
-            root / "backend" / "models" / "yolov8n.pt",
-            root / "backend" / "models" / Path(yolo_model_path).name,
-            root / "backend" / yolo_model_path,
-            Path.cwd() / "models" / "yolov8n.pt",
             Path(yolo_model_path),
+            root / "backend" / yolo_model_path,
             root / "backend" / "yolov8n.pt",
             root / "backend" / "yolo8n.pt",
-            Path.cwd() / yolo_model_path,
         ]
         resolved_path = next((c for c in candidates if c.exists()), Path(yolo_model_path))
         self.model = YOLO(str(resolved_path))
@@ -187,19 +174,6 @@ class PerceptionPipeline:
                 vehicle_colour=trk_info.get("color", "white"),
             )
 
-            # Extract track-level appearance embedding if Re-ID is enabled
-            appearance_embedding = None
-            if settings.APPEARANCE_REID_ENABLED and "crops" in trk_info and trk_info["crops"]:
-                try:
-                    from app.modules.appearance import get_appearance_extractor
-                    extractor = get_appearance_extractor()
-                    appearance_embedding = extractor.extract_track_embedding(trk_info["crops"])
-                except Exception as e:
-                    logger.debug(f"Track embedding extraction failed for {track_id_str}: {e}")
-                    appearance_embedding = None
-                finally:
-                    trk_info["crops"].clear()
-
             try:
                 with Session(self._db_engine) as session:
                     obs = persist_fused_observation(
@@ -212,15 +186,9 @@ class PerceptionPipeline:
                         vehicle_type=fused.get("vehicle_type", "car"),
                         vehicle_colour=fused.get("vehicle_colour", "white"),
                         ocr_reads=fused.get("reads_history", []),
-                        appearance_embedding=appearance_embedding,
                     )
                     if obs:
                         self.persisted_tracks.add(track_id_str)
-                        try:
-                            from app.modules.identity import match_new_observation
-                            match_new_observation(session, obs)
-                        except Exception as fuse_err:
-                            logger.debug(f"Online identity fusion error for {track_id_str}: {fuse_err}")
             except Exception as e:
                 logger.warning(f"[DB ERROR] Error persisting track {track_id_str}: {e}")
 
@@ -246,7 +214,6 @@ class PerceptionPipeline:
                 frame,
                 persist=True,
                 tracker="bytetrack.yaml",
-                classes=[2, 3, 5, 7],
                 conf=self.confidence,
                 verbose=False,
             )[0]
@@ -320,19 +287,10 @@ class PerceptionPipeline:
                         "type": vtype,
                         "first_seen": current_time_str,
                         "is_moving": False,
-                        "crops": [],
                     }
                     self.tracked_vehicles[track_id_str] = trk_info
                     disp = 0.0
                     is_moving = False
-
-                # Collect high-quality vehicle crops for track appearance embedding
-                if "crops" not in trk_info:
-                    trk_info["crops"] = []
-                if len(trk_info["crops"]) < settings.APPEARANCE_MAX_TRACK_SAMPLES:
-                    if veh_crop is not None and veh_crop.size > 0:
-                        if veh_crop.shape[0] >= settings.APPEARANCE_MIN_CROP_SIZE and veh_crop.shape[1] >= settings.APPEARANCE_MIN_CROP_SIZE:
-                            trk_info["crops"].append(veh_crop.copy())
 
                 # 2. License Plate Localization & PaddleOCR
                 plate_raw_text = ""

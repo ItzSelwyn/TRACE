@@ -1,10 +1,11 @@
 [
   {
     "camera_id": "c1000000-0000-0000-0000-000000000001",
-    "name": "Silk Board Junction",
-    "latitude": 12.9172,
-    "longitude": 77.6228,
-    "zone": "A",
+    "name": "Camera 020 (W Locust & Grandview)",
+    "latitude": 42.5039,
+    "longitude": -90.6865,
+    "zone": "S04-A",
+    "location_name": "CityFlow S04 Corridor",
     "status": "online",
     "reliability": {
       "day_ocr_reliability": 0.95,
@@ -15,10 +16,11 @@
   },
   {
     "camera_id": "c2000000-0000-0000-0000-000000000002",
-    "name": "Madiwala Checkpost",
-    "latitude": 12.9226,
-    "longitude": 77.6174,
-    "zone": "A",
+    "name": "Camera 023 (Grandview & Delhi)",
+    "latitude": 42.5055,
+    "longitude": -90.6784,
+    "zone": "S04-A",
+    "location_name": "CityFlow S04 Corridor",
     "status": "online",
     "reliability": {
       "day_ocr_reliability": 0.90,
@@ -29,10 +31,11 @@
   },
   {
     "camera_id": "c3000000-0000-0000-0000-000000000003",
-    "name": "Koramangala Sony World",
-    "latitude": 12.9382,
-    "longitude": 77.6228,
-    "zone": "B",
+    "name": "Camera 029 (N Grandview & University)",
+    "latitude": 42.5085,
+    "longitude": -90.6710,
+    "zone": "S04-B",
+    "location_name": "CityFlow S04 Corridor",
     "status": "online",
     "reliability": {
       "day_ocr_reliability": 0.92,
@@ -43,10 +46,11 @@
   },
   {
     "camera_id": "c4000000-0000-0000-0000-000000000004",
-    "name": "Indiranagar 100ft Road",
-    "latitude": 12.9784,
-    "longitude": 77.6408,
-    "zone": "B",
+    "name": "Camera 035 (Highway 20 Corridor)",
+    "latitude": 42.5115,
+    "longitude": -90.6635,
+    "zone": "S04-B",
+    "location_name": "CityFlow S04 Corridor",
     "status": "online",
     "reliability": {
       "day_ocr_reliability": 0.94,

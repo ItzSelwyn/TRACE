@@ -465,19 +465,20 @@ export const AdminCameraView: React.FC = () => {
     }
   };
 
+  // Standardized TRACE Status Badges
   const getStatusBadge = (status: string, isWaiting: boolean, isEnded: boolean) => {
     if (isWaiting) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-950/70 border border-amber-500/30 text-amber-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[3px] text-xs font-heading font-bold bg-[#B8860B]/20 text-[#B8860B]">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#B8860B]" />
           STANDBY
         </span>
       );
     }
     if (isEnded) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-950/70 border border-purple-500/30 text-purple-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[3px] text-xs font-heading font-bold bg-[#971D1B]/20 text-[#971D1B]">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#971D1B]" />
           ENDED
         </span>
       );
@@ -485,46 +486,37 @@ export const AdminCameraView: React.FC = () => {
 
     switch (status.toUpperCase()) {
       case 'PROCESSING':
+      case 'ONLINE':
+      case 'ACTIVE':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/70 border border-emerald-500/30 text-emerald-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[3px] text-xs font-heading font-bold bg-[#1B7A43]/20 text-[#1B7A43]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#1B7A43]" />
             PROCESSING
           </span>
         );
       case 'WAITING':
       case 'STANDBY':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-950/70 border border-amber-500/30 text-amber-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-            STANDBY
-          </span>
-        );
       case 'PAUSED':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-950/70 border border-blue-500/30 text-blue-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-            PAUSED
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[3px] text-xs font-heading font-bold bg-[#B8860B]/20 text-[#B8860B]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#B8860B]" />
+            {status.toUpperCase()}
           </span>
         );
       case 'SOURCE ENDED':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-950/70 border border-purple-500/30 text-purple-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-            ENDED
-          </span>
-        );
       case 'DISABLED':
+      case 'DOWN':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-neutral-800/80 border border-neutral-600 text-neutral-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-neutral-400" />
-            DISABLED
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[3px] text-xs font-heading font-bold bg-[#971D1B]/20 text-[#971D1B]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#971D1B]" />
+            {status.toUpperCase()}
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-950/70 border border-red-500/30 text-red-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-            {status}
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[3px] text-xs font-heading font-bold bg-[#151515] text-[#A0A0A0]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#A0A0A0]" />
+            {status.toUpperCase()}
           </span>
         );
     }
@@ -534,42 +526,41 @@ export const AdminCameraView: React.FC = () => {
   const maxDurationFormatted = playback?.max_duration_formatted || '03:10.000';
 
   return (
-    <div className="space-y-5 pb-8">
+    <div className="space-y-5 pb-8 font-body select-none">
       {/* Top Banner & Tab Navigation */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-[#1E1E1E] p-4 rounded-xl border border-white/10 shadow-lg">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-[#1E1E1E] p-4 rounded-[3px] shadow-lg">
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-2.5 h-6 bg-[#F2D04E] rounded-sm" />
             <h1 className="text-xl font-bold font-heading uppercase tracking-wider text-white">
               Admin Camera & Scenario Control
             </h1>
-            <span className="px-2 py-0.5 bg-[#F2D04E]/10 border border-[#F2D04E]/40 text-[#F2D04E] text-[11px] font-bold rounded">
+            <span className="px-2 py-0.5 bg-[#F2D04E]/10 text-[#F2D04E] text-[11px] font-heading font-bold rounded-[3px]">
               ADMIN / DEV
             </span>
           </div>
-          <p className="text-xs text-[#A0A0A0] mt-1 ml-5">
+          <p className="text-xs text-[#AEA793] font-body mt-1">
             Dynamically switch camera inputs, synchronize CityFlow multi-camera scenario timing, and inspect perception model crops.
           </p>
         </div>
 
         {/* Tab Buttons */}
-        <div className="flex items-center gap-2 bg-[#151515] p-1.5 rounded-lg border border-white/10">
+        <div className="flex items-center gap-2 bg-[#151515] p-1.5 rounded-[3px]">
           <button
             onClick={() => setActiveTab('cameras')}
-            className={`px-4 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${
+            className={`px-4 py-2 rounded-[3px] text-xs font-heading font-bold uppercase tracking-wider transition-colors cursor-pointer ${
               activeTab === 'cameras'
-                ? 'bg-[#F2D04E] text-black shadow-md'
-                : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                ? 'bg-[#F2D04E] text-[#000000]'
+                : 'text-[#AEA793] hover:text-white hover:bg-white/5'
             }`}
           >
             Camera & Playback
           </button>
           <button
             onClick={() => setActiveTab('debugger')}
-            className={`px-4 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${
+            className={`px-4 py-2 rounded-[3px] text-xs font-heading font-bold uppercase tracking-wider transition-colors cursor-pointer ${
               activeTab === 'debugger'
-                ? 'bg-[#F2D04E] text-black shadow-md'
-                : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                ? 'bg-[#F2D04E] text-[#000000]'
+                : 'text-[#AEA793] hover:text-white hover:bg-white/5'
             }`}
           >
             Model Visual Debugger
@@ -581,21 +572,21 @@ export const AdminCameraView: React.FC = () => {
       {activeTab === 'cameras' && (
         <>
           {/* Master Timeline & Synchronization Bar */}
-          <div className="bg-[#1E1E1E] p-4 rounded-xl border border-white/10 shadow-lg space-y-4">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-3 border-b border-white/10">
+          <div className="bg-[#1E1E1E] p-4 rounded-[3px] shadow-lg space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-3 border-b border-[#AEA793]/20">
               {/* Digital Master Clock */}
               <div className="flex items-center gap-4">
-                <div className="bg-[#121212] px-4 py-2 rounded-lg border border-white/15">
-                  <div className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">
+                <div className="bg-[#151515] px-4 py-2 rounded-[3px]">
+                  <div className="text-[10px] text-[#AEA793] font-heading font-bold uppercase tracking-wider">
                     Master Scenario Timeline (T_master)
                   </div>
-                  <div className="text-2xl font-mono font-bold text-[#F2D04E] tracking-wider">
+                  <div className="text-2xl font-heading font-bold text-[#F2D04E] tracking-wider">
                     {formatLiveTime(liveMasterTime)}
                   </div>
                 </div>
 
-                <div className="text-xs space-y-1">
-                  <div className="text-neutral-300">
+                <div className="text-xs space-y-1 font-heading">
+                  <div className="text-[#AEA793]">
                     Mode:{' '}
                     <span className="font-bold text-white">
                       {playback?.sync_mode === 'synchronized'
@@ -603,7 +594,7 @@ export const AdminCameraView: React.FC = () => {
                         : 'Independent Camera Playback'}
                     </span>
                   </div>
-                  <div className="text-[11px] text-neutral-400 font-mono">
+                  <div className="text-[11px] text-[#AEA793]">
                     Formula: T_local(cam) = T_master - T_start(cam)
                   </div>
                 </div>
@@ -614,37 +605,33 @@ export const AdminCameraView: React.FC = () => {
                 {/* Play / Pause */}
                 <button
                   onClick={handleTogglePlay}
-                  className="px-4 py-2 bg-[#F2D04E] text-black hover:bg-[#ffe16b] font-bold text-xs uppercase tracking-wider rounded-lg flex items-center gap-2 shadow-md transition-all active:scale-95"
+                  className="px-4 py-2 bg-[#F2D04E] text-[#000000] font-heading font-bold text-xs uppercase tracking-wider rounded-[3px] flex items-center gap-2 shadow-md cursor-pointer transition-colors"
                 >
                   {playback?.playback_state === 'playing' ? (
-                    <>
-                      <span className="font-mono">⏸</span> PAUSE SCENARIO
-                    </>
+                    'PAUSE SCENARIO'
                   ) : (
-                    <>
-                      <span className="font-mono">▶</span> PLAY SCENARIO
-                    </>
+                    'PLAY SCENARIO'
                   )}
                 </button>
 
                 {/* Reset to 00:00 */}
                 <button
                   onClick={handleResetPlayback}
-                  className="px-3 py-2 bg-[#252525] hover:bg-[#303030] text-neutral-200 border border-white/10 font-bold text-xs uppercase tracking-wider rounded-lg transition-all"
+                  className="px-3 py-2 bg-[#151515] hover:bg-white/5 text-[#A0A0A0] hover:text-white font-heading font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors"
                 >
-                  ⏮ RESET 00:00
+                  RESET 00:00
                 </button>
 
                 {/* Speed Multipliers */}
-                <div className="flex items-center bg-[#151515] p-1 rounded-lg border border-white/10">
+                <div className="flex items-center bg-[#151515] p-1 rounded-[3px]">
                   {[0.25, 0.5, 1.0, 2.0, 4.0].map((spd) => (
                     <button
                       key={spd}
                       onClick={() => handleChangeSpeed(spd)}
-                      className={`px-2 py-1 text-[11px] font-bold rounded transition-all ${
+                      className={`px-2 py-1 text-[11px] font-heading font-bold rounded-[3px] cursor-pointer transition-colors ${
                         playback?.playback_speed === spd
-                          ? 'bg-[#F2D04E] text-black'
-                          : 'text-neutral-400 hover:text-white'
+                          ? 'bg-[#F2D04E] text-[#000000]'
+                          : 'text-[#AEA793] hover:text-white'
                       }`}
                     >
                       {spd}x
@@ -655,10 +642,10 @@ export const AdminCameraView: React.FC = () => {
                 {/* Sync Mode Toggle */}
                 <button
                   onClick={handleToggleSyncMode}
-                  className={`px-3 py-2 text-xs font-bold uppercase tracking-wider rounded-lg border transition-all ${
+                  className={`px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors ${
                     playback?.sync_mode === 'synchronized'
-                      ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
-                      : 'bg-amber-950/60 border-amber-500/40 text-amber-300'
+                      ? 'bg-[#1B7A43]/20 text-[#1B7A43]'
+                      : 'bg-[#B8860B]/20 text-[#B8860B]'
                   }`}
                   title="Toggle between synchronized multi-camera timeline vs independent playback"
                 >
@@ -668,10 +655,10 @@ export const AdminCameraView: React.FC = () => {
                 {/* Loop Scenario Toggle */}
                 <button
                   onClick={handleToggleLoop}
-                  className={`px-3 py-2 text-xs font-bold uppercase tracking-wider rounded-lg border transition-all ${
+                  className={`px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors ${
                     playback?.loop_scenario
-                      ? 'bg-[#F2D04E]/15 border-[#F2D04E]/40 text-[#F2D04E]'
-                      : 'bg-[#252525] border-white/10 text-neutral-400'
+                      ? 'bg-[#F2D04E]/20 text-[#F2D04E]'
+                      : 'bg-[#151515] text-[#A0A0A0]'
                   }`}
                 >
                   LOOP: {playback?.loop_scenario ? 'ON' : 'OFF'}
@@ -680,17 +667,17 @@ export const AdminCameraView: React.FC = () => {
             </div>
 
             {/* Visual Timeline Progress Bar */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-[10px] font-mono text-neutral-400">
+            <div className="space-y-1 font-heading">
+              <div className="flex justify-between text-[10px] text-[#AEA793]">
                 <span>00:00 (Scenario Start)</span>
                 <span>
                   Active: {formatLiveTime(liveMasterTime)} / {maxDurationFormatted} (CityFlow S04)
                 </span>
                 <span>{maxDurationFormatted.substring(0, 5)} (Scenario End)</span>
               </div>
-              <div className="w-full h-2 bg-[#121212] rounded-full overflow-hidden border border-white/10 relative">
+              <div className="w-full h-2 bg-[#151515] rounded-[3px] overflow-hidden relative">
                 <div
-                  className="h-full bg-gradient-to-r from-[#F2D04E] to-amber-500 transition-all duration-100"
+                  className="h-full bg-[#F2D04E] transition-all duration-100"
                   style={{
                     width: `${Math.min(100, (liveMasterTime / maxScenarioDuration) * 100)}%`,
                   }}
@@ -714,15 +701,15 @@ export const AdminCameraView: React.FC = () => {
               return (
                 <div
                   key={cam.camera_id}
-                  className={`bg-[#1E1E1E] rounded-xl border p-4 shadow-md transition-all flex flex-col justify-between ${
-                    isEnabled ? 'border-white/15' : 'border-white/5 opacity-70'
+                  className={`bg-[#1E1E1E] rounded-[3px] p-4 shadow-md flex flex-col justify-between ${
+                    isEnabled ? 'opacity-100' : 'opacity-70'
                   }`}
                 >
                   {/* Card Header */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 bg-[#252525] border border-white/10 text-[#F2D04E] font-mono font-bold text-xs rounded">
+                        <span className="px-2 py-0.5 bg-[#151515] text-[#F2D04E] font-heading font-bold text-xs rounded-[3px]">
                           {cam.camera_id.toUpperCase()}
                         </span>
                         <h3 className="font-bold text-sm text-white font-heading">{cam.name}</h3>
@@ -733,50 +720,49 @@ export const AdminCameraView: React.FC = () => {
                     </div>
 
                     {/* Stream Thumbnail / Feed Preview (Strict 16:9 Aspect Ratio) */}
-                    <div className="relative bg-black rounded-lg overflow-hidden aspect-video border border-white/10 mb-3 group">
+                    <div className="relative bg-[#000000] rounded-[3px] overflow-hidden aspect-video mb-3">
                       {isEnabled ? (
                         <img
                           src={`/perception/camera/${cam.camera_id}/feed`}
                           alt={cam.name}
-                          className="w-full h-full object-contain bg-black"
+                          className="w-full h-full object-contain bg-[#000000]"
                           onError={(e) => {
                             (e.target as HTMLElement).style.display = 'none';
                           }}
                         />
                       ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-neutral-500 space-y-2">
-                          <span className="text-xl">🛑</span>
-                          <span className="text-xs font-bold uppercase tracking-wider">
+                        <div className="w-full h-full flex flex-col items-center justify-center text-[#AEA793] space-y-2">
+                          <span className="text-xs font-heading font-bold uppercase tracking-wider">
                             Camera Feed Disabled
                           </span>
                         </div>
                       )}
 
                       {/* Video Stream Info Overlay */}
-                      <div className="absolute top-2 left-2 bg-black/75 px-2 py-1 rounded text-[10px] font-mono text-neutral-300 border border-white/10 backdrop-blur-sm">
+                      <div className="absolute top-2 left-2 bg-[#151515]/90 px-2 py-1 rounded-[3px] text-[10px] font-heading text-[#AEA793]">
                         {cam.source_type.toUpperCase()}: {cam.source_path.split('/').pop()}
                       </div>
 
-                      <div className="absolute bottom-2 right-2 bg-black/75 px-2 py-1 rounded text-[10px] font-mono text-[#F2D04E] border border-white/10 backdrop-blur-sm">
+                      <div className="absolute bottom-2 right-2 bg-[#151515]/90 px-2 py-1 rounded-[3px] text-[10px] font-heading text-[#F2D04E]">
                         FPS: {cam.fps} | Frame: {cam.current_frame} / {cam.total_frames || 'N/A'}
                       </div>
                     </div>
 
                     {/* Timing & Source Details */}
-                    <div className="grid grid-cols-2 gap-2 bg-[#151515] p-2.5 rounded-lg border border-white/10 text-xs mb-3">
+                    <div className="grid grid-cols-2 gap-2 bg-[#151515] p-2.5 rounded-[3px] text-xs mb-3 font-heading">
                       <div>
-                        <span className="text-neutral-400 block text-[10px] uppercase font-bold">
+                        <span className="text-[#AEA793] block text-[10px] uppercase font-bold">
                           Scenario / Offset
                         </span>
-                        <span className="font-mono text-white font-semibold">
+                        <span className="text-white font-semibold">
                           {cam.scenario} (T_start: +{cam.sync_offset_s.toFixed(3)}s)
                         </span>
                       </div>
                       <div>
-                        <span className="text-neutral-400 block text-[10px] uppercase font-bold">
+                        <span className="text-[#AEA793] block text-[10px] uppercase font-bold">
                           Local Time (T_local)
                         </span>
-                        <span className="font-mono text-[#F2D04E] font-bold">
+                        <span className="text-[#F2D04E] font-bold">
                           {isWaiting
                             ? `WAITING (-${(cam.sync_offset_s - liveMasterTime).toFixed(1)}s)`
                             : isEnded
@@ -784,11 +770,11 @@ export const AdminCameraView: React.FC = () => {
                             : `${computedLocalTime.toFixed(2)}s`}
                         </span>
                       </div>
-                      <div className="col-span-2 pt-1 border-t border-white/5 truncate">
-                        <span className="text-neutral-400 text-[10px] uppercase font-bold mr-1">
+                      <div className="col-span-2 pt-1 border-t border-[#AEA793]/20 truncate">
+                        <span className="text-[#AEA793] text-[10px] uppercase font-bold mr-1">
                           Source:
                         </span>
-                        <span className="font-mono text-neutral-300 text-[11px] truncate">
+                        <span className="text-white/80 text-[11px] truncate">
                           {cam.source_path}
                         </span>
                       </div>
@@ -796,28 +782,28 @@ export const AdminCameraView: React.FC = () => {
                   </div>
 
                   {/* Card Actions */}
-                  <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                  <div className="flex items-center gap-2 pt-2 border-t border-[#AEA793]/20">
                     <button
                       onClick={() => handleOpenSourceModal(cam)}
-                      className="flex-1 py-2 px-3 bg-[#F2D04E] hover:bg-[#ffe16b] text-black font-bold text-xs uppercase tracking-wider rounded-lg transition-all active:scale-98 shadow-sm flex items-center justify-center gap-1.5"
+                      className="flex-1 py-2 px-3 bg-[#F2D04E] text-[#000000] font-heading font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors flex items-center justify-center gap-1.5"
                     >
-                      <span>🔄</span> Change Input
+                      Change Input
                     </button>
 
                     <button
                       onClick={() => handleOpenPreview(cam)}
-                      className="py-2 px-3 bg-[#252525] hover:bg-[#323232] text-white border border-white/15 font-bold text-xs uppercase tracking-wider rounded-lg transition-all"
+                      className="py-2 px-3 bg-[#151515] hover:bg-white/5 text-white font-heading font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors"
                       title="Inspect full resolution snapshot"
                     >
-                      📷 Snapshot
+                      Snapshot
                     </button>
 
                     <button
                       onClick={() => handleToggleEnable(cam)}
-                      className={`py-2 px-3 font-bold text-xs uppercase tracking-wider rounded-lg border transition-all ${
+                      className={`py-2 px-3 font-heading font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors ${
                         isEnabled
-                          ? 'bg-red-950/40 border-red-500/30 text-red-300 hover:bg-red-900/50'
-                          : 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300 hover:bg-emerald-900/50'
+                          ? 'bg-[#971D1B]/20 text-[#971D1B]'
+                          : 'bg-[#1B7A43]/20 text-[#1B7A43]'
                       }`}
                     >
                       {isEnabled ? 'Disable' : 'Enable'}
@@ -832,27 +818,26 @@ export const AdminCameraView: React.FC = () => {
 
       {/* TAB 2: MODEL VISUAL DEBUGGER (Image OCR & Colour Crop Inspector) */}
       {activeTab === 'debugger' && (
-        <div className="bg-[#1E1E1E] p-5 rounded-xl border border-white/10 shadow-lg space-y-6">
+        <div className="bg-[#1E1E1E] p-5 rounded-[3px] shadow-lg space-y-6">
           <div>
-            <h2 className="text-base font-bold font-heading uppercase tracking-wider text-white flex items-center gap-2">
-              <span className="w-2 h-4 bg-[#F2D04E] rounded-sm" />
+            <h2 className="text-base font-bold font-heading uppercase tracking-wider text-white">
               Perception Model Visual Crop & Attribute Debugger
             </h2>
-            <p className="text-xs text-[#A0A0A0] mt-1 ml-4">
-              Select any test image from <code className="text-[#F2D04E]">data/</code> to inspect real YOLO vehicle localization, color classifier crops, and PaddleOCR license plate recognition results side-by-side.
+            <p className="text-xs text-[#AEA793] font-body mt-1">
+              Select any test image from <code className="text-[#F2D04E] font-mono">data/</code> to inspect real YOLO vehicle localization, color classifier crops, and PaddleOCR license plate recognition results side-by-side.
             </p>
           </div>
 
           {/* Test Image Selector Bar */}
-          <div className="bg-[#151515] p-4 rounded-xl border border-white/10 flex flex-col md:flex-row items-stretch md:items-center gap-3">
+          <div className="bg-[#151515] p-4 rounded-[3px] flex flex-col md:flex-row items-stretch md:items-center gap-3">
             <div className="flex-1 space-y-1">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">
+              <label className="text-[11px] font-heading font-bold uppercase tracking-wider text-[#AEA793]">
                 Select Discovered Test Image:
               </label>
               <select
                 value={debugImageInput}
                 onChange={(e) => setDebugImageInput(e.target.value)}
-                className="w-full bg-[#1E1E1E] border border-white/20 text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-[#F2D04E]"
+                className="w-full bg-[#1E1E1E] text-white rounded-[3px] px-3 py-2 text-xs font-heading focus:outline-none"
               >
                 {sources?.images.map((img) => (
                   <option key={img.id} value={img.path || img.relative_path}>
@@ -863,7 +848,7 @@ export const AdminCameraView: React.FC = () => {
             </div>
 
             <div className="flex-1 space-y-1">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">
+              <label className="text-[11px] font-heading font-bold uppercase tracking-wider text-[#AEA793]">
                 Or Enter Relative Path under data/:
               </label>
               <input
@@ -871,7 +856,7 @@ export const AdminCameraView: React.FC = () => {
                 value={debugImageInput}
                 onChange={(e) => setDebugImageInput(e.target.value)}
                 placeholder="e.g. TN/2.jpg or test1.jpg"
-                className="w-full bg-[#1E1E1E] border border-white/20 text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-[#F2D04E]"
+                className="w-full bg-[#1E1E1E] text-white placeholder-[#AEA793] rounded-[3px] px-3 py-2 text-xs font-heading focus:outline-none"
               />
             </div>
 
@@ -879,15 +864,15 @@ export const AdminCameraView: React.FC = () => {
               <button
                 onClick={handleRunDebug}
                 disabled={isDebugRunning || !debugImageInput}
-                className="w-full md:w-auto px-5 py-2.5 bg-[#F2D04E] hover:bg-[#ffe16b] text-black font-bold text-xs uppercase tracking-wider rounded-lg transition-all shadow-md active:scale-98 disabled:opacity-50"
+                className="w-full md:w-auto px-5 py-2.5 bg-[#F2D04E] text-[#000000] font-heading font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isDebugRunning ? 'Processing AI...' : '⚡ Run Perception Pipeline'}
+                {isDebugRunning ? 'Processing AI...' : 'Run Perception Pipeline'}
               </button>
             </div>
           </div>
 
           {debugError && (
-            <div className="p-3 bg-red-950/60 border border-red-500/40 rounded-lg text-xs text-red-300">
+            <div className="p-3 bg-[#971D1B]/20 rounded-[3px] text-xs font-heading text-[#971D1B]">
               {debugError}
             </div>
           )}
@@ -897,25 +882,25 @@ export const AdminCameraView: React.FC = () => {
             <div className="space-y-4">
               {/* Detection Summary Badges */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-[#151515] p-3 rounded-lg border border-white/10">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block">
+                <div className="bg-[#151515] p-3 rounded-[3px]">
+                  <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-[#AEA793] block">
                     Detected Vehicle
                   </span>
                   <div className="text-base font-bold text-white font-heading mt-0.5">
                     {debugResult.vehicle_type}
                   </div>
-                  <span className="text-[11px] text-[#F2D04E] font-mono">
+                  <span className="text-[11px] text-[#F2D04E] font-heading">
                     Conf: {debugResult.vehicle_confidence ? `${(debugResult.vehicle_confidence * 100).toFixed(1)}%` : 'N/A'}
                   </span>
                 </div>
 
-                <div className="bg-[#151515] p-3 rounded-lg border border-white/10">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block">
+                <div className="bg-[#151515] p-3 rounded-[3px]">
+                  <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-[#AEA793] block">
                     Classified Colour
                   </span>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span
-                      className="w-3.5 h-3.5 rounded-full border border-white/20"
+                      className="w-3.5 h-3.5 rounded-full"
                       style={{
                         backgroundColor:
                           debugResult.vehicle_colour === 'WHITE'
@@ -925,13 +910,13 @@ export const AdminCameraView: React.FC = () => {
                             : debugResult.vehicle_colour === 'SILVER'
                             ? '#A0A0A0'
                             : debugResult.vehicle_colour === 'RED'
-                            ? '#EF4444'
+                            ? '#971D1B'
                             : debugResult.vehicle_colour === 'BLUE'
                             ? '#3B82F6'
                             : debugResult.vehicle_colour === 'YELLOW'
                             ? '#F2D04E'
                             : debugResult.vehicle_colour === 'GREEN'
-                            ? '#22C55E'
+                            ? '#1B7A43'
                             : '#888888',
                       }}
                     />
@@ -939,29 +924,29 @@ export const AdminCameraView: React.FC = () => {
                       {debugResult.vehicle_colour}
                     </span>
                   </div>
-                  <span className="text-[11px] text-neutral-400 font-mono">HSV + Variance</span>
+                  <span className="text-[11px] text-[#AEA793] font-heading">HSV + Variance</span>
                 </div>
 
-                <div className="bg-[#151515] p-3 rounded-lg border border-white/10">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block">
+                <div className="bg-[#151515] p-3 rounded-[3px]">
+                  <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-[#AEA793] block">
                     PaddleOCR Number Plate
                   </span>
-                  <div className="text-base font-mono font-bold text-[#F2D04E] mt-0.5">
+                  <div className="text-base font-heading font-bold text-[#F2D04E] mt-0.5">
                     {debugResult.plate_number}
                   </div>
-                  <span className="text-[11px] text-neutral-400 font-mono">
+                  <span className="text-[11px] text-[#AEA793] font-heading">
                     Status: {debugResult.plate_detected ? 'READ' : 'NOT READ'}
                   </span>
                 </div>
 
-                <div className="bg-[#151515] p-3 rounded-lg border border-white/10">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block">
+                <div className="bg-[#151515] p-3 rounded-[3px]">
+                  <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-[#AEA793] block">
                     OCR Confidence
                   </span>
                   <div className="text-base font-bold text-white font-heading mt-0.5">
                     {debugResult.ocr_confidence ? `${(debugResult.ocr_confidence * 100).toFixed(1)}%` : 'N/A'}
                   </div>
-                  <span className="text-[11px] text-neutral-400 font-mono">
+                  <span className="text-[11px] text-[#AEA793] font-heading">
                     Dims: {debugResult.dimensions}
                   </span>
                 </div>
@@ -970,11 +955,11 @@ export const AdminCameraView: React.FC = () => {
               {/* Side-by-Side Visual Crops */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {/* 1. Full Image + YOLO Bounding Box */}
-                <div className="bg-[#151515] p-3 rounded-xl border border-white/10 flex flex-col">
-                  <div className="text-xs font-bold font-heading uppercase text-neutral-300 mb-2">
+                <div className="bg-[#151515] p-3 rounded-[3px] flex flex-col">
+                  <div className="text-xs font-bold font-heading uppercase text-white mb-2">
                     1. YOLO Detection Overlay
                   </div>
-                  <div className="relative bg-black rounded-lg overflow-hidden flex-1 aspect-video flex items-center justify-center border border-white/5">
+                  <div className="relative bg-[#000000] rounded-[3px] overflow-hidden flex-1 aspect-video flex items-center justify-center">
                     {debugResult.yolo_annotated_b64 ? (
                       <img
                         src={`data:image/jpeg;base64,${debugResult.yolo_annotated_b64}`}
@@ -982,17 +967,17 @@ export const AdminCameraView: React.FC = () => {
                         className="w-full h-full object-contain"
                       />
                     ) : (
-                      <span className="text-xs text-neutral-500">No detection</span>
+                      <span className="text-xs text-[#AEA793] font-heading">No detection</span>
                     )}
                   </div>
                 </div>
 
                 {/* 2. Vehicle Crop (used for Colour Detection) */}
-                <div className="bg-[#151515] p-3 rounded-xl border border-white/10 flex flex-col">
-                  <div className="text-xs font-bold font-heading uppercase text-neutral-300 mb-2">
+                <div className="bg-[#151515] p-3 rounded-[3px] flex flex-col">
+                  <div className="text-xs font-bold font-heading uppercase text-white mb-2">
                     2. Vehicle Crop (Colour Analysis)
                   </div>
-                  <div className="relative bg-black rounded-lg overflow-hidden flex-1 aspect-video flex items-center justify-center border border-white/5">
+                  <div className="relative bg-[#000000] rounded-[3px] overflow-hidden flex-1 aspect-video flex items-center justify-center">
                     {debugResult.vehicle_crop_b64 ? (
                       <img
                         src={`data:image/jpeg;base64,${debugResult.vehicle_crop_b64}`}
@@ -1000,20 +985,20 @@ export const AdminCameraView: React.FC = () => {
                         className="w-full h-full object-contain"
                       />
                     ) : (
-                      <span className="text-xs text-neutral-500">No crop</span>
+                      <span className="text-xs text-[#AEA793] font-heading">No crop</span>
                     )}
                   </div>
-                  <div className="mt-2 text-[11px] text-neutral-400 text-center font-mono">
+                  <div className="mt-2 text-[11px] text-[#AEA793] text-center font-heading">
                     Sampled Region: Vehicle Body Core
                   </div>
                 </div>
 
                 {/* 3. Plate Crop (used for PaddleOCR) */}
-                <div className="bg-[#151515] p-3 rounded-xl border border-white/10 flex flex-col">
-                  <div className="text-xs font-bold font-heading uppercase text-neutral-300 mb-2">
+                <div className="bg-[#151515] p-3 rounded-[3px] flex flex-col">
+                  <div className="text-xs font-bold font-heading uppercase text-white mb-2">
                     3. License Plate Crop (PaddleOCR)
                   </div>
-                  <div className="relative bg-black rounded-lg overflow-hidden flex-1 aspect-video flex items-center justify-center border border-white/5">
+                  <div className="relative bg-[#000000] rounded-[3px] overflow-hidden flex-1 aspect-video flex items-center justify-center">
                     {debugResult.plate_crop_b64 ? (
                       <img
                         src={`data:image/jpeg;base64,${debugResult.plate_crop_b64}`}
@@ -1021,10 +1006,10 @@ export const AdminCameraView: React.FC = () => {
                         className="w-full h-full object-contain p-2"
                       />
                     ) : (
-                      <span className="text-xs text-neutral-500">No plate crop</span>
+                      <span className="text-xs text-[#AEA793] font-heading">No plate crop</span>
                     )}
                   </div>
-                  <div className="mt-2 text-[11px] text-[#F2D04E] text-center font-mono font-bold">
+                  <div className="mt-2 text-[11px] text-[#F2D04E] text-center font-heading font-bold">
                     Extracted: {debugResult.plate_number}
                   </div>
                 </div>
@@ -1036,15 +1021,15 @@ export const AdminCameraView: React.FC = () => {
 
       {/* CHANGE INPUT SOURCE MODAL */}
       {modalCamera && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#1E1E1E] border border-white/20 rounded-xl w-full max-w-2xl overflow-hidden shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-[#000000]/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#1E1E1E] rounded-[3px] w-full max-w-2xl overflow-hidden shadow-2xl space-y-4">
             {/* Modal Header */}
-            <div className="bg-[#151515] px-5 py-4 border-b border-white/10 flex items-center justify-between">
+            <div className="bg-[#151515] px-5 py-4 border-b border-[#AEA793]/20 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-white font-heading uppercase tracking-wider">
                   Change Camera Input Source
                 </h3>
-                <p className="text-xs text-neutral-400">
+                <p className="text-xs text-[#AEA793] font-heading">
                   Select new video or still image for{' '}
                   <span className="text-[#F2D04E] font-bold">
                     {modalCamera.name} ({modalCamera.camera_id.toUpperCase()})
@@ -1053,36 +1038,36 @@ export const AdminCameraView: React.FC = () => {
               </div>
               <button
                 onClick={() => setModalCamera(null)}
-                className="text-neutral-400 hover:text-white text-lg font-bold"
+                className="text-[#AEA793] hover:text-white text-lg font-bold cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="px-5 space-y-4 max-h-[65vh] overflow-y-auto">
+            <div className="px-5 space-y-4 max-h-[65vh] overflow-y-auto font-heading">
               {/* Type Switch */}
               <div className="flex items-center gap-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-neutral-300">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#AEA793]">
                   Input Type:
                 </span>
-                <div className="flex bg-[#151515] p-1 rounded-lg border border-white/10">
+                <div className="flex bg-[#151515] p-1 rounded-[3px]">
                   <button
                     onClick={() => setSelectedSourceType('video')}
-                    className={`px-3 py-1 text-xs font-bold uppercase rounded transition-all ${
+                    className={`px-3 py-1 text-xs font-bold uppercase rounded-[3px] cursor-pointer transition-colors ${
                       selectedSourceType === 'video'
-                        ? 'bg-[#F2D04E] text-black'
-                        : 'text-neutral-400 hover:text-white'
+                        ? 'bg-[#F2D04E] text-[#000000]'
+                        : 'text-[#AEA793] hover:text-white'
                     }`}
                   >
                     Scenario Video
                   </button>
                   <button
                     onClick={() => setSelectedSourceType('image')}
-                    className={`px-3 py-1 text-xs font-bold uppercase rounded transition-all ${
+                    className={`px-3 py-1 text-xs font-bold uppercase rounded-[3px] cursor-pointer transition-colors ${
                       selectedSourceType === 'image'
-                        ? 'bg-[#F2D04E] text-black'
-                        : 'text-neutral-400 hover:text-white'
+                        ? 'bg-[#F2D04E] text-[#000000]'
+                        : 'text-[#AEA793] hover:text-white'
                     }`}
                   >
                     Static Test Image
@@ -1093,7 +1078,7 @@ export const AdminCameraView: React.FC = () => {
               {/* Source Selection List */}
               {selectedSourceType === 'video' ? (
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-neutral-400 block">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[#AEA793] block">
                     Available Discovered Videos in data/:
                   </label>
                   <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
@@ -1103,20 +1088,20 @@ export const AdminCameraView: React.FC = () => {
                         <div
                           key={vid.id}
                           onClick={() => setSelectedSourcePath(vid.path)}
-                          className={`p-3 rounded-lg border cursor-pointer transition-all flex items-center justify-between ${
+                          className={`p-3 rounded-[3px] cursor-pointer transition-colors flex items-center justify-between ${
                             isSelected
-                              ? 'bg-[#F2D04E]/10 border-[#F2D04E] text-white'
-                              : 'bg-[#151515] border-white/10 hover:border-white/30 text-neutral-300'
+                              ? 'bg-[#F2D04E]/15 text-white'
+                              : 'bg-[#151515] text-[#AEA793] hover:text-white hover:bg-white/5'
                           }`}
                         >
                           <div>
-                            <div className="font-mono text-xs font-bold">{vid.path}</div>
-                            <div className="text-[11px] text-neutral-400">
+                            <div className="font-heading text-xs font-bold text-white">{vid.path}</div>
+                            <div className="text-[11px] text-[#AEA793]">
                               Scenario: {vid.scenario} | {vid.resolution} @ {vid.fps} FPS ({vid.duration_s}s)
                             </div>
                           </div>
                           {vid.sync_offset_s !== null && vid.sync_offset_s !== undefined && (
-                            <span className="px-2 py-0.5 bg-[#252525] text-[#F2D04E] text-[10px] font-mono rounded">
+                            <span className="px-2 py-0.5 bg-[#151515] text-[#F2D04E] text-[10px] font-heading rounded-[3px]">
                               Offset: +{vid.sync_offset_s}s
                             </span>
                           )}
@@ -1127,7 +1112,7 @@ export const AdminCameraView: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-neutral-400 block">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[#AEA793] block">
                     Available Discovered Images in data/:
                   </label>
                   <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
@@ -1137,19 +1122,19 @@ export const AdminCameraView: React.FC = () => {
                         <div
                           key={img.id}
                           onClick={() => setSelectedSourcePath(img.path)}
-                          className={`p-3 rounded-lg border cursor-pointer transition-all flex items-center justify-between ${
+                          className={`p-3 rounded-[3px] cursor-pointer transition-colors flex items-center justify-between ${
                             isSelected
-                              ? 'bg-[#F2D04E]/10 border-[#F2D04E] text-white'
-                              : 'bg-[#151515] border-white/10 hover:border-white/30 text-neutral-300'
+                              ? 'bg-[#F2D04E]/15 text-white'
+                              : 'bg-[#151515] text-[#AEA793] hover:text-white hover:bg-white/5'
                           }`}
                         >
                           <div>
-                            <div className="font-mono text-xs font-bold">{img.path}</div>
-                            <div className="text-[11px] text-neutral-400">
+                            <div className="font-heading text-xs font-bold text-white">{img.path}</div>
+                            <div className="text-[11px] text-[#AEA793]">
                               Format: {img.format} | Resolution: {img.resolution}
                             </div>
                           </div>
-                          <span className="text-[11px] font-mono text-neutral-400">
+                          <span className="text-[11px] font-heading text-[#AEA793]">
                             {(img.size_bytes / 1024).toFixed(0)} KB
                           </span>
                         </div>
@@ -1160,8 +1145,8 @@ export const AdminCameraView: React.FC = () => {
               )}
 
               {/* Custom Path Override Input */}
-              <div className="pt-2 border-t border-white/10">
-                <label className="text-xs font-bold uppercase tracking-wider text-neutral-400 block mb-1">
+              <div className="pt-2 border-t border-[#AEA793]/20">
+                <label className="text-xs font-bold uppercase tracking-wider text-[#AEA793] block mb-1">
                   Or Custom Relative Path under data/:
                 </label>
                 <input
@@ -1169,23 +1154,23 @@ export const AdminCameraView: React.FC = () => {
                   value={customPath}
                   onChange={(e) => setCustomPath(e.target.value)}
                   placeholder="e.g. footage/c020/vdo.avi or TN/1.jpg"
-                  className="w-full bg-[#151515] border border-white/20 text-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-[#F2D04E]"
+                  className="w-full bg-[#151515] text-white placeholder-[#AEA793] rounded-[3px] px-3 py-2 text-xs font-heading focus:outline-none"
                 />
               </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="bg-[#151515] px-5 py-3 border-t border-white/10 flex items-center justify-end gap-3">
+            <div className="bg-[#151515] px-5 py-3 border-t border-[#AEA793]/20 flex items-center justify-end gap-3 font-heading">
               <button
                 onClick={() => setModalCamera(null)}
-                className="px-4 py-2 bg-[#252525] hover:bg-[#323232] text-neutral-300 font-bold text-xs uppercase tracking-wider rounded-lg transition-all"
+                className="px-4 py-2 bg-[#151515] hover:bg-white/5 text-[#AEA793] hover:text-white font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleApplySource}
                 disabled={isApplying || (!selectedSourcePath && !customPath)}
-                className="px-5 py-2 bg-[#F2D04E] hover:bg-[#ffe16b] text-black font-bold text-xs uppercase tracking-wider rounded-lg transition-all shadow-md active:scale-98 disabled:opacity-50"
+                className="px-5 py-2 bg-[#F2D04E] text-[#000000] font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isApplying ? 'Applying Hot-Swap...' : 'Apply Input Source'}
               </button>
@@ -1196,26 +1181,26 @@ export const AdminCameraView: React.FC = () => {
 
       {/* SNAPSHOT PREVIEW MODAL */}
       {previewData && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#1E1E1E] border border-white/20 rounded-xl w-full max-w-3xl overflow-hidden shadow-2xl space-y-4">
-            <div className="bg-[#151515] px-5 py-4 border-b border-white/10 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-[#000000]/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#1E1E1E] rounded-[3px] w-full max-w-3xl overflow-hidden shadow-2xl space-y-4">
+            <div className="bg-[#151515] px-5 py-4 border-b border-[#AEA793]/20 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-white font-heading uppercase tracking-wider">
                   Live Snapshot: {previewData.name} ({previewData.camera_id.toUpperCase()})
                 </h3>
-                <p className="text-xs text-neutral-400 font-mono">
+                <p className="text-xs text-[#AEA793] font-heading">
                   {previewData.source_type.toUpperCase()}: {previewData.source_path} | Frame: {previewData.current_frame_idx} / {previewData.total_frames}
                 </p>
               </div>
               <button
                 onClick={() => setPreviewData(null)}
-                className="text-neutral-400 hover:text-white text-lg font-bold"
+                className="text-[#AEA793] hover:text-white text-lg font-bold cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <div className="p-5 flex items-center justify-center bg-black aspect-video">
+            <div className="p-5 flex items-center justify-center bg-[#000000] aspect-video">
               {previewData.preview_b64 ? (
                 <img
                   src={`data:image/jpeg;base64,${previewData.preview_b64}`}
@@ -1223,17 +1208,17 @@ export const AdminCameraView: React.FC = () => {
                   className="max-h-[60vh] object-contain"
                 />
               ) : (
-                <span className="text-xs text-neutral-500">No frame data</span>
+                <span className="text-xs text-[#AEA793] font-heading">No frame data</span>
               )}
             </div>
 
-            <div className="bg-[#151515] px-5 py-3 border-t border-white/10 flex items-center justify-between">
-              <span className="text-xs font-mono text-neutral-400">
+            <div className="bg-[#151515] px-5 py-3 border-t border-[#AEA793]/20 flex items-center justify-between font-heading">
+              <span className="text-xs text-[#AEA793]">
                 Status: {previewData.status}
               </span>
               <button
                 onClick={() => setPreviewData(null)}
-                className="px-4 py-2 bg-[#F2D04E] text-black font-bold text-xs uppercase tracking-wider rounded-lg"
+                className="px-4 py-2 bg-[#F2D04E] text-[#000000] font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer"
               >
                 Close Preview
               </button>
