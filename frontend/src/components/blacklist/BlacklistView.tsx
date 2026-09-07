@@ -386,9 +386,9 @@ export const BlacklistView: React.FC<BlacklistViewProps> = ({
                       onClick={() => handleRowClick(item)}
                       className={`transition-all duration-200 cursor-pointer ${
                         isThisRowSelected
-                          ? 'bg-white/[0.06] opacity-100'
+                          ? 'opacity-100'
                           : isOtherRowDimmed
-                          ? 'opacity-40 blur-[2px]'
+                          ? 'opacity-30'
                           : 'hover:bg-white/[0.03] opacity-100'
                       }`}
                     >
@@ -455,7 +455,7 @@ export const BlacklistView: React.FC<BlacklistViewProps> = ({
         {/* Floating Detail Popup Card */}
         {selectedEntry && (
           <div 
-            className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-[6px] select-none animate-fadeIn"
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/80 select-none animate-fadeIn"
             onClick={() => setSelectedEntry(null)}
           >
             <div
@@ -511,7 +511,7 @@ export const BlacklistView: React.FC<BlacklistViewProps> = ({
                 <button
                   type="button"
                   onClick={() => handleViewTraceJump(selectedEntry.plateNumber)}
-                  className="bg-[#1E1E1E] text-[#AEA793] font-bold font-body text-xs px-3 py-1 rounded-[3px] flex items-center gap-1.5 cursor-pointer"
+                  className="bg-[#000000] text-[#AEA793] hover:text-white transition-colors font-bold font-body text-xs px-3 py-1.5 rounded-[3px] flex items-center gap-1.5 cursor-pointer"
                 >
                   <span>VIEW RECONSTRUCTED TRAJECTORY</span>
                   <img src="/assets/diagonal_arrow.svg" alt="Arrow" className="w-3 h-3 object-contain" />

@@ -234,7 +234,7 @@ export const CamerasView: React.FC = () => {
                 </MarkerContent>
                 <MarkerTooltip>{cam.name} ({cam.location})</MarkerTooltip>
                 <MarkerPopup>
-                  <div className="bg-[#161616] p-3 rounded-[3px] w-48 text-left space-y-1 select-none font-body">
+                  <div className="bg-[#000000] p-3 rounded-[3px] w-48 text-left space-y-1 select-none font-body">
                     <div className="font-bold text-white text-sm font-body tracking-wide">
                       {cam.name}
                     </div>
