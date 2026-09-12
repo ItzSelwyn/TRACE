@@ -9,8 +9,8 @@
       "latitude": 42.5039,
       "longitude": -90.6865,
       "resolution": "1080P",
-      "source_type": "video",
-      "source_path": "footage/c020/vdo.avi",
+      "source_type": "image",
+      "source_path": "TN/TN1.jpg",
       "scenario": "S04",
       "fps": 10.0,
       "enabled": true,
@@ -18,7 +18,7 @@
       "frame_count": 473,
       "total_frames": 473,
       "status": "ONLINE",
-      "raw_status": "SYNC DISABLED",
+      "raw_status": "IMAGE ACTIVE",
       "sync_mode": "independent",
       "current_frame": 0,
       "current_local_time": 0.0
@@ -41,8 +41,8 @@
       "status": "ONLINE",
       "raw_status": "SYNC DISABLED",
       "sync_mode": "independent",
-      "current_frame": 0,
-      "current_local_time": 0.0
+      "current_frame": 3,
+      "current_local_time": 0.3
     },
     "c029": {
       "camera_id": "c029",
@@ -62,8 +62,8 @@
       "status": "ONLINE",
       "raw_status": "SYNC DISABLED",
       "sync_mode": "independent",
-      "current_frame": 0,
-      "current_local_time": 0.0
+      "current_frame": 3,
+      "current_local_time": 0.3
     },
     "c035": {
       "camera_id": "c035",
@@ -83,9 +83,9 @@
       "status": "ONLINE",
       "raw_status": "SYNC DISABLED",
       "sync_mode": "independent",
-      "current_frame": 0,
-      "current_local_time": 0.0
+      "current_frame": 1,
+      "current_local_time": 0.1
     }
   },
-  "updated_at": "2026-09-07T05:15:12.184194+00:00"
+  "updated_at": "2026-09-07T09:37:12.018947+00:00"
 }
