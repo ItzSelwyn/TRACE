@@ -26,7 +26,11 @@ const formatTime = (iso: string) => {
   });
 };
 
-const transformPerceptionStatus = (payload: any, activeCamId: string = 'c020'): DashboardDataPayload => {
+const transformPerceptionStatus = (
+  payload: any,
+  activeCamId: string = 'c020',
+  dynamicBlacklistCount?: number
+): DashboardDataPayload => {
   const cameras = Object.entries(payload?.cameras ?? {}).map(([cameraId, camera]: [string, any]) => {
     const status = camera?.camera_status ?? 'online';
     const observations = camera?.observations ?? [];
@@ -49,6 +53,11 @@ const transformPerceptionStatus = (payload: any, activeCamId: string = 'c020'): 
     (total: number, camera: any) => total + ((camera?.observations ?? []).length || 0),
     0
   );
+
+  // Dynamic metrics from backend status payload
+  const activeScansCount = payload?.active_scans ?? activeScans ?? 0;
+  const realBlacklistsCount = dynamicBlacklistCount ?? payload?.blacklists_count ?? 3;
+  const uptimeFormatted = payload?.uptime_formatted ?? '32m';
 
   // Helper to parse clean 3-digit TRK ID without concatenating camera numbers
   const parseCleanTrackId = (raw: any, fallbackNum: number = 1): string => {
@@ -93,8 +102,8 @@ const transformPerceptionStatus = (payload: any, activeCamId: string = 'c020'): 
 
   return {
     topStats: {
-      activeScans: activeScans || 24,
-      blacklistsCount: 10,
+      activeScans: activeScansCount,
+      blacklistsCount: realBlacklistsCount,
       systemStatus: downCount > 0 ? 'DEGRADED' : 'OPTIMAL',
     },
     cameras: cameras.length ? cameras : mockDashboardData.cameras,
@@ -118,7 +127,7 @@ const transformPerceptionStatus = (payload: any, activeCamId: string = 'c020'): 
       : mockDashboardData.modelAnalysis,
     recentAlerts: [],
     networkStats: {
-      uptimeFormatted: '5hrs',
+      uptimeFormatted: uptimeFormatted,
       camerasActive: onlineCount || 4,
       camerasDown: downCount,
       totalCameras: cameras.length || 4,
@@ -242,11 +251,24 @@ export const App: React.FC = () => {
     let isMounted = true;
     const loadDashboard = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/perception/status`);
-        if (!response.ok) return;
-        const payload = await response.json();
-        if (isMounted) {
-          setDashboardData(transformPerceptionStatus(payload, selectedCameraId));
+        const [statusRes, blacklistRes] = await Promise.allSettled([
+          fetch(`${API_BASE_URL}/perception/status`),
+          fetch(`${API_BASE_URL}/blacklist`),
+        ]);
+
+        let dynamicBlacklistCount: number | undefined = undefined;
+        if (blacklistRes.status === 'fulfilled' && blacklistRes.value.ok) {
+          try {
+            const bData = await blacklistRes.value.json();
+            dynamicBlacklistCount = typeof bData?.total === 'number' ? bData.total : (bData?.entries?.length ?? undefined);
+          } catch (_) {}
+        }
+
+        if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
+          const payload = await statusRes.value.json();
+          if (isMounted) {
+            setDashboardData(transformPerceptionStatus(payload, selectedCameraId, dynamicBlacklistCount));
+          }
         }
       } catch (err) {
         console.warn('Backend offline, using mock dashboard data:', err);

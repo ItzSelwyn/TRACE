@@ -25,10 +25,18 @@ def get_ocr_engine() -> Optional[Any]:
         if not _OCR_INITIALIZED:
             _OCR_INITIALIZED = True
             try:
+                import logging as _py_logging
+                import os
+                os.environ["FLAGS_use_mkldnn"] = "0"
+                os.environ["FLAGS_use_onednn"] = "0"
+                _py_logging.getLogger("ppocr").setLevel(_py_logging.ERROR)
+
                 from paddleocr import PaddleOCR
                 _OCR_INSTANCE = PaddleOCR(
                     use_angle_cls=False,
                     lang="en",
+                    enable_mkldnn=False,
+                    use_gpu=False,
                     show_log=False,
                 )
                 logger.info("PaddleOCR engine initialized successfully.")

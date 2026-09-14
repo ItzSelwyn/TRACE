@@ -80,9 +80,14 @@ class VehicleObservation(Base):
     vehicle_colour: Mapped[str] = mapped_column(Text, nullable=False)
     # Visual appearance / Re-ID feature vector (e.g. 512-dim or 1024-dim L2-normalized vector)
     appearance_embedding: Mapped[Optional[List[float]]] = mapped_column(JSONB, nullable=True)
+    # Embedding extraction status: 'pending', 'complete', 'failed'
+    embedding_status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    embedding_failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    embedding_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     __table_args__ = (
         Index('ix_vehicle_obs_camera_time', 'camera_id', 'captured_at'),
+        Index('ix_vehicle_obs_embedding_status', 'embedding_status'),
     )
 
     camera: Mapped["Camera"] = relationship(back_populates="observations")

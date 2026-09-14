@@ -88,6 +88,71 @@ def resolve_camera_uuid(session: Session, camera_identifier: str | uuid.UUID) ->
     return first_cam.camera_id if first_cam else None
 
 
+def upsert_observation_embedding(
+    session: Session,
+    observation_id: Union[str, uuid.UUID],
+    appearance_embedding: Optional[List[float]],
+    embedding_status: Optional[str] = None,
+    embedding_failure_reason: Optional[str] = None,
+) -> bool:
+    """Idempotently update an existing VehicleObservation's embedding and status.
+    
+    Guarantees:
+    - Never overwrites an existing valid 512-d embedding with None or an invalid vector.
+    - Uses row-level lock (with_for_update) to prevent concurrent race conditions.
+    - Updates embedding_status, embedding_failure_reason, and increments embedding_attempts.
+    """
+    if is_db_in_backoff():
+        return False
+
+    try:
+        obs_uuid = uuid.UUID(str(observation_id)) if not isinstance(observation_id, uuid.UUID) else observation_id
+        obs = session.execute(
+            select(VehicleObservation).where(VehicleObservation.observation_id == obs_uuid).with_for_update()
+        ).scalar_one_or_none()
+
+        if not obs:
+            return False
+
+        obs.embedding_attempts = (obs.embedding_attempts or 0) + 1
+
+        # Check if already has valid embedding
+        has_valid_existing = (
+            obs.appearance_embedding is not None
+            and isinstance(obs.appearance_embedding, (list, tuple))
+            and len(obs.appearance_embedding) == 512
+        )
+
+        # Validate incoming embedding
+        valid_incoming = False
+        emb_val = None
+        if appearance_embedding is not None and isinstance(appearance_embedding, (list, tuple)):
+            if len(appearance_embedding) == 512 and all(np.isfinite(v) for v in appearance_embedding):
+                emb_val = [round(float(v), 6) for v in appearance_embedding]
+                valid_incoming = True
+
+        if valid_incoming:
+            obs.appearance_embedding = emb_val
+            obs.embedding_status = "complete"
+            obs.embedding_failure_reason = None
+            session.commit()
+            return True
+        elif not has_valid_existing:
+            # Only mark as failed if there is no existing valid embedding
+            obs.embedding_status = embedding_status or "failed"
+            obs.embedding_failure_reason = embedding_failure_reason or "extraction_failed"
+            session.commit()
+            return True
+        else:
+            # Preserved existing valid embedding
+            session.commit()
+            return True
+    except Exception as e:
+        logger.warning(f"Error updating observation embedding {observation_id}: {e}")
+        record_db_error(str(e))
+        return False
+
+
 def persist_fused_observation(
     session: Session,
     camera_id_str: str | uuid.UUID,
@@ -99,6 +164,10 @@ def persist_fused_observation(
     vehicle_colour: str = "white",
     ocr_reads: Optional[List[Dict[str, Any]]] = None,
     appearance_embedding: Optional[List[float]] = None,
+    embedding_status: Optional[str] = None,
+    embedding_failure_reason: Optional[str] = None,
+    embedding_attempts: Optional[int] = None,
+    **kwargs: Any,
 ) -> Optional[VehicleObservation]:
     """Atomically insert ONE VehicleObservation and its multiple associated OcrRead records into PostgreSQL.
     
@@ -133,9 +202,20 @@ def persist_fused_observation(
 
         # Validate appearance_embedding if provided
         emb_val = None
+        has_valid_emb = False
         if appearance_embedding is not None and isinstance(appearance_embedding, (list, tuple)):
-            if len(appearance_embedding) > 0 and all(np.isfinite(v) for v in appearance_embedding):
-                emb_val = [float(v) for v in appearance_embedding]
+            if len(appearance_embedding) == 512 and all(np.isfinite(v) for v in appearance_embedding):
+                emb_val = [round(float(v), 6) for v in appearance_embedding]
+                has_valid_emb = True
+
+        if has_valid_emb:
+            status_val = "complete"
+            reason_val = None
+            attempts_val = embedding_attempts if embedding_attempts is not None else 1
+        else:
+            status_val = embedding_status or "pending"
+            reason_val = embedding_failure_reason
+            attempts_val = embedding_attempts if embedding_attempts is not None else (1 if embedding_failure_reason else 0)
 
         # 1. Create VehicleObservation record
         obs_id = uuid.uuid4()
@@ -149,6 +229,9 @@ def persist_fused_observation(
             vehicle_type=str(vehicle_type).lower(),
             vehicle_colour=str(vehicle_colour).lower(),
             appearance_embedding=emb_val,
+            embedding_status=status_val,
+            embedding_failure_reason=reason_val,
+            embedding_attempts=attempts_val,
         )
         session.add(observation)
         session.flush()

@@ -16,6 +16,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.modules.appearance.preprocessing import score_crop_quality
 from app.modules.perception.normalization import normalize_plate_text
 from app.modules.perception.ocr_engine import read_plate_image
 from app.modules.perception.persistence import persist_fused_observation, resolve_camera_uuid
@@ -35,69 +36,97 @@ VEHICLE_CLASS_MAP = {
 
 def _detect_crop_color(crop: np.ndarray) -> str:
     """Classify dominant vehicle color using robust RGB/HSV analysis on vehicle core crop.
-    
+
     Accurately identifies: RED, ORANGE, YELLOW, GREEN, BLUE, BLACK, WHITE, SILVER.
-    Filters specular highlights and windshield/ground noise.
+    Filters out sky/windshield reflection, tinted glass, asphalt shadows, and specular glare.
     """
     if crop is None or crop.size == 0 or crop.shape[0] < 6 or crop.shape[1] < 6:
         return "SILVER"
     try:
         h, w = crop.shape[:2]
-        ch1, ch2 = int(h * 0.15), int(h * 0.80)
-        cw1, cw2 = int(w * 0.15), int(w * 0.85)
-        core = crop[ch1:ch2, cw1:cw2]
-        if core.size == 0:
-            core = crop
 
-        hsv = cv2.cvtColor(core, cv2.COLOR_BGR2HSV)
+        # Target the vehicle body: 35% - 78% height (bypasses windshield sky reflection & road/wheels)
+        # and 15% - 85% width (bypasses side backgrounds/curbs)
+        b_y1, b_y2 = int(h * 0.35), int(h * 0.78)
+        b_x1, b_x2 = int(w * 0.15), int(w * 0.85)
+        body = crop[b_y1:b_y2, b_x1:b_x2]
+        if body.size == 0 or body.shape[0] < 4 or body.shape[1] < 4:
+            body = crop
+
+        bgr = body.astype(float)
+        max_c = np.max(bgr, axis=2)
+        min_c = np.min(bgr, axis=2)
+        delta_rgb = max_c - min_c
+
+        hsv = cv2.cvtColor(body, cv2.COLOR_BGR2HSV)
         H = hsv[:, :, 0]
         S = hsv[:, :, 1]
         V = hsv[:, :, 2]
 
-        # Filter out extreme specular highlights (pure white glare/headlights)
-        glare_mask = (V > 240) & (S < 30)
-        valid_mask = ~glare_mask
+        # Valid non-black mask (exclude deep shadow crevices V < 35)
+        valid_mask = (V >= 35)
         if np.sum(valid_mask) < 20:
             valid_mask = np.ones_like(V, dtype=bool)
 
         H_v = H[valid_mask]
         S_v = S[valid_mask]
         V_v = V[valid_mask]
+        delta_v = delta_rgb[valid_mask]
 
-        # Chromatic check: sufficient saturation (S >= 45) on body pixels
-        chroma_mask = S_v >= 45
-        chroma_ratio = float(np.sum(chroma_mask)) / max(1, len(S_v))
+        med_delta = float(np.median(delta_v))
+        med_s = float(np.median(S_v))
+        med_v = float(np.median(V))  # overall median of body
 
-        if chroma_ratio >= 0.16:
-            h_chroma = H_v[chroma_mask]
-            red_count = int(np.sum((h_chroma <= 10) | (h_chroma >= 165)))
-            orange_count = int(np.sum((h_chroma >= 11) & (h_chroma <= 24)))
-            yellow_count = int(np.sum((h_chroma >= 25) & (h_chroma <= 35)))
-            green_count = int(np.sum((h_chroma >= 36) & (h_chroma <= 85)))
-            blue_count = int(np.sum((h_chroma >= 86) & (h_chroma <= 140)))
+        # 1. Check BLACK first: overall body median V < 75
+        if med_v < 75:
+            chroma_dark = (S_v >= 90) & (delta_v >= 45) & (V_v >= 45)
+            if np.sum(chroma_dark) / max(1, len(S_v)) < 0.35:
+                return "BLACK"
+
+        # 2. Chromatic detection:
+        # A true colored car has high saturation AND significant channel difference (delta_rgb).
+        # Sky reflections on silver cars have low delta_rgb (< 28) even if Hue is in the blue range.
+        # Therefore, true chromatic pixels must satisfy S >= 60 AND delta_rgb >= 30 AND V >= 45.
+        chroma_pixels = (S_v >= 60) & (delta_v >= 30) & (V_v >= 45)
+        chroma_ratio = float(np.sum(chroma_pixels)) / max(1, len(S_v))
+
+        if chroma_ratio >= 0.28 or (med_delta >= 38 and chroma_ratio >= 0.18):
+            h_chroma = H_v[chroma_pixels]
+            red_cnt = int(np.sum((h_chroma <= 9) | (h_chroma >= 165)))
+            orange_cnt = int(np.sum((h_chroma >= 10) & (h_chroma <= 24)))
+            yellow_cnt = int(np.sum((h_chroma >= 25) & (h_chroma <= 35)))
+            green_cnt = int(np.sum((h_chroma >= 36) & (h_chroma <= 85)))
+            # Blue range: 86 to 140
+            blue_cnt = int(np.sum((h_chroma >= 86) & (h_chroma <= 140)))
 
             counts = {
-                "RED": red_count,
-                "ORANGE": orange_count,
-                "YELLOW": yellow_count,
-                "GREEN": green_count,
-                "BLUE": blue_count,
+                "RED": red_cnt,
+                "ORANGE": orange_cnt,
+                "YELLOW": yellow_cnt,
+                "GREEN": green_cnt,
+                "BLUE": blue_cnt,
             }
             best_col, best_n = max(counts.items(), key=lambda x: x[1])
-            if best_n > 0:
+            # The best color must represent at least 38% of the chromatic pixels
+            if best_n > 0 and (best_n / max(1, len(h_chroma))) >= 0.38:
                 return best_col
 
-        # Achromatic: BLACK, WHITE, SILVER
-        med_v = float(np.median(V_v))
-        p75_v = float(np.percentile(V_v, 75))
+        # 3. Achromatic classification: WHITE vs SILVER / GREY
+        # Compute high brightness ratio among paint pixels
+        n_mid = int(np.sum((V >= 90) & (V < 200)))
+        n_high = int(np.sum(V >= 200))
+        total_bright = n_mid + n_high
+        ratio_high = (n_high / total_bright) if total_bright > 0 else 0.0
 
-        if med_v < 75 and p75_v < 118:
-            return "BLACK"
-        elif med_v > 155:
+        # White vehicles have high brightness paint (ratio_high >= 0.55 or med_v >= 200)
+        if ratio_high >= 0.55 or med_v >= 200:
             return "WHITE"
+        elif med_v < 85:
+            return "BLACK"
         else:
             return "SILVER"
-    except Exception:
+    except Exception as exc:
+        logger.warning(f"Error in _detect_crop_color: {exc}")
         return "SILVER"
 
 
@@ -174,6 +203,32 @@ class PerceptionPipeline:
                 vehicle_colour=trk_info.get("color", "white"),
             )
 
+            # Extract appearance embedding
+            appearance_embedding = None
+            emb_status = "pending"
+            emb_reason = None
+            if settings.APPEARANCE_REID_ENABLED:
+                try:
+                    from app.modules.appearance import get_appearance_extractor
+                    extractor = get_appearance_extractor()
+                    candidate = trk_info.get("best_crop")
+                    if candidate is not None:
+                        appearance_embedding, emb_reason = extractor.extract_with_reason(
+                            candidate, min_size=settings.APPEARANCE_MIN_CROP_SIZE
+                        )
+                    else:
+                        emb_reason = "crop_pending_better_frame"
+
+                    if appearance_embedding is not None:
+                        emb_status = "complete"
+                        emb_reason = None
+                except Exception as emb_err:
+                    appearance_embedding = None
+                    emb_reason = f"inference_error: {str(emb_err)[:50]}"
+            else:
+                emb_status = "failed"
+                emb_reason = "appearance_reid_disabled"
+
             try:
                 with Session(self._db_engine) as session:
                     obs = persist_fused_observation(
@@ -186,6 +241,10 @@ class PerceptionPipeline:
                         vehicle_type=fused.get("vehicle_type", "car"),
                         vehicle_colour=fused.get("vehicle_colour", "white"),
                         ocr_reads=fused.get("reads_history", []),
+                        appearance_embedding=appearance_embedding,
+                        embedding_status=emb_status,
+                        embedding_failure_reason=emb_reason,
+                        embedding_attempts=1,
                     )
                     if obs:
                         self.persisted_tracks.add(track_id_str)
@@ -287,10 +346,19 @@ class PerceptionPipeline:
                         "type": vtype,
                         "first_seen": current_time_str,
                         "is_moving": False,
+                        "best_crop": veh_crop.copy() if (veh_crop is not None and veh_crop.size > 0 and veh_crop.shape[0] >= 24 and veh_crop.shape[1] >= 24) else None,
+                        "best_crop_score": 0.0,
                     }
                     self.tracked_vehicles[track_id_str] = trk_info
                     disp = 0.0
                     is_moving = False
+
+                if veh_crop is not None and veh_crop.size > 0:
+                    crop_score = score_crop_quality(crop=veh_crop, bbox=[x1, y1, x2, y2], frame_shape=(h, w), conf=conf)
+                    if crop_score > trk_info.get("best_crop_score", 0.0) or trk_info.get("best_crop") is None:
+                        if veh_crop.shape[0] >= 24 and veh_crop.shape[1] >= 24:
+                            trk_info["best_crop"] = veh_crop.copy()
+                            trk_info["best_crop_score"] = crop_score
 
                 # 2. License Plate Localization & PaddleOCR
                 plate_raw_text = ""

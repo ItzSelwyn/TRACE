@@ -73,10 +73,7 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
                 </>
               )}
 
-              {/* Bottom Clean Camera Number */}
-              <div className="relative z-10 p-2 text-[11px] font-heading font-semibold text-white/90 pointer-events-none">
-                <span>{cam.name}</span>
-              </div>
+
             </div>
           );
         })}

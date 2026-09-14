@@ -7,6 +7,7 @@ import {
   MarkerTooltip,
   MapRoute,
 } from "@/components/ui/map";
+import { snapTrajectoryToRoads } from '../../data/roadGeometry';
 
 interface VehicleTraceViewProps {
   data: VehicleTraceDataPayload;
@@ -52,19 +53,15 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
     .filter((item) => typeof item.longitude === 'number' && typeof item.latitude === 'number')
     .map((item) => ({
       name: `${item.cameraName} (${item.timestamp})`,
+      cameraName: item.cameraName,
       lng: item.longitude as number,
       lat: item.latitude as number,
       statusType: item.statusType,
       plateNumber: item.plateNumber,
     }));
 
-  const dynamicRoute: [number, number][] = [];
-  validStops.forEach((stop) => {
-    const last = dynamicRoute[dynamicRoute.length - 1];
-    if (!last || last[0] !== stop.lng || last[1] !== stop.lat) {
-      dynamicRoute.push([stop.lng, stop.lat]);
-    }
-  });
+  // Snap route dynamically along real physical street centerlines and curves
+  const dynamicRoute: [number, number][] = snapTrajectoryToRoads(validStops);
 
   const mapCenter: [number, number] = validStops.length > 0
     ? [validStops[0].lng, validStops[0].lat]
@@ -343,7 +340,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
             {dynamicRoute.length >= 2 ? (
               <span className="bg-[#F2D04E]/10 border border-[#F2D04E]/40 text-[#F2D04E] text-[11px] font-bold px-2.5 py-1 rounded-[3px] flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#1B7A43]" />
-                <span>Cross-Camera Route ({dynamicRoute.length} Junctions)</span>
+                <span>Cross-Camera Route ({validStops.length} Camera Sightings)</span>
               </span>
             ) : validStops.length === 1 ? (
               <span className="bg-white/5 border border-white/15 text-[#AEA793] text-[11px] font-medium px-2.5 py-1 rounded-[3px]">

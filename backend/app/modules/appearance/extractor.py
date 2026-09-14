@@ -1,4 +1,4 @@
-﻿"""Vehicle Appearance / Re-ID Feature Extractor."""
+"""Vehicle Appearance / Re-ID Feature Extractor."""
 
 from __future__ import annotations
 
@@ -14,7 +14,9 @@ from app.config import settings
 from app.modules.appearance.preprocessing import (
     create_transform,
     preprocess_crop,
+    score_crop_quality,
     validate_crop,
+    validate_crop_detailed,
 )
 
 logger = logging.getLogger("trace.appearance.extractor")
@@ -114,53 +116,65 @@ class AppearanceExtractor:
         model.classifier[3] = torch.nn.Identity()
         return model, 1024, (224, 224)
 
-    def extract(self, crop: Optional[np.ndarray]) -> Optional[List[float]]:
-        """Extract a single L2-normalized Re-ID embedding vector from a vehicle crop.
-
-        Args:
-            crop: BGR numpy image array representing the vehicle bounding box.
+    def extract_with_reason(
+        self,
+        crop: Optional[Union[np.ndarray, Image.Image]],
+        min_size: Optional[int] = None,
+    ) -> Tuple[Optional[List[float]], Optional[str]]:
+        """Extract a single L2-normalized Re-ID embedding vector with diagnostic reason.
 
         Returns:
-            List of floats representing the embedding vector, or None if crop is invalid.
+            (embedding_vector, None) on success.
+            (None, failure_reason) on validation/inference failure.
         """
-        valid_bgr = validate_crop(crop, min_size=self.min_crop_size)
+        ms = min_size if min_size is not None else self.min_crop_size
+        valid_bgr, reason = validate_crop_detailed(crop, min_size=ms)
         if valid_bgr is None:
-            return None
+            return None, reason
 
         try:
             tensor = preprocess_crop(valid_bgr, self.transform).to(self.device)
             with torch.no_grad():
-                feat = self.model(tensor).squeeze(0).cpu().numpy()
+                feat = self.model(tensor).squeeze(0).cpu().numpy().flatten().astype(np.float32)
+
+            if len(feat) != self.embedding_dim:
+                return None, f"dimension_mismatch_{len(feat)}_expected_{self.embedding_dim}"
 
             if not np.isfinite(feat).all():
-                return None
+                return None, "non_finite_output"
 
             norm = float(np.linalg.norm(feat))
-            if norm <= 1e-7:
-                return None
+            if norm <= 1e-7 or not np.isfinite(norm):
+                return None, "zero_norm_vector"
 
-            normalized = feat / norm
-            return [round(float(v), 6) for v in normalized]
+            normalized = feat / (norm + 1e-12)
+            final_norm = float(np.linalg.norm(normalized))
+            if abs(final_norm - 1.0) > 1e-2:
+                return None, "norm_validation_failed"
+
+            return [round(float(v), 6) for v in normalized], None
         except Exception as e:
             logger.warning(f"Feature extraction failed: {e}")
-            return None
+            return None, "inference_error"
+
+    def extract(self, crop: Optional[np.ndarray]) -> Optional[List[float]]:
+        """Extract a single L2-normalized Re-ID embedding vector from a vehicle crop."""
+        emb, _ = self.extract_with_reason(crop)
+        return emb
 
     def extract_track_embedding(
         self,
         crops: Sequence[Optional[np.ndarray]],
         max_samples: Optional[int] = None,
     ) -> Optional[List[float]]:
-        """Aggregate embeddings across multiple vehicle frames into a single track-level representation.
+        """Aggregate embeddings across vehicle frames into a single track-level representation.
 
         Strategy:
-        1. Validate each crop and filter out invalid/corrupt frames.
-        2. Evenly sample up to max_samples crops across the track.
+        1. Validate crops and calculate quality score for each frame.
+        2. Select the top-quality crops across the track.
         3. Extract individual L2-normalized embeddings.
         4. Mean-pool the embeddings.
         5. L2-renormalize the resulting track vector.
-
-        Returns:
-            Track-level embedding as List[float], or None if no valid crops exist.
         """
         if not crops:
             return None
@@ -171,13 +185,14 @@ class AppearanceExtractor:
         if not valid_crops:
             return None
 
-        # Sample evenly across the track
-        step = max(1, len(valid_crops) // k)
-        sampled = valid_crops[::step][:k]
+        # Sort crops by quality score descending
+        from app.modules.appearance.preprocessing import score_crop_quality
+        scored = sorted(valid_crops, key=lambda c: score_crop_quality(c), reverse=True)
+        top_crops = scored[:k]
 
         embs: List[np.ndarray] = []
-        for c in sampled:
-            vec = self.extract(c)
+        for c in top_crops:
+            vec, _ = self.extract_with_reason(c)
             if vec is not None:
                 embs.append(np.asarray(vec, dtype=np.float32))
 
@@ -189,8 +204,17 @@ class AppearanceExtractor:
         if norm <= 1e-7 or not np.isfinite(norm):
             return None
 
-        final_vec = mean_vec / norm
+        final_vec = mean_vec / (norm + 1e-12)
         return [round(float(v), 6) for v in final_vec]
+
+
+def extract_vehicle_embedding(
+    crop: Optional[Union[np.ndarray, Image.Image]],
+    min_size: Optional[int] = None,
+) -> Tuple[Optional[List[float]], Optional[str]]:
+    """Convenience top-level function to extract an embedding from a vehicle crop."""
+    extractor = get_appearance_extractor()
+    return extractor.extract_with_reason(crop, min_size=min_size)
 
 
 def get_appearance_extractor(

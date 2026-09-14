@@ -419,7 +419,13 @@ def compute_identity_score(
     score, weight_debug = _weighted_score(components)
 
     # --- Status classification ---
-    if score >= CONFIRM_THRESHOLD:
+    if not both_plates_available and appearance_similarity is None:
+        # A pair with no plate and no visual appearance must NEVER produce a confirmed or candidate match
+        status = "NO_MATCH"
+        label = "no_match"
+        score = min(score, 0.35)
+        weight_debug["primary_evidence_missing"] = True
+    elif score >= CONFIRM_THRESHOLD:
         status = "CONFIRMED"
         label = "confirmed"
     elif score >= CANDIDATE_THRESHOLD:

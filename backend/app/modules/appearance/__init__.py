@@ -1,4 +1,4 @@
-﻿"""Vehicle Appearance / Re-ID Feature Extraction Package."""
+"""Vehicle Appearance / Re-ID Feature Extraction Package."""
 
 from app.modules.appearance.extractor import (
     AppearanceExtractor,
@@ -15,9 +15,9 @@ from app.modules.appearance.similarity import (
 )
 
 
-def extract_vehicle_embedding(crop):
-    """Convenience helper to extract embedding from a single vehicle crop."""
-    return get_appearance_extractor().extract(crop)
+def extract_vehicle_embedding(crop, min_size=None):
+    """Convenience helper to extract embedding from a single vehicle crop with failure diagnostics."""
+    return get_appearance_extractor().extract_with_reason(crop, min_size=min_size)
 
 
 __all__ = [

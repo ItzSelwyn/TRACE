@@ -15,21 +15,57 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
   const [liveVehicle, setLiveVehicle] = useState<any>(null);
   const activeCamId = (selectedCameraId || data.cameraId || 'c020').toLowerCase();
   const cameraDisplayName = `Camera ${activeCamId.replace('c', '').toUpperCase()}`;
-  const [frameUrl, setFrameUrl] = useState<string>(
-    `/perception/camera/${activeCamId}/frame?annotate=true&t=${Date.now()}`
-  );
+  const [frameBlobUrl, setFrameBlobUrl] = useState<string | null>(null);
 
-  // Smooth 10 FPS frame refresher that completely avoids browser HTTP connection pool exhaustion
+  // High-performance, connection-safe YOLO frame updater with instant abort on camera switch
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+    let currentObjectUrl = '';
+
+    const streamLoop = async () => {
+      while (isMounted) {
+        try {
+          const res = await fetch(`/perception/camera/${activeCamId}/frame?annotate=true`, {
+            signal: controller.signal,
+            cache: 'no-store',
+          });
+          if (!res.ok) {
+            await new Promise((r) => setTimeout(r, 100));
+            continue;
+          }
+          const blob = await res.blob();
+          if (!isMounted) break;
+          const newUrl = URL.createObjectURL(blob);
+          setFrameBlobUrl(newUrl);
+          if (currentObjectUrl) {
+            URL.revokeObjectURL(currentObjectUrl);
+          }
+          currentObjectUrl = newUrl;
+          // ~25 FPS delivery (40ms interval)
+          await new Promise((r) => setTimeout(r, 40));
+        } catch (err: any) {
+          if (err.name === 'AbortError') break;
+          await new Promise((r) => setTimeout(r, 150));
+        }
+      }
+    };
+
+    streamLoop();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+      if (currentObjectUrl) {
+        URL.revokeObjectURL(currentObjectUrl);
+      }
+    };
+  }, [activeCamId]);
+
+  // Synchronized active vehicle metadata listener
   useEffect(() => {
     let isMounted = true;
     setLiveVehicle(null);
-    setFrameUrl(`/perception/camera/${activeCamId}/frame?annotate=true&t=${Date.now()}`);
-
-    const frameInterval = setInterval(() => {
-      if (isMounted) {
-        setFrameUrl(`/perception/camera/${activeCamId}/frame?annotate=true&t=${Date.now()}`);
-      }
-    }, 100); // 10 FPS
 
     const fetchActiveVehicle = async () => {
       try {
@@ -50,7 +86,6 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
 
     return () => {
       isMounted = false;
-      clearInterval(frameInterval);
       clearInterval(vehicleInterval);
     };
   }, [activeCamId]);
@@ -125,12 +160,17 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
 
       {/* Main Live Detection Frame Video - strict uncropped 16:9 */}
       <div className="relative bg-[#000000] rounded-[3px] overflow-hidden aspect-video mb-2.5 flex items-center justify-center">
-        <img
-          key={activeCamId}
-          src={frameUrl}
-          alt={`YOLOv8 Target Detection Frame - ${activeCamId}`}
-          className="absolute inset-0 w-full h-full object-contain bg-black z-0"
-        />
+        {frameBlobUrl ? (
+          <img
+            src={frameBlobUrl}
+            alt={`YOLOv8 Target Detection Frame - ${activeCamId}`}
+            className="absolute inset-0 w-full h-full object-contain bg-black z-0"
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center text-[#AEA793] text-xs font-mono select-none">
+            <span className="animate-pulse">INITIALIZING {cameraDisplayName.toUpperCase()} YOLO STREAM...</span>
+          </div>
+        )}
       </div>
 
       {/* Detail Breakdown Card */}

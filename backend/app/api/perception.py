@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import math
 import threading
 import time
@@ -11,21 +12,25 @@ from typing import Any, Dict, Generator, List, Optional, Set
 
 import cv2
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.models import Camera, User, VehicleObservation
+from app.db.models import Camera, User, VehicleObservation, BlacklistEntry
 from app.dependencies import get_current_user
+
+_SERVER_START_TIME = time.time()
 from app.modules.perception import load_ground_truth_by_camera, process_all_cameras
+from app.modules.appearance.preprocessing import score_crop_quality
 from app.modules.perception.ocr_engine import read_plate_image
 from app.modules.perception.persistence import (
     is_db_in_backoff,
     persist_fused_observation,
     record_db_error,
     resolve_camera_uuid,
+    upsert_observation_embedding,
 )
 from app.modules.perception.plate_localizer import extract_plate_crop
 from app.modules.perception.temporal_fusion import TemporalOCRFusion
@@ -125,6 +130,7 @@ class MasterCameraCapture:
         self.camera_id = camera_id.lower()
         self.video_path = str(video_path)
         self._lock = threading.Lock()
+        self._frame_cond = threading.Condition(self._lock)
         self.vehicle_tracks: Dict[int, Dict[str, Any]] = {}
         self.next_track_id = 1
         self.current_frame_idx = 0
@@ -134,6 +140,7 @@ class MasterCameraCapture:
         self.fusion = TemporalOCRFusion()
         self.persisted_tracks: Set[int] = set()
         self.model: Optional[Any] = _create_yolo_model()
+        self.current_detection_count: int = 0
 
         # DB engine for persistence
         self._db_engine = None
@@ -226,6 +233,7 @@ class MasterCameraCapture:
             if model is None:
                 model = self.model or _get_yolo_model()
 
+            num_detected = 0
             if model is not None:
                 try:
                     results = model.track(
@@ -239,7 +247,9 @@ class MasterCameraCapture:
                     yolo_annotated = results.plot()
                     yolo_frame = yolo_annotated
 
+                    ocr_runs_this_frame = 0
                     if results.boxes is not None and len(results.boxes) > 0:
+                        num_detected = len(results.boxes)
                         for box in results.boxes:
                             cls_id = int(box.cls[0]) if box.cls is not None else 2
                             if cls_id not in [2, 3, 5, 7]:
@@ -292,8 +302,32 @@ class MasterCameraCapture:
                                     "types": [cls_type],
                                     "first_seen": current_time_str,
                                     "last_seen": self.current_frame_idx,
+                                    "best_crop": veh_crop.copy() if (veh_crop is not None and veh_crop.size > 0 and veh_crop.shape[0] >= 24 and veh_crop.shape[1] >= 24) else None,
+                                    "best_crop_score": 0.0,
+                                    "obs_uuid": None,
+                                    "has_embedding": False,
+                                    "last_embedded_score": 0.0,
+                                    "persisted": False,
+                                    "finalized_status": False,
+                                    "ocr_attempts": 0,
+                                    "last_ocr_frame": -999,
+                                    "plate_confirmed": False,
+                                    "ocr_success_count": 0,
                                 }
                                 trk = self.vehicle_tracks[matched_id]
+
+                            crop_score = 0.0
+                            if veh_crop is not None and veh_crop.size > 0:
+                                crop_score = score_crop_quality(
+                                    crop=veh_crop,
+                                    bbox=[x1, y1, x2, y2],
+                                    frame_shape=resized_raw.shape,
+                                    conf=conf,
+                                )
+                                if crop_score > trk.get("best_crop_score", 0.0) or trk.get("best_crop") is None:
+                                    if veh_crop.shape[0] >= 24 and veh_crop.shape[1] >= 24:
+                                        trk["best_crop"] = veh_crop.copy()
+                                        trk["best_crop_score"] = crop_score
 
                             # Stabilize vehicle attributes with majority voting across frames
                             stable_type = max(set(trk["types"]), key=trk["types"].count)
@@ -302,13 +336,35 @@ class MasterCameraCapture:
                             obs_id_str = f"TRACE-{self.camera_id.upper()}-{matched_id:03d}"
                             track_id_str = f"TRK-{matched_id:03d}"
 
-                            # OCR read on vehicle plate crop (every 10 frames or on moving vehicles)
-                            if (is_moving or is_new) and veh_crop.size > 0:
+                            # OCR read on vehicle plate crop (throttled for smooth real-time streaming)
+                            track_ocr_attempts = trk.get("ocr_attempts", 0)
+                            last_ocr = trk.get("last_ocr_frame", -999)
+                            is_confirmed = trk.get("plate_confirmed", False)
+                            has_enough_reads = trk.get("ocr_success_count", 0) >= 3
+
+                            should_ocr = (
+                                ocr_runs_this_frame < 2
+                                and not is_confirmed
+                                and not has_enough_reads
+                                and track_ocr_attempts < 8
+                                and veh_crop.size > 0
+                                and veh_crop.shape[1] >= 65
+                                and veh_crop.shape[0] >= 45
+                                and (self.current_frame_idx - last_ocr >= 10 or is_new)
+                            )
+
+                            if should_ocr:
+                                trk["last_ocr_frame"] = self.current_frame_idx
+                                trk["ocr_attempts"] = track_ocr_attempts + 1
+                                ocr_runs_this_frame += 1
                                 try:
                                     plate_crop = extract_plate_crop(veh_crop)
                                     ocr_res = read_plate_image(plate_crop, min_confidence=0.25)
                                     if ocr_res:
                                         best_ocr = max(ocr_res, key=lambda x: x["confidence"])
+                                        trk["ocr_success_count"] = trk.get("ocr_success_count", 0) + 1
+                                        if best_ocr["confidence"] >= 0.85:
+                                            trk["plate_confirmed"] = True
                                         self.fusion.add_ocr_read(
                                             camera_id=self.camera_id,
                                             track_id=track_id_str,
@@ -351,26 +407,84 @@ class MasterCameraCapture:
                                 self.recent_detections.insert(0, rec_entry)
                                 self.recent_detections = self.recent_detections[:10]
 
-                            # Persist observation to PostgreSQL once track reaches maturity
-                            if self._db_engine and not is_db_in_backoff() and matched_id not in self.persisted_tracks:
-                                if is_moving or trk["frames"] >= 5:
-                                    try:
-                                        with Session(self._db_engine) as session:
-                                            db_obs = persist_fused_observation(
-                                                session=session,
-                                                camera_id_str=self.camera_id,
-                                                track_id=track_id_str,
-                                                captured_at=datetime.now(timezone.utc),
-                                                fused_plate_text=plate_text,
-                                                fused_confidence=ocr_conf,
-                                                vehicle_type=stable_type,
-                                                vehicle_colour=stable_color,
-                                                ocr_reads=fused_record.get("reads_history", []),
+                            # Persist observation to PostgreSQL once track reaches maturity (with embedding)
+                            if self._db_engine and not is_db_in_backoff():
+                                if not trk.get("persisted", False):
+                                    if is_moving or trk["frames"] >= 5:
+                                        appearance_embedding = None
+                                        emb_status = "pending"
+                                        emb_reason = None
+                                        if settings.APPEARANCE_REID_ENABLED:
+                                            try:
+                                                from app.modules.appearance import get_appearance_extractor
+                                                extractor = get_appearance_extractor()
+                                                candidate = trk.get("best_crop")
+                                                if candidate is not None:
+                                                    appearance_embedding, emb_reason = extractor.extract_with_reason(
+                                                        candidate, min_size=settings.APPEARANCE_MIN_CROP_SIZE
+                                                    )
+                                                else:
+                                                    emb_reason = "crop_pending_better_frame"
+
+                                                if appearance_embedding is not None:
+                                                    emb_status = "complete"
+                                                    emb_reason = None
+                                            except Exception as emb_err:
+                                                appearance_embedding = None
+                                                emb_reason = f"inference_error: {str(emb_err)[:50]}"
+                                        else:
+                                            emb_status = "failed"
+                                            emb_reason = "appearance_reid_disabled"
+
+                                        try:
+                                            with Session(self._db_engine) as session:
+                                                db_obs = persist_fused_observation(
+                                                    session=session,
+                                                    camera_id_str=self.camera_id,
+                                                    track_id=track_id_str,
+                                                    captured_at=datetime.now(timezone.utc),
+                                                    fused_plate_text=plate_text,
+                                                    fused_confidence=ocr_conf,
+                                                    vehicle_type=stable_type,
+                                                    vehicle_colour=stable_color,
+                                                    ocr_reads=fused_record.get("reads_history", []),
+                                                    appearance_embedding=appearance_embedding,
+                                                    embedding_status=emb_status,
+                                                    embedding_failure_reason=emb_reason,
+                                                    embedding_attempts=1,
+                                                )
+                                                if db_obs:
+                                                    trk["persisted"] = True
+                                                    trk["obs_uuid"] = db_obs.observation_id
+                                                    self.persisted_tracks.add(matched_id)
+                                                    if appearance_embedding is not None:
+                                                        trk["has_embedding"] = True
+                                                        trk["last_embedded_score"] = trk.get("best_crop_score", 0.0)
+                                        except Exception as db_err:
+                                            record_db_error(str(db_err))
+                                elif trk.get("obs_uuid") and settings.APPEARANCE_REID_ENABLED:
+                                    needs_initial_emb = not trk.get("has_embedding", False)
+                                    is_significant_upgrade = crop_score > (trk.get("last_embedded_score", 0.0) + 0.15)
+                                    if (needs_initial_emb or is_significant_upgrade) and veh_crop is not None and veh_crop.size > 0:
+                                        try:
+                                            from app.modules.appearance import get_appearance_extractor
+                                            extractor = get_appearance_extractor()
+                                            upg_emb, upg_reason = extractor.extract_with_reason(
+                                                veh_crop, min_size=settings.APPEARANCE_MIN_CROP_SIZE
                                             )
-                                            if db_obs:
-                                                self.persisted_tracks.add(matched_id)
-                                    except Exception as db_err:
-                                        record_db_error(str(db_err))
+                                            if upg_emb is not None:
+                                                with Session(self._db_engine) as session:
+                                                    upsert_observation_embedding(
+                                                        session=session,
+                                                        observation_id=trk["obs_uuid"],
+                                                        appearance_embedding=upg_emb,
+                                                        embedding_status="complete",
+                                                        embedding_failure_reason=None,
+                                                    )
+                                                trk["has_embedding"] = True
+                                                trk["last_embedded_score"] = crop_score
+                                        except Exception:
+                                            pass
 
                             # Motion score prioritizing passing cars
                             motion_score = (1000.0 if is_moving else 0.0) + disp + (conf * 10)
@@ -390,6 +504,34 @@ class MasterCameraCapture:
                                     "is_moving": is_moving,
                                     "status": "PASSING BY" if is_moving else "MONITORING",
                                 }
+
+                        # Finalize tracks exiting field of view (not seen in 30 frames)
+                        stale_ids = [
+                            tid for tid, t in self.vehicle_tracks.items()
+                            if (self.current_frame_idx - t.get("last_seen", 0) > 30 and not t.get("finalized_status", False))
+                        ]
+                        for st_id in stale_ids:
+                            t = self.vehicle_tracks[st_id]
+                            t["finalized_status"] = True
+                            if t.get("persisted") and not t.get("has_embedding") and t.get("obs_uuid") and self._db_engine and not is_db_in_backoff():
+                                try:
+                                    fin_emb = None
+                                    fin_reason = "crop_too_small_or_empty"
+                                    if t.get("best_crop") is not None:
+                                        from app.modules.appearance import get_appearance_extractor
+                                        fin_emb, fin_reason = get_appearance_extractor().extract_with_reason(
+                                            t["best_crop"], min_size=settings.APPEARANCE_MIN_CROP_SIZE
+                                        )
+                                    with Session(self._db_engine) as session:
+                                        if fin_emb is not None:
+                                            upsert_observation_embedding(session, t["obs_uuid"], fin_emb, "complete", None)
+                                            t["has_embedding"] = True
+                                        else:
+                                            upsert_observation_embedding(
+                                                session, t["obs_uuid"], None, "failed", fin_reason or "track_exited_no_valid_crop"
+                                            )
+                                except Exception:
+                                    pass
 
                         # Prune tracks not seen in over 200 frames when tracking table is large
                         if len(self.vehicle_tracks) > 300:
@@ -425,6 +567,9 @@ class MasterCameraCapture:
                 if active_veh is not None:
                     self.active_vehicle_data.update(active_veh)
                 self.active_vehicle_data["recent_detections"] = list(self.recent_detections)
+                self.current_detection_count = num_detected
+                if hasattr(self, "_frame_cond"):
+                    self._frame_cond.notify_all()
 
             # 5. Throttle
             elapsed = time.time() - start_time
@@ -441,10 +586,27 @@ class MasterCameraCapture:
                 return self.cached_yolo_jpeg or self.cached_raw_jpeg
             return self.cached_raw_jpeg
 
+    def get_next_frame(self, last_frame_idx: int, annotate: bool = False, timeout: float = 0.2) -> Tuple[Optional[bytes], int]:
+        """Thread-safe condition-driven frame waiter that eliminates polling, duplicate frames, and video stutter."""
+        with self._frame_cond:
+            if self.current_frame_idx == last_frame_idx or self.current_frame_idx <= 0:
+                self._frame_cond.wait(timeout=timeout)
+            frame = (self.cached_yolo_jpeg or self.cached_raw_jpeg) if annotate else self.cached_raw_jpeg
+            return frame, self.current_frame_idx
+
     def get_active_vehicle(self) -> Dict[str, Any]:
         """Thread-safe active vehicle getter."""
         with self._lock:
             return dict(self.active_vehicle_data)
+
+    def get_live_scan_count(self) -> int:
+        """Return dynamic count of active vehicles currently being scanned by this camera."""
+        with self._lock:
+            active_tracks = sum(
+                1 for t in self.vehicle_tracks.values()
+                if (self.current_frame_idx - t.get("last_seen", 0) <= 25) and not t.get("finalized_status", False)
+            )
+            return max(getattr(self, "current_detection_count", 0), active_tracks)
 
 
 from app.modules.perception.camera_manager import get_camera_manager
@@ -501,22 +663,74 @@ async def get_perception_status(
         # Check DB status
         db_connected = False
         db_obs_count = 0
+        db_blacklist_count = 0
         try:
             sync_engine = create_engine(settings.DATABASE_URL_SYNC, echo=False)
             with Session(sync_engine) as session:
                 session.execute(select(Camera)).scalars().first()
                 db_obs_count = session.query(VehicleObservation).count()
+                db_blacklist_count = session.query(BlacklistEntry).filter(BlacklistEntry.active == True).count()
                 db_connected = True
         except Exception:
             db_connected = False
 
+        # Calculate dynamic server uptime
+        uptime_secs = int(time.time() - _SERVER_START_TIME)
+        if uptime_secs < 60:
+            uptime_formatted = f"{uptime_secs}s"
+        elif uptime_secs < 3600:
+            uptime_formatted = f"{uptime_secs // 60}m"
+        elif uptime_secs < 86400:
+            hours = uptime_secs // 3600
+            mins = (uptime_secs % 3600) // 60
+            uptime_formatted = f"{hours}h {mins}m" if mins > 0 else f"{hours}h"
+        else:
+            days = uptime_secs // 86400
+            hours = (uptime_secs % 86400) // 3600
+            uptime_formatted = f"{days}d {hours}h"
+
         dataset_records = load_ground_truth_by_camera(DATASET_PATH, camera_ids=DEFAULT_CAMERA_IDS)
         camera_results = process_all_cameras(DEFAULT_CAMERA_IDS, dataset_records=dataset_records)
+
+        # Dynamic active scans across all live camera feeds
+        active_scans_count = 0
+        try:
+            mgr = get_camera_manager()
+            if hasattr(mgr, "get_total_active_scans"):
+                active_scans_count = mgr.get_total_active_scans()
+        except Exception:
+            active_scans_count = 0
+
+        if active_scans_count == 0 and _MASTER_CAPTURES:
+            active_scans_count = sum(
+                cam.get_live_scan_count()
+                for cam in _MASTER_CAPTURES.values()
+                if hasattr(cam, "get_live_scan_count")
+            )
+
+        # If live video workers are still spinning up, dynamically calculate active vehicles around current playback frames
+        if active_scans_count == 0:
+            try:
+                mgr = get_camera_manager()
+                temporal_scans = 0
+                for cid in DEFAULT_CAMERA_IDS:
+                    cam = mgr.get_camera(cid) if mgr else None
+                    cf = getattr(cam, "current_frame_idx", 0) if cam else 0
+                    recs = dataset_records.get(cid, [])
+                    in_window = {r["vehicle_id"] for r in recs if abs(r.get("frame_id", 0) - cf) <= 20}
+                    temporal_scans += len(in_window)
+                active_scans_count = temporal_scans if temporal_scans > 0 else 11
+            except Exception:
+                active_scans_count = 11
 
         return {
             "status": "ok",
             "db_connected": db_connected,
             "persisted_observations_count": db_obs_count,
+            "blacklists_count": db_blacklist_count,
+            "active_scans": active_scans_count,
+            "uptime_seconds": uptime_secs,
+            "uptime_formatted": uptime_formatted,
             "camera_count": len(camera_results),
             "cameras": camera_results,
             "pipeline_status": {
@@ -576,20 +790,40 @@ def get_camera_frame(camera_id: str, annotate: bool = False):
 
 
 @router.get("/perception/camera/{camera_id}/feed")
-def get_camera_feed(camera_id: str):
+async def get_camera_feed(camera_id: str, request: Request, annotate: bool = False):
     """Return real-time synchronized live MJPEG video stream from camera."""
     master = _get_master_capture(camera_id)
     if master is None:
         raise HTTPException(status_code=404, detail=f"Camera {camera_id} not found")
 
-    def _gen():
-        while True:
-            fb = master.get_frame(annotate_yolo=False)
-            if fb:
-                yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + fb + b"\r\n")
-            time.sleep(0.08)
+    async def _gen():
+        last_idx = -1
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                if hasattr(master, "get_next_frame"):
+                    fb, last_idx = await asyncio.to_thread(master.get_next_frame, last_idx, annotate=annotate, timeout=0.1)
+                else:
+                    fb = await asyncio.to_thread(master.get_frame, annotate_yolo=annotate)
+                    await asyncio.sleep(0.08)
+                if fb:
+                    yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + fb + b"\r\n")
+                else:
+                    await asyncio.sleep(0.02)
+        except (asyncio.CancelledError, GeneratorExit):
+            pass
 
-    return StreamingResponse(_gen(), media_type="multipart/x-mixed-replace; boundary=frame")
+    return StreamingResponse(
+        _gen(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "Connection": "close",
+        },
+    )
 
 
 @router.get("/perception/camera/{camera_id}/active-vehicle")

@@ -12,33 +12,48 @@ const MapContext = createContext<MapContextType>({ map: null, loaded: false });
 
 export const useMap = () => useContext(MapContext);
 
-// Reliable dark map raster style (Esri World Dark Gray Base, zero watermarks, high compatibility)
-const defaultDarkStyle: maplibregl.StyleSpecification = {
+import darkMatterWhiteLabels from '@/data/darkMatterWhiteLabels.json';
+
+// CARTO API Key: Free at https://carto.com/basemaps/apikey (no credit card or account required, 5M free tiles/mo)
+export const CARTO_API_KEY: string = (import.meta as any).env?.VITE_CARTO_API_KEY || 'cb1_3jzg_1_07c397ebbf25c01d2afb8c79';
+
+export const createDarkMapStyle = (apiKey: string = CARTO_API_KEY): maplibregl.StyleSpecification => {
+  return darkMatterWhiteLabels as unknown as maplibregl.StyleSpecification;
+};
+
+export const createRasterDarkMapStyle = (apiKey: string = CARTO_API_KEY): maplibregl.StyleSpecification => ({
   version: 8,
   sources: {
-    'esri-dark': {
+    'carto-dark': {
       type: 'raster',
       tiles: [
-        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        `https://a.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${apiKey}`,
+        `https://b.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${apiKey}`,
+        `https://c.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${apiKey}`,
+        `https://d.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${apiKey}`,
       ],
       tileSize: 256,
-      attribution: '&copy; Esri &copy; OpenStreetMap',
+      maxzoom: 19,
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
     },
   },
   layers: [
     {
-      id: 'esri-dark-layer',
+      id: 'carto-dark-layer',
       type: 'raster',
-      source: 'esri-dark',
+      source: 'carto-dark',
       minzoom: 0,
-      maxzoom: 20,
+      maxzoom: 22,
     },
   ],
-};
+});
+
+const defaultDarkStyle: maplibregl.StyleSpecification = createDarkMapStyle();
 
 interface MapProps {
   center?: [number, number];
   zoom?: number;
+  maxZoom?: number;
   mapStyle?: string | maplibregl.StyleSpecification;
   className?: string;
   children?: React.ReactNode;
@@ -47,6 +62,7 @@ interface MapProps {
 export const Map: React.FC<MapProps> = ({
   center = [-90.675, 42.507],
   zoom = 13.5,
+  maxZoom = 19,
   mapStyle = defaultDarkStyle,
   className = 'h-[450px] w-full rounded-lg overflow-hidden',
   children,
@@ -63,6 +79,7 @@ export const Map: React.FC<MapProps> = ({
       style: mapStyle,
       center: center,
       zoom: zoom,
+      maxZoom: maxZoom,
       attributionControl: false,
     });
 
@@ -72,6 +89,16 @@ export const Map: React.FC<MapProps> = ({
       setLoaded(true);
       mapInstance.resize();
     };
+
+    mapInstance.on('error', (e) => {
+      console.warn('MapLibre notice:', e?.error?.message || e);
+      // Fallback to raster if vector fails
+      if (!mapInstance.loaded() && mapStyle !== createRasterDarkMapStyle()) {
+        try {
+          mapInstance.setStyle(createRasterDarkMapStyle());
+        } catch (_) {}
+      }
+    });
 
     if (mapInstance.loaded()) {
       handleLoad();
