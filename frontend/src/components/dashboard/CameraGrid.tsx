@@ -73,7 +73,6 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
                 </>
               )}
 
-
             </div>
           );
         })}
