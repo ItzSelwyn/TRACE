@@ -15,4 +15,4 @@ def test_perception_status_route_is_available():
     payload = response.json()
     assert payload["status"] == "ok"
     assert "cameras" in payload
-    assert set(payload["cameras"]) == {"c020", "c023", "c029", "c035"}
+    assert set(payload["cameras"]) == {"c020", "c023", "c028", "c029"}

@@ -73,3 +73,5 @@ yarn-error.log*
 pnpm-debug.log*
 
 backend/models/
+
+yolov8n.pt

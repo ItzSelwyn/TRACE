@@ -23,14 +23,27 @@ from app.dependencies import get_current_user
 from app.modules.spatial_temporal.road_graph import get_road_graph
 from app.modules.spatial_temporal.trajectory_service import (
     find_and_build_trajectory,
+    get_active_cross_camera_paths,
     search_vehicles,
 )
 from app.schemas.vehicles import (
+    CrossCameraPathsResponse,
     TrajectoryResponse,
     VehicleSearchResponse,
 )
 
 router = APIRouter()
+
+
+@router.get("/vehicles/cross-camera-paths", response_model=CrossCameraPathsResponse)
+def list_cross_camera_paths(
+    limit: int = Query(10, description="Max cross-camera paths to return"),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_sync_db),
+):
+    """Return dynamically discovered cross-camera paths from the active corridor scenario."""
+    paths = get_active_cross_camera_paths(session, limit=limit)
+    return CrossCameraPathsResponse(status="ok", total=len(paths), paths=paths)
 
 
 @router.get("/vehicles/search", response_model=VehicleSearchResponse)

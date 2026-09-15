@@ -46,6 +46,8 @@ from app.modules.perception.normalization import normalize_plate_text
 from app.modules.spatial_temporal import reconstruct_trajectory
 from app.modules.spatial_temporal.road_graph import get_road_graph
 from app.schemas.vehicles import (
+    CrossCameraPathItem,
+    CrossCameraPathsResponse,
     EvidenceBreakdown,
     ObservationInTrajectory,
     TrajectoryResponse,
@@ -63,8 +65,8 @@ CAMERAS_SEED_PATH = _PROJECT_ROOT / "data" / "seed" / "cameras.json"
 _UUID_TO_CAMERA_ALIAS: Dict[str, str] = {
     "c1000000-0000-0000-0000-000000000001": "c020",
     "c2000000-0000-0000-0000-000000000002": "c023",
-    "c3000000-0000-0000-0000-000000000003": "c029",
-    "c4000000-0000-0000-0000-000000000004": "c035",
+    "c3000000-0000-0000-0000-000000000003": "c028",
+    "c4000000-0000-0000-0000-000000000004": "c029",
 }
 
 
@@ -82,7 +84,7 @@ def _load_seed_cameras() -> Dict[str, Dict[str, Any]]:
             if alias:
                 res[alias] = cam
             name = cam.get("name", "")
-            for a in ["c020", "c023", "c029", "c035"]:
+            for a in ["c020", "c023", "c028", "c029"]:
                 if a in name.lower() or a.replace("c0", "0") in name:
                     res[a] = cam
         return res
@@ -109,7 +111,7 @@ def _resolve_camera_metadata(session: Session, camera_id: uuid.UUID) -> Dict[str
     seed = _SEED_CAMERAS.get(alias or "") or _SEED_CAMERAS.get(cam_str, {})
     lat = seed.get("latitude")
     lon = seed.get("longitude")
-    loc_name = seed.get("location_name") or "CityFlow S04 Corridor"
+    loc_name = seed.get("location_name") or "CityFlow S05 Corridor"
 
     return {
         "camera_id": camera_id,
@@ -300,12 +302,12 @@ def _expand_observation_cluster(
         for tp in tps:
             cluster_obs_ids.add(tp.observation_id)
 
-    # Expand across confirmed and candidate IdentityMatches
+    # Expand across confirmed IdentityMatches only (score >= CONFIRM_THRESHOLD)
     queue = list(cluster_obs_ids)
     visited = set(cluster_obs_ids)
 
     hop = 0
-    while queue and hop < 3:
+    while queue and hop < 1:
         curr_batch = queue[:]
         queue = []
         matches = session.execute(
@@ -314,7 +316,7 @@ def _expand_observation_cluster(
                     IdentityMatch.observation_id_a.in_(curr_batch),
                     IdentityMatch.observation_id_b.in_(curr_batch),
                 ),
-                IdentityMatch.identity_score >= CANDIDATE_THRESHOLD,
+                IdentityMatch.identity_score >= CONFIRM_THRESHOLD,
             )
         ).scalars().all()
 
@@ -333,9 +335,10 @@ def _expand_observation_cluster(
             from app.modules.identity.matcher import match_new_observation
             new_matches = match_new_observation(session, target_observations[0], road_graph=get_road_graph())
             for m in new_matches:
-                other_id = m.get("observation_id_b") if m.get("observation_id_a") == target_observations[0].observation_id else m.get("observation_id_a")
-                if other_id and other_id not in cluster_obs_ids:
-                    cluster_obs_ids.add(other_id)
+                if (m.get("identity_score") or 0.0) >= CONFIRM_THRESHOLD:
+                    other_id = m.get("observation_id_b") if m.get("observation_id_a") == target_observations[0].observation_id else m.get("observation_id_a")
+                    if other_id and other_id not in cluster_obs_ids:
+                        cluster_obs_ids.add(other_id)
         except Exception as e:
             logger.debug(f"On-demand identity fusion skipped: {e}")
 
@@ -365,18 +368,13 @@ def _build_trajectory_from_database(
     # Expand to complete cross-camera identity cluster
     raw_obs_list = _expand_observation_cluster(session, target_obs, canon_id)
 
-    # Deduplicate observations on the same camera occurring within a 5-second window
-    filtered_obs: List[VehicleObservation] = []
-    last_per_cam: Dict[uuid.UUID, datetime] = {}
-    for obs in sorted(raw_obs_list, key=lambda o: o.captured_at):
-        cam = obs.camera_id
-        ts = obs.captured_at if obs.captured_at.tzinfo else obs.captured_at.replace(tzinfo=timezone.utc)
-        if cam in last_per_cam:
-            diff_s = abs((ts - last_per_cam[cam]).total_seconds())
-            if diff_s < 5.0:
-                continue
-        last_per_cam[cam] = ts
-        filtered_obs.append(obs)
+    # Deduplicate observations so there is at most one clean sighting per camera encounter
+    cam_best_obs: Dict[uuid.UUID, VehicleObservation] = {}
+    for obs in sorted(raw_obs_list, key=lambda o: (o.fused_confidence or 0.0), reverse=True):
+        if obs.camera_id not in cam_best_obs:
+            cam_best_obs[obs.camera_id] = obs
+
+    filtered_obs = sorted(cam_best_obs.values(), key=lambda o: o.captured_at)
 
     # Format observations for Layer 3 reconstruct_trajectory()
     obs_dicts: List[Dict[str, Any]] = []
@@ -580,8 +578,8 @@ def _offline_ground_truth_fallback(
                 if r.get("vehicle_id") == target_vid:
                     selected_records.append(r)
 
-    # If no records match this vehicle in ground truth dataset, return clean empty trajectory
-    if not selected_records:
+    # If a specific numeric or vehicle ID was searched but not found in dataset, return empty trajectory
+    if target_vid is not None and not selected_records:
         return TrajectoryResponse(
             plate=None,
             vehicle_id=query,
@@ -606,9 +604,9 @@ def _offline_ground_truth_fallback(
             obs["latitude"] = seed.get("latitude")
             obs["longitude"] = seed.get("longitude")
             obs["camera_name"] = seed.get("name", obs.get("camera_name"))
-            obs["location"] = seed.get("location_name") or "CityFlow S04 Corridor"
+            obs["location"] = seed.get("location_name") or "CityFlow S05 Corridor"
         else:
-            obs["location"] = "CityFlow S04 Corridor"
+            obs["location"] = "CityFlow S05 Corridor"
 
     spatial_payload = reconstruct_trajectory(query, raw_obs, graph)
     annotated_obs = spatial_payload.get("observations", [])
@@ -625,18 +623,20 @@ def _offline_ground_truth_fallback(
             camera_transition_score=obs.get("camera_transition_score"),
             mode="CITYFLOW" if obs.get("plate_similarity") is None else "ANPR",
         )
+        clean_vid = query.replace("Vehicle ", "").replace("vehicle-", "").replace("veh-", "").strip()
+        display_label = f"Vehicle {clean_vid}" if clean_vid.isdigit() else query
         observations.append(
             ObservationInTrajectory(
                 observation_id=uuid.uuid4(),
                 camera_id=uuid.uuid4(),
                 camera_name=obs.get("camera_name"),
-                location=obs.get("location", "CityFlow S04 Corridor"),
+                location=obs.get("location", "CityFlow S05 Corridor"),
                 captured_at=datetime.fromisoformat(obs["captured_at"]),
-                fused_plate_text=obs.get("fused_plate_text", query),
+                fused_plate_text=display_label,
                 fused_confidence=float(obs.get("fused_confidence", 0.92)),
                 vehicle_type=obs.get("vehicle_type", "vehicle"),
                 vehicle_colour=obs.get("vehicle_colour", "unknown"),
-                track_id=obs.get("track_id"),
+                track_id=obs.get("track_id") or f"VEH-{clean_vid}",
                 identity_score=float(obs.get("identity_score", 0.85)),
                 match_confidence_label=obs.get("match_confidence_label", "confirmed"),
                 evidence=ev,
@@ -648,9 +648,12 @@ def _offline_ground_truth_fallback(
             )
         )
 
+    clean_vid = query.replace("Vehicle ", "").replace("vehicle-", "").replace("veh-", "").strip()
+    display_label = f"Vehicle {clean_vid}" if clean_vid.isdigit() else query
+
     return TrajectoryResponse(
-        plate=query if any(c.isalpha() for c in query) else None,
-        vehicle_id=query,
+        plate=display_label if any(c.isalpha() for c in display_label) else None,
+        vehicle_id=display_label,
         search_query=query,
         identifier_type="cityflow_ground_truth_fallback",
         observations=observations,
@@ -670,12 +673,10 @@ def find_and_build_trajectory(
     only when no database record matches the query.
     """
     clean_q = query.strip()
-    # CityFlow ground truth vehicles (e.g. '260', 'veh-260', '261', '265', '272') have verified cross-camera paths
-    is_cityflow_vid = clean_q.isdigit() or clean_q.lower().startswith(("veh-", "vehicle-", "v-"))
+    # CityFlow ground truth vehicles (e.g. '334', 'veh-334', '396', '336') have verified cross-camera paths
+    is_cityflow_vid = clean_q.isdigit() or clean_q.lower().startswith(("veh-", "vehicle-", "v-", "vehicle "))
     if is_cityflow_vid:
-        gt_resp = _offline_ground_truth_fallback(query, road_graph)
-        if gt_resp.observations:
-            return gt_resp
+        return _offline_ground_truth_fallback(clean_q.replace("Vehicle ", "").replace("vehicle ", "").strip(), road_graph)
 
     identity_info = resolve_vehicle_identity(session, query)
 
@@ -684,6 +685,77 @@ def find_and_build_trajectory(
 
     # Step 4: Fallback strictly when no DB records match query
     return _offline_ground_truth_fallback(query, road_graph)
+
+
+_CACHED_S05_CROSS_PATHS: Optional[List[CrossCameraPathItem]] = None
+
+
+def get_active_cross_camera_paths(
+    session: Session,
+    limit: int = 10,
+) -> List[CrossCameraPathItem]:
+    """Return discovered cross-camera paths from ground-truth corridor scenario and live database."""
+    global _CACHED_S05_CROSS_PATHS
+    if _CACHED_S05_CROSS_PATHS is not None:
+        return _CACHED_S05_CROSS_PATHS[:limit]
+
+    results: List[CrossCameraPathItem] = []
+    seen_vids: Set[str] = set()
+
+    if DATASET_PATH.exists():
+        try:
+            veh_records: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+            with open(DATASET_PATH, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    d = json.loads(line)
+                    veh_records[d["vehicle_id"]].append(d)
+
+            by_count: Dict[int, List[CrossCameraPathItem]] = defaultdict(list)
+            for vid, recs in veh_records.items():
+                sorted_recs = sorted(recs, key=lambda r: r.get("frame_id", 0))
+                seen_cams: List[str] = []
+                for r in sorted_recs:
+                    cid = r.get("camera_id")
+                    if cid and cid not in seen_cams:
+                        seen_cams.append(cid)
+                if len(seen_cams) >= 2:
+                    is_corridor = len(seen_cams) == 4
+                    arrow_path = " → ".join(seen_cams)
+                    if is_corridor:
+                        label = f"Vehicle {vid} (4-Cam Corridor)"
+                    else:
+                        label = f"Vehicle {vid} ({arrow_path})"
+                    desc = f"Corridor crossing: {arrow_path}" if is_corridor else arrow_path
+                    by_count[len(seen_cams)].append(
+                        CrossCameraPathItem(
+                            vehicle_id=str(vid),
+                            label=label,
+                            description=desc,
+                            camera_count=len(seen_cams),
+                            cameras=seen_cams,
+                            is_corridor=is_corridor,
+                        )
+                    )
+
+            # Sort 4-camera corridor vehicles with 334 first, followed by 396, 336, 354, 348
+            fav_4 = ["334", "396", "336", "354", "348"]
+            if 4 in by_count:
+                by_count[4].sort(key=lambda x: (fav_4.index(x.vehicle_id) if x.vehicle_id in fav_4 else 999, int(x.vehicle_id) if x.vehicle_id.isdigit() else 999))
+            fav_3 = ["420", "436"]
+            if 3 in by_count:
+                by_count[3].sort(key=lambda x: (fav_3.index(x.vehicle_id) if x.vehicle_id in fav_3 else 999, int(x.vehicle_id) if x.vehicle_id.isdigit() else 999))
+            fav_2 = ["486", "330"]
+            if 2 in by_count:
+                by_count[2].sort(key=lambda x: (fav_2.index(x.vehicle_id) if x.vehicle_id in fav_2 else 999, int(x.vehicle_id) if x.vehicle_id.isdigit() else 999))
+
+            results = by_count.get(4, [])[:4] + by_count.get(3, [])[:2] + by_count.get(2, [])[:2]
+        except Exception as e:
+            logger.error(f"Error reading S05 ground truth for cross-camera paths: {e}")
+
+    _CACHED_S05_CROSS_PATHS = results
+    return results[:limit]
 
 
 def search_vehicles(

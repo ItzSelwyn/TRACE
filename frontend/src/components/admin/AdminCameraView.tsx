@@ -81,13 +81,13 @@ const DEFAULT_CAMERAS: CameraItem[] = [
     camera_id: 'c020',
     name: 'Camera 020',
     source_type: 'video',
-    source_path: 'footage/c020/vdo.avi',
-    scenario: 'S04',
+    source_path: 'footage/S05/c020/vdo.avi',
+    scenario: 'S05',
     fps: 10.0,
     enabled: true,
-    sync_offset_s: 25.905,
-    frame_count: 473,
-    total_frames: 473,
+    sync_offset_s: 0.0,
+    frame_count: 3973,
+    total_frames: 3973,
     status: 'PROCESSING',
     sync_mode: 'synchronized',
     current_frame: 0,
@@ -97,14 +97,30 @@ const DEFAULT_CAMERAS: CameraItem[] = [
     camera_id: 'c023',
     name: 'Camera 023',
     source_type: 'video',
-    source_path: 'footage/c023/vdo.avi',
-    scenario: 'S04',
+    source_path: 'footage/S05/c023/vdo.avi',
+    scenario: 'S05',
     fps: 10.0,
     enabled: true,
-    sync_offset_s: 45.716,
-    frame_count: 609,
-    total_frames: 609,
+    sync_offset_s: 0.0,
+    frame_count: 4255,
+    total_frames: 4255,
     status: 'PROCESSING',
+    sync_mode: 'synchronized',
+    current_frame: 0,
+    current_local_time: 0.0,
+  },
+  {
+    camera_id: 'c028',
+    name: 'Camera 028',
+    source_type: 'video',
+    source_path: 'footage/S05/c028/vdo.avi',
+    scenario: 'S05',
+    fps: 10.0,
+    enabled: true,
+    sync_offset_s: 0.0,
+    frame_count: 3825,
+    total_frames: 3825,
+    status: 'WAITING',
     sync_mode: 'synchronized',
     current_frame: 0,
     current_local_time: 0.0,
@@ -113,29 +129,13 @@ const DEFAULT_CAMERAS: CameraItem[] = [
     camera_id: 'c029',
     name: 'Camera 029',
     source_type: 'video',
-    source_path: 'footage/c029/vdo.avi',
-    scenario: 'S04',
+    source_path: 'footage/S05/c029/vdo.avi',
+    scenario: 'S05',
     fps: 10.0,
     enabled: true,
-    sync_offset_s: 125.788,
-    frame_count: 260,
-    total_frames: 260,
-    status: 'WAITING',
-    sync_mode: 'synchronized',
-    current_frame: 0,
-    current_local_time: 0.0,
-  },
-  {
-    camera_id: 'c035',
-    name: 'Camera 035',
-    source_type: 'video',
-    source_path: 'footage/c035/vdo.avi',
-    scenario: 'S04',
-    fps: 10.0,
-    enabled: true,
-    sync_offset_s: 165.568,
-    frame_count: 210,
-    total_frames: 210,
+    sync_offset_s: 0.0,
+    frame_count: 3545,
+    total_frames: 3545,
     status: 'WAITING',
     sync_mode: 'synchronized',
     current_frame: 0,
@@ -149,8 +149,8 @@ const DEFAULT_PLAYBACK: PlaybackStatus = {
   playback_speed: 1.0,
   master_time_s: 0.0,
   master_time_formatted: '00:00.000',
-  max_duration_s: 190.0,
-  max_duration_formatted: '03:10.000',
+  max_duration_s: 425.5,
+  max_duration_formatted: '07:05.500',
   loop_scenario: true,
 };
 
@@ -207,7 +207,7 @@ export const AdminCameraView: React.FC = () => {
   useEffect(() => {
     if (playback?.playback_state !== 'playing') return;
     const speed = playback?.playback_speed || 1.0;
-    const maxDur = playback?.max_duration_s || 190.0;
+    const maxDur = playback?.max_duration_s || 425.5;
     const tickInterval = 50;
 
     const timer = setInterval(() => {
@@ -522,8 +522,8 @@ export const AdminCameraView: React.FC = () => {
     }
   };
 
-  const maxScenarioDuration = playback?.max_duration_s || 190.0;
-  const maxDurationFormatted = playback?.max_duration_formatted || '03:10.000';
+  const maxScenarioDuration = playback?.max_duration_s || 425.5;
+  const maxDurationFormatted = playback?.max_duration_formatted || '07:05.500';
 
   return (
     <div className="space-y-5 pb-8 font-body select-none">
@@ -590,7 +590,7 @@ export const AdminCameraView: React.FC = () => {
                     Mode:{' '}
                     <span className="font-bold text-white">
                       {playback?.sync_mode === 'synchronized'
-                        ? 'CityFlow S04 Synchronized'
+                        ? 'CityFlow S05 Synchronized'
                         : 'Independent Camera Playback'}
                     </span>
                   </div>
@@ -649,7 +649,7 @@ export const AdminCameraView: React.FC = () => {
                   }`}
                   title="Toggle between synchronized multi-camera timeline vs independent playback"
                 >
-                  {playback?.sync_mode === 'synchronized' ? 'SYNC: ON (S04)' : 'INDEPENDENT'}
+                  {playback?.sync_mode === 'synchronized' ? 'SYNC: ON (S05)' : 'INDEPENDENT'}
                 </button>
 
                 {/* Loop Scenario Toggle */}
@@ -671,7 +671,7 @@ export const AdminCameraView: React.FC = () => {
               <div className="flex justify-between text-[10px] text-[#AEA793]">
                 <span>00:00 (Scenario Start)</span>
                 <span>
-                  Active: {formatLiveTime(liveMasterTime)} / {maxDurationFormatted} (CityFlow S04)
+                  Active: {formatLiveTime(liveMasterTime)} / {maxDurationFormatted} (CityFlow S05)
                 </span>
                 <span>{maxDurationFormatted.substring(0, 5)} (Scenario End)</span>
               </div>

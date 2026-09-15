@@ -22,6 +22,26 @@ from app.db.models import Camera, User, VehicleObservation, BlacklistEntry
 from app.dependencies import get_current_user
 
 _SERVER_START_TIME = time.time()
+
+
+def get_system_uptime() -> tuple[int, str, float]:
+    """Calculate dynamic system uptime in seconds, formatted string, and fractional hours."""
+    uptime_secs = int(time.time() - _SERVER_START_TIME)
+    if uptime_secs < 60:
+        uptime_formatted = f"{uptime_secs}s"
+    elif uptime_secs < 3600:
+        uptime_formatted = f"{uptime_secs // 60}m"
+    elif uptime_secs < 86400:
+        hours = uptime_secs // 3600
+        mins = (uptime_secs % 3600) // 60
+        uptime_formatted = f"{hours}h {mins}m" if mins > 0 else f"{hours}h"
+    else:
+        days = uptime_secs // 86400
+        hours = (uptime_secs % 86400) // 3600
+        uptime_formatted = f"{days}d {hours}h"
+    uptime_hours = round(uptime_secs / 3600, 1)
+    return uptime_secs, uptime_formatted, uptime_hours
+
 from app.modules.perception import load_ground_truth_by_camera, process_all_cameras
 from app.modules.appearance.preprocessing import score_crop_quality
 from app.modules.perception.ocr_engine import read_plate_image
@@ -37,7 +57,7 @@ from app.modules.perception.temporal_fusion import TemporalOCRFusion
 
 router = APIRouter()
 
-DEFAULT_CAMERA_IDS = ["c020", "c023", "c029", "c035"]
+DEFAULT_CAMERA_IDS = ["c020", "c023", "c028", "c029"]
 
 # Project root: backend/app/api/perception.py -> parents[3] is TRACE/
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -105,15 +125,17 @@ def _get_camera_video_path(camera_id: str) -> Optional[Path]:
     alias_map = {
         "cam-13": "c020",
         "cam-14": "c023",
-        "cam-15": "c029",
-        "cam-16": "c035",
+        "cam-15": "c028",
+        "cam-16": "c029",
     }
     clean_id = alias_map.get(clean_id, clean_id)
 
     candidates = [
+        _VIDEO_DIR / "S05" / clean_id / "vdo.avi",
         _VIDEO_DIR / clean_id / "vdo.avi",
         _VIDEO_DIR / f"{clean_id}.avi",
         _VIDEO_DIR / f"{clean_id}.mp4",
+        Path.cwd() / "data" / "footage" / "S05" / clean_id / "vdo.avi",
         Path.cwd() / "data" / "footage" / clean_id / "vdo.avi",
         Path.cwd() / clean_id / "vdo.avi",
     ]
@@ -359,7 +381,9 @@ class MasterCameraCapture:
                                 ocr_runs_this_frame += 1
                                 try:
                                     plate_crop = extract_plate_crop(veh_crop)
-                                    ocr_res = read_plate_image(plate_crop, min_confidence=0.25)
+                                    ocr_res = read_plate_image(plate_crop, min_confidence=0.20) if plate_crop is not None and plate_crop.size > 0 else None
+                                    if not ocr_res and veh_crop is not None and veh_crop.size > 0:
+                                        ocr_res = read_plate_image(veh_crop, min_confidence=0.20)
                                     if ocr_res:
                                         best_ocr = max(ocr_res, key=lambda x: x["confidence"])
                                         trk["ocr_success_count"] = trk.get("ocr_success_count", 0) + 1
@@ -621,8 +645,8 @@ def _get_master_capture(camera_id: str) -> Optional[Any]:
     alias_map = {
         "cam-13": "c020",
         "cam-14": "c023",
-        "cam-15": "c029",
-        "cam-16": "c035",
+        "cam-15": "c028",
+        "cam-16": "c029",
     }
     clean_id = alias_map.get(clean_id, clean_id)
 
@@ -675,19 +699,7 @@ async def get_perception_status(
             db_connected = False
 
         # Calculate dynamic server uptime
-        uptime_secs = int(time.time() - _SERVER_START_TIME)
-        if uptime_secs < 60:
-            uptime_formatted = f"{uptime_secs}s"
-        elif uptime_secs < 3600:
-            uptime_formatted = f"{uptime_secs // 60}m"
-        elif uptime_secs < 86400:
-            hours = uptime_secs // 3600
-            mins = (uptime_secs % 3600) // 60
-            uptime_formatted = f"{hours}h {mins}m" if mins > 0 else f"{hours}h"
-        else:
-            days = uptime_secs // 86400
-            hours = (uptime_secs % 86400) // 3600
-            uptime_formatted = f"{days}d {hours}h"
+        uptime_secs, uptime_formatted, _ = get_system_uptime()
 
         dataset_records = load_ground_truth_by_camera(DATASET_PATH, camera_ids=DEFAULT_CAMERA_IDS)
         camera_results = process_all_cameras(DEFAULT_CAMERA_IDS, dataset_records=dataset_records)
@@ -756,6 +768,7 @@ def get_perception_cameras():
     cams = mgr.list_cameras()
     active = sum(1 for c in cams if c.get("enabled", True) and c.get("status") not in ["DISABLED", "FAILED", "OFFLINE"])
     down = len(cams) - active
+    uptime_secs, uptime_formatted, uptime_hours = get_system_uptime()
     return {
         "status": "ok",
         "cameras": cams,
@@ -763,7 +776,9 @@ def get_perception_cameras():
         "total_cameras": len(cams),
         "active_cameras": active,
         "down_cameras": down,
-        "uptime_hours": 28,
+        "uptime_seconds": uptime_secs,
+        "uptime_formatted": uptime_formatted,
+        "uptime_hours": uptime_hours,
     }
 
 

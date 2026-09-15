@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.api.perception import get_system_uptime
 from app.modules.perception.camera_manager import get_camera_manager
 from app.modules.perception.source_discovery import discover_sources
 
@@ -48,6 +49,7 @@ def list_cameras():
     cams = mgr.list_cameras()
     active = sum(1 for c in cams if c.get("enabled", True) and c.get("status") not in ["DISABLED", "FAILED", "OFFLINE"])
     down = len(cams) - active
+    uptime_secs, uptime_formatted, uptime_hours = get_system_uptime()
     return {
         "status": "ok",
         "cameras": cams,
@@ -55,7 +57,9 @@ def list_cameras():
         "total_cameras": len(cams),
         "active_cameras": active,
         "down_cameras": down,
-        "uptime_hours": 28,
+        "uptime_seconds": uptime_secs,
+        "uptime_formatted": uptime_formatted,
+        "uptime_hours": uptime_hours,
     }
 
 

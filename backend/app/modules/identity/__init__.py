@@ -107,7 +107,7 @@ def build_vehicle_trajectory(
 ) -> Dict[str, Any]:
     """Build trajectory observations payload with multi-modal identity evidence."""
     profiles = camera_profiles or {}
-    camera_templates = ["c020", "c023", "c029", "c035"]
+    camera_templates = ["c020", "c023", "c028", "c029"]
     source_records = list(records or [])
 
     if not source_records:
@@ -130,7 +130,7 @@ def build_vehicle_trajectory(
         if "captured_at" in record:
             captured_at_str = record["captured_at"]
         else:
-            offset = {"c020": 25.905, "c023": 45.716, "c029": 125.788, "c035": 165.568}.get(camera_id, 0.0)
+            offset = {"c020": 0.0, "c023": 0.0, "c028": 0.0, "c029": 0.0}.get(camera_id, 0.0)
             ts = datetime(2024, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=offset + frame_id / 10.0)
             captured_at_str = ts.isoformat()
 

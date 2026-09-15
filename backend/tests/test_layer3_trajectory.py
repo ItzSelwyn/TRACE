@@ -67,6 +67,41 @@ def auth_token() -> str:
 def sync_db():
     engine = create_engine(settings.DATABASE_URL_SYNC, echo=False)
     with Session(engine) as session:
+        # Ensure test observation for TN 37 CY 1234 and TN37CY1234 exists
+        existing = session.execute(
+            select(VehicleObservation).where(VehicleObservation.fused_plate_text == "TN 37 CY 1234")
+        ).scalars().first()
+        existing_norm = session.execute(
+            select(VehicleObservation).where(VehicleObservation.fused_plate_text == "TN37CY1234")
+        ).scalars().first()
+        if not existing or not existing_norm:
+            cam = session.execute(select(Camera).limit(1)).scalars().first()
+            if cam:
+                if not existing:
+                    session.add(VehicleObservation(
+                        observation_id=uuid.uuid4(),
+                        camera_id=cam.camera_id,
+                        track_id="TRK-TN37-1",
+                        captured_at=datetime.now(timezone.utc),
+                        fused_plate_text="TN 37 CY 1234",
+                        fused_confidence=0.95,
+                        vehicle_type="car",
+                        vehicle_colour="white",
+                        scenario="S05",
+                    ))
+                if not existing_norm:
+                    session.add(VehicleObservation(
+                        observation_id=uuid.uuid4(),
+                        camera_id=cam.camera_id,
+                        track_id="TRK-TN37-2",
+                        captured_at=datetime.now(timezone.utc),
+                        fused_plate_text="TN37CY1234",
+                        fused_confidence=0.95,
+                        vehicle_type="car",
+                        vehicle_colour="white",
+                        scenario="S05",
+                    ))
+                session.commit()
         yield session
 
 

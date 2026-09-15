@@ -104,3 +104,21 @@ class VehicleSearchResponse(BaseModel):
     results: List[VehicleSearchResult] = []
     total: int = 0
 
+
+class CrossCameraPathItem(BaseModel):
+    """Discovered cross-camera vehicle trajectory summary."""
+    vehicle_id: str
+    label: str
+    description: str
+    camera_count: int
+    cameras: List[str]
+    is_corridor: bool = False
+
+
+class CrossCameraPathsResponse(BaseModel):
+    """Response envelope for discovered cross-camera paths."""
+    status: str = "ok"
+    total: int
+    paths: List[CrossCameraPathItem]
+
+

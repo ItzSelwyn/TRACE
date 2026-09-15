@@ -25,11 +25,11 @@ CAMERA_ALIAS_MAP: Dict[str, uuid.UUID] = {
     "c023": uuid.UUID("c2000000-0000-0000-0000-000000000002"),
     "cam023": uuid.UUID("c2000000-0000-0000-0000-000000000002"),
     "cam-14": uuid.UUID("c2000000-0000-0000-0000-000000000002"),
-    "c029": uuid.UUID("c3000000-0000-0000-0000-000000000003"),
-    "cam029": uuid.UUID("c3000000-0000-0000-0000-000000000003"),
+    "c028": uuid.UUID("c3000000-0000-0000-0000-000000000003"),
+    "cam028": uuid.UUID("c3000000-0000-0000-0000-000000000003"),
     "cam-15": uuid.UUID("c3000000-0000-0000-0000-000000000003"),
-    "c035": uuid.UUID("c4000000-0000-0000-0000-000000000004"),
-    "cam035": uuid.UUID("c4000000-0000-0000-0000-000000000004"),
+    "c029": uuid.UUID("c4000000-0000-0000-0000-000000000004"),
+    "cam029": uuid.UUID("c4000000-0000-0000-0000-000000000004"),
     "cam-16": uuid.UUID("c4000000-0000-0000-0000-000000000004"),
 }
 
@@ -232,6 +232,7 @@ def persist_fused_observation(
             embedding_status=status_val,
             embedding_failure_reason=reason_val,
             embedding_attempts=attempts_val,
+            scenario=kwargs.get("scenario", "S05"),
         )
         session.add(observation)
         session.flush()
@@ -313,3 +314,120 @@ def persist_fused_observation(
             pass
         record_db_error(str(e))
         return None
+
+
+def update_observation_plate(
+    session: Session,
+    observation_id: Union[str, uuid.UUID],
+    fused_plate_text: str,
+    fused_confidence: Optional[float],
+    ocr_read: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """Safely update an existing VehicleObservation's plate text and confidence, and append an OcrRead record.
+    
+    Guarantees:
+    - Never overwrites a valid high-confidence plate with an unreadable/lower-confidence plate.
+    - Adds child OcrRead record if ocr_read metadata is provided.
+    - Checks for active blacklist matches on newly identified plate.
+    - Thread/transaction-safe.
+    """
+    if is_db_in_backoff():
+        return False
+
+    try:
+        obs_uuid = uuid.UUID(str(observation_id)) if not isinstance(observation_id, uuid.UUID) else observation_id
+        obs = session.execute(
+            select(VehicleObservation).where(VehicleObservation.observation_id == obs_uuid).with_for_update()
+        ).scalar_one_or_none()
+
+        if not obs:
+            return False
+
+        new_plate = str(fused_plate_text).strip() if fused_plate_text else "NOT READ"
+        new_conf = round(float(fused_confidence), 3) if fused_confidence is not None else 0.000
+
+        # Only update if new plate is valid and either previous was 'NOT READ' or new_conf >= obs.fused_confidence
+        current_plate = obs.fused_plate_text or "NOT READ"
+        current_conf = float(obs.fused_confidence or 0.0)
+
+        should_update_plate = False
+        if new_plate != "NOT READ":
+            if current_plate == "NOT READ" or new_conf >= current_conf or current_plate == new_plate:
+                should_update_plate = True
+
+        if should_update_plate:
+            obs.fused_plate_text = new_plate
+            obs.fused_confidence = new_conf
+
+        # Append child OcrRead record if provided
+        if ocr_read:
+            raw_text = str(ocr_read.get("raw_text") or ocr_read.get("raw_plate_text") or "").strip()
+            if raw_text:
+                r_conf = round(float(ocr_read.get("confidence", 0.0)), 3)
+                r_ts_raw = ocr_read.get("timestamp") or ocr_read.get("frame_timestamp")
+                if isinstance(r_ts_raw, str):
+                    try:
+                        r_dt = datetime.fromisoformat(r_ts_raw.replace("Z", "+00:00"))
+                    except Exception:
+                        r_dt = datetime.now(timezone.utc)
+                elif isinstance(r_ts_raw, datetime):
+                    r_dt = r_ts_raw if r_ts_raw.tzinfo else r_ts_raw.replace(tzinfo=timezone.utc)
+                else:
+                    r_dt = datetime.now(timezone.utc)
+
+                read_record = OcrRead(
+                    ocr_read_id=uuid.uuid4(),
+                    observation_id=obs_uuid,
+                    frame_timestamp=r_dt,
+                    raw_plate_text=raw_text,
+                    confidence=r_conf,
+                )
+                session.add(read_record)
+
+        # Check blacklist alert if newly identified plate
+        if should_update_plate and new_plate != "NOT READ" and current_plate != new_plate:
+            try:
+                from app.modules.perception.normalization import normalize_plate_text
+                from sqlalchemy import func, or_
+                norm_p = normalize_plate_text(new_plate)
+                bl_entries = session.execute(
+                    select(BlacklistEntry).where(
+                        BlacklistEntry.active == True,
+                        or_(
+                            func.upper(BlacklistEntry.plate_text) == new_plate.upper(),
+                            func.upper(BlacklistEntry.plate_text) == norm_p.upper(),
+                        ),
+                    )
+                ).scalars().all()
+
+                for bl in bl_entries:
+                    alert = Alert(
+                        alert_id=uuid.uuid4(),
+                        type="blacklist_hit",
+                        plate_text=bl.plate_text,
+                        camera_id=obs.camera_id,
+                        blacklist_id=bl.blacklist_id,
+                        triggered_at=datetime.now(timezone.utc),
+                        reviewed=False,
+                    )
+                    session.add(alert)
+                    logger.warning(
+                        f"[ALERT] Blacklisted vehicle '{bl.plate_text}' detected on camera {obs.camera_id} via updated OCR!"
+                    )
+            except Exception as bl_err:
+                logger.error(f"[BLACKLIST CHECK ERROR] {bl_err}")
+
+        session.commit()
+        logger.info(
+            f"[DB UPDATE] Updated VehicleObservation {obs_uuid} plate='{new_plate}' conf={new_conf}"
+        )
+        return True
+
+    except Exception as e:
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        record_db_error(str(e))
+        return False
+

@@ -84,10 +84,12 @@ class VehicleObservation(Base):
     embedding_status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
     embedding_failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     embedding_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    scenario: Mapped[str] = mapped_column(Text, nullable=False, default="S05")
 
     __table_args__ = (
         Index('ix_vehicle_obs_camera_time', 'camera_id', 'captured_at'),
         Index('ix_vehicle_obs_embedding_status', 'embedding_status'),
+        Index('ix_vehicle_obs_scenario', 'scenario'),
     )
 
     camera: Mapped["Camera"] = relationship(back_populates="observations")

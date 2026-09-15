@@ -125,7 +125,7 @@ def _get_fallback_blacklist(q: Optional[str] = None) -> BlacklistListResponse:
             active=True,
             last_found="2d ago",
             last_camera_name="Camera 035 (Highway 20 Corridor)",
-            last_location="CityFlow S04 Corridor",
+            last_location="CityFlow S05 Corridor",
             date_added_formatted=_format_ordinal_date(now),
             time_added_formatted=now.strftime("%I:%M:%S %p").lower(),
         ),
@@ -138,7 +138,7 @@ def _get_fallback_blacklist(q: Optional[str] = None) -> BlacklistListResponse:
             active=True,
             last_found="Never",
             last_camera_name="Camera 023 (Grandview & Delhi)",
-            last_location="CityFlow S04 Corridor",
+            last_location="CityFlow S05 Corridor",
             date_added_formatted=_format_ordinal_date(now),
             time_added_formatted=now.strftime("%I:%M:%S %p").lower(),
         ),
@@ -151,7 +151,7 @@ def _get_fallback_blacklist(q: Optional[str] = None) -> BlacklistListResponse:
             active=True,
             last_found="2d ago",
             last_camera_name="Camera 029 (N Grandview & University)",
-            last_location="CityFlow S04 Corridor",
+            last_location="CityFlow S05 Corridor",
             date_added_formatted=_format_ordinal_date(now),
             time_added_formatted=now.strftime("%I:%M:%S %p").lower(),
         ),
@@ -220,10 +220,10 @@ async def get_blacklist(
                 cam = cam_res.scalars().first()
                 if cam:
                     cam_name = cam.name
-                    cam_loc = cam.zone or "CityFlow S04 Corridor"
+                    cam_loc = cam.zone or "CityFlow S05 Corridor"
                 else:
                     cam_name = f"Camera {str(latest_obs.camera_id)[:4]}"
-                    cam_loc = "CityFlow S04 Corridor"
+                    cam_loc = "CityFlow S05 Corridor"
 
             added_dt = entry.added_at if entry.added_at.tzinfo else entry.added_at.replace(tzinfo=timezone.utc)
 
@@ -376,7 +376,7 @@ async def add_blacklist(
             active=True,
             last_found="Never",
             last_camera_name="Camera 029 (N Grandview & University)",
-            last_location="CityFlow S04 Corridor",
+            last_location="CityFlow S05 Corridor",
             date_added_formatted=_format_ordinal_date(now),
             time_added_formatted=now.strftime("%I:%M:%S %p").lower(),
         )

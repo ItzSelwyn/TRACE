@@ -8,7 +8,7 @@ from pathlib import Path
 
 def test_prepare_ground_truth_supports_flattened_layout(tmp_path: Path):
     dataset_root = tmp_path / "CityFlow"
-    for camera in ("c020", "c023", "c029", "c035"):
+    for camera in ("c020", "c023", "c028", "c029"):
         gt_dir = dataset_root / camera / "gt"
         gt_dir.mkdir(parents=True)
         gt_file = gt_dir / "gt.txt"

@@ -60,8 +60,8 @@ interface MapProps {
 }
 
 export const Map: React.FC<MapProps> = ({
-  center = [-90.675, 42.507],
-  zoom = 13.5,
+  center = [-90.6847, 42.4991],
+  zoom = 14.5,
   maxZoom = 19,
   mapStyle = defaultDarkStyle,
   className = 'h-[450px] w-full rounded-lg overflow-hidden',
@@ -225,6 +225,8 @@ export const MapRoute: React.FC<MapRouteProps> = ({
 interface MapMarkerProps {
   longitude: number;
   latitude: number;
+  anchor?: maplibregl.PositionAnchor;
+  offset?: maplibregl.PointLike;
   children?: React.ReactNode;
 }
 
@@ -236,6 +238,8 @@ export const MapMarkerContext = createContext<{
 export const MapMarker: React.FC<MapMarkerProps> = ({
   longitude,
   latitude,
+  anchor = 'bottom',
+  offset,
   children,
 }) => {
   const { map, loaded } = useMap();
@@ -248,7 +252,7 @@ export const MapMarker: React.FC<MapMarkerProps> = ({
     const el = elementRef.current;
     el.className = 'map-marker-container cursor-pointer z-10';
 
-    const newMarker = new maplibregl.Marker({ element: el })
+    const newMarker = new maplibregl.Marker({ element: el, anchor, offset })
       .setLngLat([longitude, latitude])
       .addTo(map);
 
@@ -257,7 +261,7 @@ export const MapMarker: React.FC<MapMarkerProps> = ({
     return () => {
       newMarker.remove();
     };
-  }, [map, loaded, longitude, latitude]);
+  }, [map, loaded, longitude, latitude, anchor, offset]);
 
   return (
     <MapMarkerContext.Provider value={{ marker, markerElement: elementRef.current }}>

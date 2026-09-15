@@ -23,51 +23,51 @@ export interface CameraMapNode {
 const DEFAULT_CAMERAS: CameraMapNode[] = [
   {
     id: 'c020',
-    name: 'Camera 020 (W Locust & Grandview)',
-    location: 'W Locust & Grandview',
+    name: 'Camera 020 (University Ave & Walnut)',
+    location: 'University Ave & Walnut',
     status: 'ONLINE',
-    lng: -90.6865,
-    lat: 42.5039,
+    lng: -90.675620,
+    lat: 42.499860,
     resolution: '1080P',
     fps: 10,
     lastActive: 'Live',
-    uptime: '28 hrs',
+    uptime: 'Live',
   },
   {
     id: 'c023',
-    name: 'Camera 023 (Grandview & Delhi)',
-    location: 'Grandview & Delhi',
+    name: 'Camera 023 (University Ave & Nevada)',
+    location: 'University Ave & Nevada',
     status: 'ONLINE',
-    lng: -90.6784,
-    lat: 42.5055,
+    lng: -90.681350,
+    lat: 42.499140,
     resolution: '1080P',
     fps: 10,
     lastActive: 'Live',
-    uptime: '28 hrs',
+    uptime: 'Live',
+  },
+  {
+    id: 'c028',
+    name: 'Camera 028 (Grandview Roundabout)',
+    location: 'Grandview Roundabout',
+    status: 'ONLINE',
+    lng: -90.688350,
+    lat: 42.498360,
+    resolution: '1080P',
+    fps: 10,
+    lastActive: 'Live',
+    uptime: 'Live',
   },
   {
     id: 'c029',
-    name: 'Camera 029 (N Grandview & University)',
-    location: 'N Grandview & University',
+    name: 'Camera 029 (University Ave & Alta Pl)',
+    location: 'University Ave & Alta Pl',
     status: 'ONLINE',
-    lng: -90.6710,
-    lat: 42.5085,
+    lng: -90.693500,
+    lat: 42.499190,
     resolution: '1080P',
     fps: 10,
     lastActive: 'Live',
-    uptime: '28 hrs',
-  },
-  {
-    id: 'c035',
-    name: 'Camera 035 (Highway 20 Corridor)',
-    location: 'Highway 20 Corridor',
-    status: 'ONLINE',
-    lng: -90.6635,
-    lat: 42.5115,
-    resolution: '1080P',
-    fps: 10,
-    lastActive: 'Live',
-    uptime: '28 hrs',
+    uptime: 'Live',
   },
 ];
 
@@ -85,6 +85,7 @@ export const CamerasView: React.FC = () => {
     active: 4,
     down: 0,
     uptimeHours: 28,
+    uptimeFormatted: 'Live',
   });
 
   useEffect(() => {
@@ -96,17 +97,19 @@ export const CamerasView: React.FC = () => {
         const data = await res.json();
         if (!isMounted || !data.cameras || data.cameras.length === 0) return;
 
+        const uptimeStr = data.uptime_formatted || (data.uptime_hours ? `${data.uptime_hours} hrs` : 'Live');
+
         const mapped: CameraMapNode[] = data.cameras.map((c: any) => ({
           id: c.camera_id,
           name: c.name || `Camera ${c.camera_id.toUpperCase()}`,
-          location: c.location || 'CityFlow S04 Corridor',
+          location: c.location || 'CityFlow S05 Corridor',
           status: (c.status === 'ONLINE' || c.status === 'PROCESSING' || c.status === 'SYNC DISABLED') ? 'ONLINE' : 'DOWN',
-          lng: typeof c.longitude === 'number' ? c.longitude : -90.675,
-          lat: typeof c.latitude === 'number' ? c.latitude : 42.507,
+          lng: typeof c.longitude === 'number' ? c.longitude : -90.6847,
+          lat: typeof c.latitude === 'number' ? c.latitude : 42.4991,
           resolution: c.resolution || '1080P',
           fps: Math.round(c.fps || 10),
           lastActive: 'Live',
-          uptime: `${data.uptime_hours || 28} hrs`,
+          uptime: uptimeStr,
         }));
 
         setCameras(mapped);
@@ -115,6 +118,7 @@ export const CamerasView: React.FC = () => {
           active: data.active_cameras ?? mapped.filter(c => c.status === 'ONLINE').length,
           down: data.down_cameras ?? mapped.filter(c => c.status !== 'ONLINE').length,
           uptimeHours: data.uptime_hours ?? 28,
+          uptimeFormatted: uptimeStr,
         });
       } catch (err) {
         console.warn('Using default camera metadata:', err);
@@ -185,14 +189,14 @@ export const CamerasView: React.FC = () => {
             UPTIME
           </span>
           <span className="text-4xl md:text-5xl font-bold font-body text-[#F2D04E]">
-            {metrics.uptimeHours} hrs
+            {metrics.uptimeFormatted}
           </span>
         </div>
       </div>
 
       {/* ================= 2. MAIN GIS CAMERA MAP CONTAINER (Dubuque CityFlow Corridor) ================= */}
       <div className="relative rounded-[3px] overflow-hidden bg-[#151515] h-[560px] w-full">
-        <Map center={[-90.675, 42.507]} zoom={13.8}>
+        <Map center={[-90.6847, 42.4991]} zoom={14.8}>
           {cameras.map((cam) => {
             const isOnline = cam.status === 'ONLINE';
 
@@ -235,7 +239,7 @@ export const CamerasView: React.FC = () => {
                       </div>
                       <div className="flex justify-between items-center text-[#A0A0A0]">
                         <span>Uptime</span>
-                        <span className="text-white/90">{cam.uptime || '28 hrs'}</span>
+                        <span className="text-white/90">{cam.uptime || metrics.uptimeFormatted}</span>
                       </div>
                       <div className="flex justify-between items-center text-[#A0A0A0]">
                         <span>Status</span>
@@ -377,19 +381,13 @@ export const CamerasView: React.FC = () => {
                 }}
               />
 
-              {/* LIVE Indicator Tag */}
-              <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/70 backdrop-blur-sm px-2.5 py-1 rounded-[3px] border border-white/10 select-none">
-                <span className="w-2 h-2 rounded-full bg-[#1B7A43] animate-pulse" />
-                <span className="text-[10px] font-bold text-white uppercase tracking-wider font-body">LIVE</span>
-              </div>
-
-              {/* Camera Info Overlay */}
-              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent p-3 flex items-center justify-between text-xs font-body select-none">
+              {/* Camera Info Overlay (No vignette background) */}
+              <div className="absolute bottom-0 inset-x-0 p-3 flex items-center justify-between text-xs font-body select-none pointer-events-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
                 <div>
                   <p className="font-bold text-white tracking-wide text-sm">{cam.name}</p>
                   <p className="text-[11px] text-[#AEA793]">{cam.location}</p>
                 </div>
-                <span className="text-[10px] bg-[#1E1E1E] text-[#F2D04E] font-semibold px-2 py-0.5 rounded-[3px] border border-[#F2D04E]/30">
+                <span className="text-[10px] bg-[#1E1E1E]/90 text-[#F2D04E] font-semibold px-2 py-0.5 rounded-[3px] border border-[#F2D04E]/30 pointer-events-auto">
                   {cam.resolution} • {cam.fps} FPS
                 </span>
               </div>

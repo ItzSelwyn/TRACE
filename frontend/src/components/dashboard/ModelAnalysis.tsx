@@ -107,9 +107,17 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
   const trackNum = trackId.replace('TRK-', '');
   const observationId = liveVehicle?.observation_id || liveVehicle?.observationId || `TRACE-${activeCamId.toUpperCase()}-${trackNum}`;
   const rawPlate = liveVehicle?.plate_number || liveVehicle?.plateNumber || data.plateNumber;
-  const isPlateRead = rawPlate && rawPlate !== 'NOT READ' && !rawPlate.startsWith('TRACE-');
+  const formatConfidence = (conf: any): string => {
+    if (conf === null || conf === undefined || conf === '') return 'NOT READ';
+    const num = Number(conf);
+    if (isNaN(num) || num <= 0) return 'NOT READ';
+    const pct = num <= 1.0 ? num * 100 : num;
+    return `${pct.toFixed(1)}%`;
+  };
+
+  const isPlateRead = Boolean(rawPlate && rawPlate !== 'NOT READ' && !rawPlate.startsWith('TRACE-'));
   const displayPlate = isPlateRead ? rawPlate : 'NOT READ';
-  const displayConfidence = isPlateRead ? `${liveVehicle?.ocr_confidence ?? data.ocrConfidence ?? 85}%` : 'NOT READ';
+  const displayConfidence = isPlateRead ? formatConfidence(liveVehicle?.ocr_confidence ?? data.ocrConfidence) : 'NOT READ';
   const displayVehicleType = (liveVehicle?.vehicle_type || liveVehicle?.vehicleType || data.vehicleType || 'CAR').toUpperCase();
   const displayColor = (liveVehicle?.color || data.color || 'WHITE').toUpperCase();
   const displayTimestamp = liveVehicle?.timestamp || data.timestamp || new Date().toLocaleTimeString('en-US', {

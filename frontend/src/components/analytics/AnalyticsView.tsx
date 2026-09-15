@@ -5,12 +5,27 @@ import {
   MarkerContent,
   MarkerTooltip,
   MarkerPopup,
-  MapHeatmap,
+  MapRoute,
   HeatmapPoint,
 } from '@/components/ui/map';
+import { ROAD_SEGMENTS } from '@/data/roadGeometry';
 
 export type AnalyticsTab = 'HEATMAP' | 'OD_MATRIX' | 'SEGMENT_DETAIL';
 export type TimeFilter = 'LIVE' | '1hr' | '6hrs' | '12hrs' | '24hrs';
+
+export interface TrafficRoadSegment {
+  edge_id?: string;
+  from_camera_id: string;
+  to_camera_id: string;
+  name: string;
+  density: number;
+  congestion_status: 'Optimal' | 'Moderate' | 'Critical' | string;
+  avg_speed_kmph: number;
+  speed_limit_kmph?: number;
+  color?: string;
+  vehicle_count?: number;
+  coordinates: [number, number][];
+}
 
 export interface CameraTrafficStat {
   camera_id: string;
@@ -25,6 +40,7 @@ export interface CameraTrafficStat {
   weight: number;
   status_color?: 'red' | 'yellow' | 'green';
   max_capacity?: number;
+  avg_speed_kmph?: number;
 }
 
 export interface HeatmapResponsePayload {
@@ -34,8 +50,19 @@ export interface HeatmapResponsePayload {
   total_vehicles: number;
   max_capacity: number;
   congestion_index: string;
+  avg_corridor_speed?: number;
+  segments?: TrafficRoadSegment[];
   camera_stats: CameraTrafficStat[];
   heatmap_points: Array<{ lng: number; lat: number; weight: number }>;
+}
+
+export interface ODMatrixResponsePayload {
+  corridor_name?: string;
+  subtitle?: string;
+  zones?: string[];
+  matrix?: Record<string, Record<string, number | null>>;
+  flow_rate_unit?: string;
+  entries?: Array<{ origin_zone: string; destination_zone: string; trip_count: number }>;
 }
 
 interface MonitoredSegment {
@@ -58,8 +85,8 @@ const SegmentSpeedChart: React.FC<{ filter: TimeFilter; segmentName: string }> =
 
   // Dynamic sample data based on time filter & segment congestion
   const getFilterData = () => {
-    const isBottleneck = segmentName.includes('029');
-    const isModerate = segmentName.includes('035');
+    const isBottleneck = segmentName.includes('028') || segmentName.includes('Roundabout');
+    const isModerate = segmentName.includes('023') || segmentName.includes('Nevada');
     // Offset speed to reflect actual flow condition at this camera node
     const offset = isBottleneck ? -25 : isModerate ? -8 : 15;
     const clamp = (val: number) => Math.max(18, Math.min(95, val));
@@ -263,48 +290,116 @@ export const AnalyticsView: React.FC = () => {
   const [selectedSegmentId, setSelectedSegmentId] = useState<number>(1);
   const [exportToast, setExportToast] = useState<string | null>(null);
   const [heatmapData, setHeatmapData] = useState<HeatmapResponsePayload | null>(null);
+  const [odMatrixData, setOdMatrixData] = useState<ODMatrixResponsePayload | null>(null);
 
-  // Fetch live heatmap and corridor camera traffic statistics
+  // Fetch live heatmap and corridor camera traffic statistics + dynamic OD matrix with 3s live polling
   useEffect(() => {
     let isMounted = true;
     const fetchAnalytics = async () => {
       try {
-        const res = await fetch(`/analytics/heatmap?filter=${activeFilter}`);
-        if (res.ok) {
-          const json = await res.json();
+        const [heatmapRes, odRes] = await Promise.all([
+          fetch(`/analytics/heatmap?filter=${activeFilter}`),
+          fetch(`/analytics/od-matrix?filter=${activeFilter}`),
+        ]);
+        if (heatmapRes.ok) {
+          const json = await heatmapRes.json();
           if (isMounted) {
             setHeatmapData(json);
           }
         }
+        if (odRes.ok) {
+          const odJson = await odRes.json();
+          if (isMounted) {
+            setOdMatrixData(odJson);
+          }
+        }
       } catch (err) {
-        console.error('Failed to fetch analytics heatmap:', err);
+        console.error('Failed to fetch analytics data:', err);
       }
     };
     fetchAnalytics();
+
+    // Auto-poll in LIVE mode for dynamic traffic updates from video playback
+    let pollTimer: any = null;
+    if (activeFilter === 'LIVE') {
+      pollTimer = setInterval(fetchAnalytics, 3000);
+    }
+
     return () => {
       isMounted = false;
+      if (pollTimer) clearInterval(pollTimer);
     };
   }, [activeFilter]);
 
-  // Heatmap Point Data for Maplibre/mapcn
+  // Default CityFlow S05 road traffic segments connecting the corridor cameras
+  const DEFAULT_ROAD_SEGMENTS: TrafficRoadSegment[] = [
+    {
+      from_camera_id: 'c020',
+      to_camera_id: 'c023',
+      name: 'University Ave (Walnut to Nevada)',
+      density: 22,
+      congestion_status: 'Optimal',
+      avg_speed_kmph: 56.5,
+      color: '#1B7A43',
+      vehicle_count: 32,
+      coordinates: ROAD_SEGMENTS['c020_c023'] || [],
+    },
+    {
+      from_camera_id: 'c023',
+      to_camera_id: 'c028',
+      name: 'University Ave (Nevada to Roundabout)',
+      density: 26,
+      congestion_status: 'Optimal',
+      avg_speed_kmph: 53.5,
+      color: '#1B7A43',
+      vehicle_count: 38,
+      coordinates: ROAD_SEGMENTS['c023_c028'] || [],
+    },
+    {
+      from_camera_id: 'c028',
+      to_camera_id: 'c029',
+      name: 'University Ave (Roundabout to Alta Pl)',
+      density: 45,
+      congestion_status: 'Moderate',
+      avg_speed_kmph: 43.0,
+      color: '#F2D04E',
+      vehicle_count: 46,
+      coordinates: ROAD_SEGMENTS['c028_c029'] || [],
+    },
+  ];
+
+  const roadSegments: TrafficRoadSegment[] = (heatmapData?.segments && heatmapData.segments.length > 0)
+    ? heatmapData.segments.map(seg => ({
+        ...seg,
+        coordinates: (seg.coordinates && seg.coordinates.length > 1)
+          ? seg.coordinates
+          : (ROAD_SEGMENTS[`${seg.from_camera_id}_${seg.to_camera_id}`] ||
+             ROAD_SEGMENTS[`${seg.from_camera_id.slice(0, 4)}_${seg.to_camera_id.slice(0, 4)}`] ||
+             DEFAULT_ROAD_SEGMENTS.find(d => d.name === seg.name)?.coordinates || []),
+      }))
+    : DEFAULT_ROAD_SEGMENTS;
+
+  // Heatmap Point Data for Maplibre/mapcn fallback
   const heatmapPoints: HeatmapPoint[] = (heatmapData?.heatmap_points && heatmapData.heatmap_points.length > 0)
     ? heatmapData.heatmap_points
     : [
-        { lng: -90.6710, lat: 42.5085, weight: 1.0 },
-        { lng: -90.6635, lat: 42.5115, weight: 0.65 },
-        { lng: -90.6865, lat: 42.5039, weight: 0.32 },
-        { lng: -90.6784, lat: 42.5055, weight: 0.26 },
+        { lng: -90.688350, lat: 42.498360, weight: 0.35 },
+        { lng: -90.681350, lat: 42.499140, weight: 0.32 },
+        { lng: -90.675620, lat: 42.499860, weight: 0.28 },
+        { lng: -90.693500, lat: 42.499190, weight: 0.55 },
       ];
 
-  // OD Matrix Zones & Data Structure for CityFlow Corridor
-  const zones = ['CAM-020 (Locust)', 'CAM-023 (Delhi)', 'CAM-029 (University)', 'CAM-035 (Hwy 20)'];
+  // OD Matrix Zones & Data Structure for CityFlow S05 Corridor
+  const zones = odMatrixData?.zones || ['CAM-020 (Walnut)', 'CAM-023 (Nevada)', 'CAM-028 (Roundabout)', 'CAM-029 (Alta Pl)'];
 
-  const matrixData: Record<string, Record<string, number | null>> = {
-    'CAM-020 (Locust)': { 'CAM-020 (Locust)': null, 'CAM-023 (Delhi)': 185, 'CAM-029 (University)': 295, 'CAM-035 (Hwy 20)': 110 },
-    'CAM-023 (Delhi)': { 'CAM-020 (Locust)': 160, 'CAM-023 (Delhi)': null, 'CAM-029 (University)': 340, 'CAM-035 (Hwy 20)': 125 },
-    'CAM-029 (University)': { 'CAM-020 (Locust)': 310, 'CAM-023 (Delhi)': 420, 'CAM-029 (University)': null, 'CAM-035 (Hwy 20)': 480 },
-    'CAM-035 (Hwy 20)': { 'CAM-020 (Locust)': 95, 'CAM-023 (Delhi)': 140, 'CAM-029 (University)': 380, 'CAM-035 (Hwy 20)': null },
-  };
+  const matrixData: Record<string, Record<string, number | null>> = (odMatrixData?.matrix && Object.keys(odMatrixData.matrix).length > 0)
+    ? odMatrixData.matrix
+    : {
+        'CAM-020 (Walnut)': { 'CAM-020 (Walnut)': null, 'CAM-023 (Nevada)': 165, 'CAM-028 (Roundabout)': 140, 'CAM-029 (Alta Pl)': 95 },
+        'CAM-023 (Nevada)': { 'CAM-020 (Walnut)': 150, 'CAM-023 (Nevada)': null, 'CAM-028 (Roundabout)': 175, 'CAM-029 (Alta Pl)': 120 },
+        'CAM-028 (Roundabout)': { 'CAM-020 (Walnut)': 135, 'CAM-023 (Nevada)': 170, 'CAM-028 (Roundabout)': null, 'CAM-029 (Alta Pl)': 235 },
+        'CAM-029 (Alta Pl)': { 'CAM-020 (Walnut)': 90, 'CAM-023 (Nevada)': 125, 'CAM-028 (Roundabout)': 225, 'CAM-029 (Alta Pl)': null },
+      };
 
   // Monitored Segments List based on dynamic corridor camera stats
   const monitoredSegments: MonitoredSegment[] = (heatmapData?.camera_stats && heatmapData.camera_stats.length > 0)
@@ -329,55 +424,55 @@ export const AnalyticsView: React.FC = () => {
     : [
         {
           id: 1,
-          title: 'Camera 029 (N Grandview & University)',
-          shortName: 'CAM-029 (University)',
-          statusColor: 'red',
-          vehiclesTravelling: 218,
-          maxCapacity: 240,
+          title: 'Camera 020 (University Ave & Walnut)',
+          shortName: 'CAM-020 (Walnut)',
+          statusColor: 'green',
+          vehiclesTravelling: 14,
+          maxCapacity: 200,
           timestamp: '10:23:01 am',
-          congestionIndex: 'Critical',
-          congestionColor: 'red',
-          lng: -90.6710,
-          lat: 42.5085,
+          congestionIndex: 'Optimal',
+          congestionColor: 'green',
+          lng: -90.675620,
+          lat: 42.499860,
         },
         {
           id: 2,
-          title: 'Camera 035 (Highway 20 Corridor)',
-          shortName: 'CAM-035 (Highway 20)',
-          statusColor: 'yellow',
-          vehiclesTravelling: 114,
-          maxCapacity: 170,
+          title: 'Camera 023 (University Ave & Nevada)',
+          shortName: 'CAM-023 (Nevada)',
+          statusColor: 'green',
+          vehiclesTravelling: 18,
+          maxCapacity: 200,
           timestamp: '10:23:01 am',
-          congestionIndex: 'Moderate',
-          congestionColor: 'yellow',
-          lng: -90.6635,
-          lat: 42.5115,
+          congestionIndex: 'Optimal',
+          congestionColor: 'green',
+          lng: -90.681350,
+          lat: 42.499140,
         },
         {
           id: 3,
-          title: 'Camera 020 (W Locust & Grandview)',
-          shortName: 'CAM-020 (W Locust)',
+          title: 'Camera 028 (Grandview Roundabout)',
+          shortName: 'CAM-028 (Roundabout)',
           statusColor: 'green',
-          vehiclesTravelling: 68,
-          maxCapacity: 200,
+          vehiclesTravelling: 20,
+          maxCapacity: 240,
           timestamp: '10:23:01 am',
           congestionIndex: 'Optimal',
           congestionColor: 'green',
-          lng: -90.6865,
-          lat: 42.5039,
+          lng: -90.688350,
+          lat: 42.498360,
         },
         {
           id: 4,
-          title: 'Camera 023 (Grandview & Delhi)',
-          shortName: 'CAM-023 (Delhi)',
-          statusColor: 'green',
-          vehiclesTravelling: 52,
+          title: 'Camera 029 (University Ave & Alta Pl)',
+          shortName: 'CAM-029 (Alta Pl)',
+          statusColor: 'yellow',
+          vehiclesTravelling: 26,
           maxCapacity: 200,
           timestamp: '10:23:01 am',
-          congestionIndex: 'Optimal',
-          congestionColor: 'green',
-          lng: -90.6784,
-          lat: 42.5055,
+          congestionIndex: 'Moderate',
+          congestionColor: 'yellow',
+          lng: -90.693500,
+          lat: 42.499190,
         },
       ];
 
@@ -388,13 +483,23 @@ export const AnalyticsView: React.FC = () => {
     if (val === null) {
       return { bg: 'bg-[#151515]', text: 'text-[#666666]', label: '-' };
     }
-    if (val < 200) {
-      return { bg: 'bg-[#14291D]/80 hover:bg-[#14291D]', text: 'text-[#1B7A43]', label: `${val} v/h` };
+    const unit = odMatrixData?.flow_rate_unit || (activeFilter === 'LIVE' ? 'v/h' : 'trips');
+    const formattedVal = val.toLocaleString();
+
+    // In historical modes, normalize to hourly rate for consistent flow coloring
+    const hourlyRate = activeFilter === 'LIVE' ? val : (
+      activeFilter === '1hr' ? val :
+      activeFilter === '6hrs' ? val / 5.8 :
+      activeFilter === '12hrs' ? val / 11.5 : val / 22.8
+    );
+
+    if (hourlyRate < 200) {
+      return { bg: 'bg-[#14291D]/80 hover:bg-[#14291D]', text: 'text-[#1B7A43]', label: `${formattedVal} ${unit}` };
     }
-    if (val <= 400) {
-      return { bg: 'bg-[#2E2A14]/80 hover:bg-[#2E2A14]', text: 'text-[#F2D04E]', label: `${val} v/h` };
+    if (hourlyRate <= 400) {
+      return { bg: 'bg-[#2E2A14]/80 hover:bg-[#2E2A14]', text: 'text-[#F2D04E]', label: `${formattedVal} ${unit}` };
     }
-    return { bg: 'bg-[#3A1717]/80 hover:bg-[#3A1717]', text: 'text-[#971D1B]', label: `${val} v/h` };
+    return { bg: 'bg-[#3A1717]/80 hover:bg-[#3A1717]', text: 'text-[#971D1B]', label: `${formattedVal} ${unit}` };
   };
 
   // Export Handlers
@@ -476,7 +581,7 @@ export const AnalyticsView: React.FC = () => {
         </button>
       </div>
 
-      {/* ================= 2. HEATMAP SECTION (Strokes Removed) ================= */}
+      {/* ================= 2. HEATMAP SECTION (Google Maps-Style Traffic Vector Flow) ================= */}
       {activeTab === 'HEATMAP' && (
         <div className="bg-[#151515] rounded-[3px] p-6 flex flex-col gap-6">
           {/* Header Metadata Section */}
@@ -487,7 +592,7 @@ export const AnalyticsView: React.FC = () => {
               <div className="flex items-center gap-3">
                 <img src="/assets/heatmap_location.svg" alt="Location Pin" className="w-6 h-7 object-contain" />
                 <h1 className="text-2xl md:text-3xl font-bold font-heading text-white tracking-wide">
-                  {heatmapData?.corridor_name || 'Grandview & Highway 20 Corridor'}
+                  {heatmapData?.corridor_name || 'University Ave Corridor (S05)'}
                 </h1>
               </div>
 
@@ -511,9 +616,9 @@ export const AnalyticsView: React.FC = () => {
               </div>
             </div>
 
-            {/* Subtitle Description */}
-            <p className="text-sm md:text-base text-[#AEA793] font-body leading-relaxed max-w-4xl">
-              {heatmapData?.subtitle || 'Flow velocity is 74% below optimal. Peak congestion originating from intersection node CAM-029 (N Grandview & University).'}
+            {/* Corridor Subtitle */}
+            <p className="text-xs md:text-sm font-body text-[#A0A0A0] max-w-4xl leading-relaxed">
+              {heatmapData?.subtitle || 'Flow velocity is optimal across cameras 020, 023, 028 with moderate traffic near Cam 029. University Ave corridor monitored across 4 synchronized cameras.'}
             </p>
 
             {/* Info Metrics Grid Row */}
@@ -521,12 +626,12 @@ export const AnalyticsView: React.FC = () => {
               <div className="text-xs md:text-sm font-body text-[#AEA793] space-y-2">
                 <div className="flex items-center gap-2">
                   <img src="/assets/heatmap_camera.svg" alt="Cameras" className="w-4 h-4 object-contain" />
-                  <span>{heatmapData?.cameras_label || 'Camera 020, Camera 023, Camera 029, Camera 035'}</span>
+                  <span>{heatmapData?.cameras_label || 'Camera 020, Camera 023, Camera 028, Camera 029'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <img src="/assets/heatmap_vehicles.svg" alt="Vehicles" className="w-4 h-4 object-contain" />
                   <span className="text-[#AEA793] font-semibold font-body">
-                    {heatmapData ? `${heatmapData.total_vehicles.toLocaleString()} vehicles` : '452 vehicles'}
+                    {heatmapData ? `${heatmapData.total_vehicles.toLocaleString()} vehicles` : '78 vehicles'}
                   </span>
                 </div>
               </div>
@@ -540,57 +645,128 @@ export const AnalyticsView: React.FC = () => {
             </div>
           </div>
 
-          {/* Interactive Heatmap Map (MapCN Map - Stroke Removed) */}
+          {/* Interactive Google Maps-Style Traffic Corridor (Dual-Layer Vector Routes) */}
           <div className="relative rounded-[3px] overflow-hidden bg-[#000000] h-[520px] w-full">
-            <Map center={[-90.675, 42.507]} zoom={13.8}>
-              <MapHeatmap data={heatmapPoints} radius={45} opacity={0.88} intensity={1.3} />
-
-              {monitoredSegments.map((seg) => (
-                <MapMarker key={seg.id} longitude={seg.lng} latitude={seg.lat}>
-                  <MarkerContent>
-                    <div
-                      className={`w-4 h-4 rounded-full border-2 border-white ${
-                        seg.statusColor === 'red'
-                          ? 'bg-[#971D1B] animate-pulse shadow-[0_0_12px_#971D1B]'
-                          : seg.statusColor === 'yellow'
-                          ? 'bg-[#F2D04E] shadow-[0_0_8px_#F2D04E]'
-                          : 'bg-[#1B7A43]'
-                      }`}
+            <Map center={[-90.6847, 42.4991]} zoom={14.8}>
+              {/* 1. Google Maps Vector Traffic Routes on University Ave */}
+              {roadSegments.map((seg, idx) => {
+                const segColor = seg.color || (
+                  seg.avg_speed_kmph < 35.0 ? '#971D1B' :
+                  seg.avg_speed_kmph < 50.0 ? '#F2D04E' : '#1B7A43'
+                );
+                return (
+                  <React.Fragment key={seg.name || idx}>
+                    {/* Dark casing/halo under traffic line for crisp contrast */}
+                    <MapRoute
+                      coordinates={seg.coordinates}
+                      color="#000000"
+                      width={9}
+                      opacity={0.75}
                     />
-                  </MarkerContent>
-                  <MarkerTooltip>{seg.title}</MarkerTooltip>
-                  <MarkerPopup>
-                    <div className="bg-[#161616] p-3 rounded-lg text-left space-y-1 font-body text-xs min-w-[180px]">
-                      <p className="font-bold text-white font-body">{seg.title}</p>
-                      <p className="text-[#A0A0A0]">
-                        Vehicles: <strong className="text-white">{seg.vehiclesTravelling}</strong>
-                      </p>
-                      <p className="text-[#A0A0A0]">
-                        Congestion:{' '}
-                        <strong
-                          className={
-                            seg.congestionColor === 'red'
-                              ? 'text-[#971D1B]'
-                              : seg.congestionColor === 'yellow'
-                              ? 'text-[#F2D04E]'
-                              : 'text-[#1B7A43]'
-                          }
+                    {/* Vibrant vector traffic flow line */}
+                    <MapRoute
+                      coordinates={seg.coordinates}
+                      color={segColor}
+                      width={5.5}
+                      opacity={0.96}
+                    />
+                  </React.Fragment>
+                );
+              })}
+
+              {/* 2. S05 Corridor Camera Markers with Dynamic Velocity Tooltips */}
+              {monitoredSegments.map((cam) => {
+                const stat = heatmapData?.camera_stats?.find(
+                  (s) => s.camera_id === cam.title || s.name === cam.title || (cam.shortName && s.short_name?.includes(cam.shortName.slice(0, 7)))
+                );
+                const speed = stat?.avg_speed_kmph || (cam.statusColor === 'red' ? 31.0 : cam.statusColor === 'yellow' ? 44.0 : 55.0);
+                const vCount = stat?.vehicle_count || cam.vehiclesTravelling;
+
+                return (
+                  <MapMarker key={cam.id} longitude={cam.lng} latitude={cam.lat}>
+                    <MarkerContent>
+                      <div className="relative group cursor-pointer">
+                        {/* Circular status indicator */}
+                        <div
+                          className={`w-5 h-5 rounded-full flex items-center justify-center border-2 border-white/90 shadow-lg ${
+                            cam.statusColor === 'red'
+                              ? 'bg-[#971D1B] shadow-[0_0_12px_#971D1B]'
+                              : cam.statusColor === 'yellow'
+                              ? 'bg-[#F2D04E] shadow-[0_0_8px_#F2D04E]'
+                              : 'bg-[#1B7A43] shadow-[0_0_8px_#1B7A43]'
+                          }`}
                         >
-                          {seg.congestionIndex}
-                        </strong>
-                      </p>
-                    </div>
-                  </MarkerPopup>
-                </MapMarker>
-              ))}
+                          <div className="w-1.5 h-1.5 rounded-full bg-white/90" />
+                        </div>
+
+                        {/* Camera short label badge */}
+                        <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 px-1.5 py-0.5 bg-black/90 border border-white/20 rounded text-[9px] font-bold text-white whitespace-nowrap pointer-events-none shadow">
+                          {cam.shortName.split(' ')[0]}
+                        </div>
+                      </div>
+                    </MarkerContent>
+                    <MarkerTooltip>{cam.title} • {speed} km/h</MarkerTooltip>
+                    <MarkerPopup>
+                      <div className="bg-[#161616] p-3.5 rounded-lg text-left space-y-1.5 font-body text-xs min-w-[210px] border border-white/10 shadow-2xl">
+                        <p className="font-bold text-white text-sm font-heading">{cam.title}</p>
+                        <div className="text-[#A0A0A0] space-y-1 pt-1">
+                          <div className="flex justify-between">
+                            <span>Traffic Velocity:</span>
+                            <strong className="text-[#F2D04E] font-mono">{speed} km/h</strong>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Vehicles in Feed:</span>
+                            <strong className="text-white font-mono">{vCount}</strong>
+                          </div>
+                          <div className="flex justify-between items-center pt-0.5">
+                            <span>Flow Status:</span>
+                            <span
+                              className={`font-bold px-1.5 py-0.5 rounded text-[10px] uppercase ${
+                                cam.congestionColor === 'red'
+                                   ? 'bg-[#971D1B]/30 text-[#FF6B6B] border border-[#971D1B]'
+                                   : cam.congestionColor === 'yellow'
+                                   ? 'bg-[#F2D04E]/20 text-[#F2D04E] border border-[#F2D04E]/50'
+                                   : 'bg-[#1B7A43]/20 text-[#4ADE80] border border-[#1B7A43]'
+                              }`}
+                            >
+                              {cam.congestionIndex}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </MarkerPopup>
+                  </MapMarker>
+                );
+              })}
             </Map>
 
-            <div className="absolute bottom-4 left-4 z-10 pointer-events-none">
-              <img
-                src="/assets/traffic_congestion_index.svg"
-                alt="Traffic Congestion Index"
-                className="w-auto h-20 md:h-24 object-contain"
-              />
+            {/* Google Maps-Style Traffic Legend & Live Velocity Badge */}
+            <div className="absolute bottom-4 left-4 z-10 bg-[#121212]/95 backdrop-blur-md px-4 py-3 rounded-[4px] border border-white/10 shadow-2xl font-body text-xs min-w-[240px] space-y-2 select-none pointer-events-auto">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />
+                  <span className="font-bold text-white uppercase tracking-wider text-[11px] font-heading">
+                    TRAFFIC FLOW
+                  </span>
+                </div>
+                <span className="text-[10px] text-[#F2D04E] font-mono font-bold">
+                  Avg {heatmapData?.avg_corridor_speed || 52} km/h
+                </span>
+              </div>
+
+              {/* Segmented Google Maps Bar */}
+              <div className="space-y-1">
+                <div className="h-2 w-full rounded-full flex overflow-hidden border border-white/5">
+                  <div className="h-full w-1/3 bg-[#1B7A43]" title="Fast (> 50 km/h)" />
+                  <div className="h-full w-1/3 bg-[#F2D04E]" title="Moderate (35 - 50 km/h)" />
+                  <div className="h-full w-1/3 bg-[#971D1B]" title="Slow (< 35 km/h)" />
+                </div>
+                <div className="flex justify-between text-[10px] text-[#A0A0A0] font-medium pt-0.5">
+                  <span className="text-[#1B7A43] font-semibold">Fast (&gt;50)</span>
+                  <span className="text-[#F2D04E] font-semibold">Moderate</span>
+                  <span className="text-[#971D1B] font-semibold">Slow (&lt;35)</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -606,7 +782,7 @@ export const AnalyticsView: React.FC = () => {
               <div className="flex items-center gap-3">
                 <img src="/assets/heatmap_location.svg" alt="Location Pin" className="w-6 h-7 object-contain" />
                 <h1 className="text-2xl md:text-3xl font-bold font-heading text-white tracking-wide">
-                  {heatmapData?.corridor_name || 'Grandview & Highway 20 Corridor'}
+                  {odMatrixData?.corridor_name || heatmapData?.corridor_name || 'University Ave Corridor (S05)'}
                 </h1>
               </div>
 
@@ -632,7 +808,7 @@ export const AnalyticsView: React.FC = () => {
 
             {/* Subtitle Description */}
             <p className="text-sm md:text-base text-[#AEA793] font-body max-w-4xl leading-relaxed">
-              Cross-sector vehicle velocity, journey counts, and throughput volume computed via multi-camera plate re-identification.
+              {odMatrixData?.subtitle || 'Dynamic cross-camera vehicle flow and hourly throughput computed in real-time across 4 synchronized corridor cameras.'}
             </p>
           </div>
 
@@ -640,15 +816,15 @@ export const AnalyticsView: React.FC = () => {
           <div className="flex flex-wrap items-center gap-6 text-xs md:text-sm font-body font-medium text-[#AEA793] pt-2">
             <div className="flex items-center gap-2">
               <span className="w-3.5 h-3.5 rounded-sm bg-[#1B7A43]" />
-              <span>Normal Flow ( &lt; 200 v/h )</span>
+              <span>{activeFilter === 'LIVE' ? 'Normal Flow ( < 200 v/h )' : 'Normal Flow'}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3.5 h-3.5 rounded-sm bg-[#F2D04E]" />
-              <span>Moderate Flow ( 200 - 400 v/h )</span>
+              <span>{activeFilter === 'LIVE' ? 'Moderate Flow ( 200 - 400 v/h )' : 'Moderate Flow'}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3.5 h-3.5 rounded-sm bg-[#971D1B]" />
-              <span>Heavy Flow ( &gt; 400 v/h )</span>
+              <span>{activeFilter === 'LIVE' ? 'Heavy Flow ( > 400 v/h )' : 'Heavy Flow'}</span>
             </div>
           </div>
 
@@ -678,7 +854,7 @@ export const AnalyticsView: React.FC = () => {
                     </td>
 
                     {zones.map((destZone) => {
-                      const val = matrixData[originZone][destZone];
+                      const val = matrixData[originZone]?.[destZone] ?? null;
                       const style = getCellStyling(val);
                       return (
                         <td

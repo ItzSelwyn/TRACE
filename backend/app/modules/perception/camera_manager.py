@@ -25,6 +25,7 @@ from app.modules.perception.persistence import (
     is_db_in_backoff,
     persist_fused_observation,
     record_db_error,
+    update_observation_plate,
     upsert_observation_embedding,
 )
 from app.modules.perception.pipeline import _detect_crop_color
@@ -43,31 +44,31 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
 _CAMERA_GEO_METADATA: Dict[str, Dict[str, Any]] = {
     "c020": {
-        "name": "Camera 020 (W Locust & Grandview)",
-        "location": "W Locust & Grandview",
-        "latitude": 42.5039,
-        "longitude": -90.6865,
+        "name": "Camera 020 (University Ave & Walnut)",
+        "location": "University Ave & Walnut",
+        "latitude": 42.499860,
+        "longitude": -90.675620,
         "resolution": "1080P",
     },
     "c023": {
-        "name": "Camera 023 (Grandview & Delhi)",
-        "location": "Grandview & Delhi",
-        "latitude": 42.5055,
-        "longitude": -90.6784,
+        "name": "Camera 023 (University Ave & Nevada)",
+        "location": "University Ave & Nevada",
+        "latitude": 42.499140,
+        "longitude": -90.681350,
+        "resolution": "1080P",
+    },
+    "c028": {
+        "name": "Camera 028 (Grandview Roundabout)",
+        "location": "Grandview Roundabout",
+        "latitude": 42.498360,
+        "longitude": -90.688350,
         "resolution": "1080P",
     },
     "c029": {
-        "name": "Camera 029 (N Grandview & University)",
-        "location": "N Grandview & University",
-        "latitude": 42.5085,
-        "longitude": -90.6710,
-        "resolution": "1080P",
-    },
-    "c035": {
-        "name": "Camera 035 (Highway 20 Corridor)",
-        "location": "Highway 20 Corridor",
-        "latitude": 42.5115,
-        "longitude": -90.6635,
+        "name": "Camera 029 (University Ave & Alta Pl)",
+        "location": "University Ave & Alta Pl",
+        "latitude": 42.499190,
+        "longitude": -90.693500,
         "resolution": "1080P",
     },
 }
@@ -178,7 +179,7 @@ class CameraPlaybackController:
         self.master_time_s: float = 0.0
         self.loop_scenario: bool = True
         self.last_tick_time: float = time.time()
-        self.max_scenario_duration_s: float = 190.0
+        self.max_scenario_duration_s: float = 425.5
         self.seek_version: int = 0
 
     def get_status(self) -> Dict[str, Any]:
@@ -261,13 +262,13 @@ class ManagedCameraWorker:
         # Configuration properties
         geo = _CAMERA_GEO_METADATA.get(self.camera_id, {})
         self.name: str = config.get("name") or geo.get("name") or f"Camera {self.camera_id.upper()}"
-        self.location: str = config.get("location") or geo.get("location") or "CityFlow S04 Corridor"
-        self.latitude: float = float(config.get("latitude") or geo.get("latitude") or 42.507)
-        self.longitude: float = float(config.get("longitude") or geo.get("longitude") or -90.675)
+        self.location: str = config.get("location") or geo.get("location") or "CityFlow S05 Corridor"
+        self.latitude: float = float(config.get("latitude") or geo.get("latitude") or 42.4991)
+        self.longitude: float = float(config.get("longitude") or geo.get("longitude") or -90.6847)
         self.resolution: str = config.get("resolution") or geo.get("resolution") or "1080P"
         self.source_type: str = config.get("source_type", "video").lower()
         self.source_path: str = config.get("source_path", "")
-        self.scenario: str = config.get("scenario", "S04")
+        self.scenario: str = config.get("scenario", "S05")
         self.fps: float = float(config.get("fps", 10.0))
         self.enabled: bool = bool(config.get("enabled", True))
         self.sync_offset_s: float = float(config.get("sync_offset_s") or 0.0)
@@ -289,6 +290,16 @@ class ManagedCameraWorker:
         self.model: Optional[Any] = _create_yolo_model()
         self.current_detection_count: int = 0
 
+        # Fast live traffic metrics cache (lock-free read for analytics)
+        self._stats_lock = threading.Lock()
+        base_c = 28 if self.camera_id == "c029" else 20 if self.camera_id == "c028" else 15 if self.camera_id == "c023" else 18
+        base_s = 42.0 if self.camera_id == "c029" else 52.0 if self.camera_id == "c028" else 54.0 if self.camera_id == "c023" else 56.0
+        self._live_traffic_stats = {
+            "active_vehicles": base_c,
+            "avg_speed_kmph": base_s,
+        }
+        self._cached_plot_boxes: List[Tuple[int, int, int, int, int, str, Tuple[int, int, int]]] = []
+
         # Active Observation
         self.active_vehicle_data: Dict[str, Any] = {
             "camera_id": self.camera_id,
@@ -298,6 +309,7 @@ class ManagedCameraWorker:
             "plate_number": "NOT READ",
             "ocr_confidence": None,
             "ocr_status": "NOT READ",
+            "detection_confidence": None,
             "vehicle_type": "CAR",
             "color": "WHITE",
             "timestamp": time.strftime("%I:%M:%S %p"),
@@ -456,6 +468,10 @@ class ManagedCameraWorker:
         self.frame_count = total_frames
         self.total_frames = total_frames
         video_fps = cap.get(cv2.CAP_PROP_FPS) or self.fps or 10.0
+        if total_frames > 0 and video_fps > 0:
+            dur = (total_frames / video_fps) + (self.sync_offset_s or 0.0)
+            if dur > self.controller.max_scenario_duration_s:
+                self.controller.max_scenario_duration_s = round(dur, 3)
 
         last_rendered_frame_idx = -1
         next_frame_time = time.monotonic()
@@ -657,6 +673,11 @@ class ManagedCameraWorker:
             frame_idx += 1
             self.current_frame_idx = frame_idx
 
+            # If plate has not been confirmed yet, periodically re-evaluate perception every 2-3 seconds
+            has_confirmed = any(t.get("plate_confirmed") for t in self.vehicle_tracks.values())
+            if not has_confirmed and (frame_idx % int(max(5, self.fps * 2)) == 0):
+                self._process_and_cache_frame(letterboxed.copy(), frame_idx, generation, stop_event)
+
             # Update OSD timestamp on letterboxed raw frame smoothly without warping
             raw_osd = letterboxed.copy()
             sync_label = "SYNC" if self.controller.sync_mode == "synchronized" else "INDEP"
@@ -675,6 +696,7 @@ class ManagedCameraWorker:
                 with self._lock:
                     if self._generation == generation and self._running and not stop_event.is_set():
                         self.cached_raw_jpeg = raw_buf.tobytes()
+                        self._frame_cond.notify_all()
 
             stop_event.wait(1.0 / max(1.0, self.fps))
 
@@ -858,14 +880,14 @@ class ManagedCameraWorker:
                             trk["ocr_in_flight"] = True
                             ocr_runs_this_frame += 1
                             plate_crop = extract_plate_crop(veh_crop)
-                            if plate_crop is not None and plate_crop.size > 0:
-                                self._bg_executor.submit(
-                                    self._async_ocr_task,
-                                    matched_id,
-                                    track_id_str,
-                                    frame_id,
-                                    plate_crop.copy(),
-                                )
+                            self._bg_executor.submit(
+                                self._async_ocr_task,
+                                matched_id,
+                                track_id_str,
+                                frame_id,
+                                plate_crop.copy() if plate_crop is not None and plate_crop.size > 0 else None,
+                                veh_crop.copy() if veh_crop is not None and veh_crop.size > 0 else None,
+                            )
 
                         fused_record = self.fusion.fuse_track(
                             camera_id=self.camera_id,
@@ -876,6 +898,9 @@ class ManagedCameraWorker:
 
                         plate_text = fused_record.get("fused_plate_text", "NOT READ")
                         ocr_conf = fused_record.get("fused_confidence")
+                        if plate_text == "NOT READ" and trk.get("plate_number") and trk.get("plate_number") != "NOT READ":
+                            plate_text = trk["plate_number"]
+                            ocr_conf = trk.get("ocr_confidence")
                         ocr_status = "READ" if plate_text != "NOT READ" else "NOT READ"
 
                         # Update recent detections list
@@ -900,7 +925,7 @@ class ManagedCameraWorker:
                         # Persist observation to DB (Asynchronously on background thread to never stall video FPS)
                         if self._db_engine and not is_db_in_backoff():
                             if not trk.get("persisted", False) and not trk.get("persist_in_flight", False):
-                                if is_moving or trk["frames"] >= 5:
+                                if is_moving or trk["frames"] >= 5 or self.source_type == "image":
                                     trk["persist_in_flight"] = True
                                     best_crop_copy = trk.get("best_crop").copy() if trk.get("best_crop") is not None else None
                                     crops_copy = [c.copy() for c in trk.get("crops", [])]
@@ -945,6 +970,7 @@ class ManagedCameraWorker:
                                 "plate_number": plate_text,
                                 "ocr_confidence": ocr_conf,
                                 "ocr_status": ocr_status,
+                                "detection_confidence": round(float(conf), 3),
                                 "vehicle_type": stable_type,
                                 "color": stable_color,
                                 "timestamp": trk.get("first_seen", current_time_str),
@@ -1016,30 +1042,155 @@ class ManagedCameraWorker:
             self.current_frame_idx = frame_id
             self._frame_cond.notify_all()
 
-    def _async_ocr_task(self, matched_id: int, track_id_str: str, frame_id: int, plate_crop: Optional[np.ndarray]):
-        """Execute PaddleOCR in background thread pool without stalling video rendering."""
+    def _async_ocr_task(
+        self,
+        matched_id: int,
+        track_id_str: str,
+        frame_id: int,
+        plate_crop: Optional[np.ndarray],
+        veh_crop: Optional[np.ndarray],
+    ):
+        """Execute PaddleOCR in background thread pool with crop fallback, state sync, and DB persistence."""
         try:
-            if plate_crop is None or plate_crop.size == 0:
+            veh_dims = f"{veh_crop.shape[0]}x{veh_crop.shape[1]}" if veh_crop is not None and veh_crop.size > 0 else "0x0"
+            plate_dims = f"{plate_crop.shape[0]}x{plate_crop.shape[1]}" if plate_crop is not None and plate_crop.size > 0 else "0x0"
+
+            if (plate_crop is None or plate_crop.size == 0) and (veh_crop is None or veh_crop.size == 0):
+                logger.info(
+                    f"[OCR DIAGNOSTIC] cam={self.camera_id} | track={track_id_str} | veh_crop={veh_dims} | "
+                    f"plate_crop={plate_dims} | raw='' | norm='' | conf=0.000 | rejected: crop_empty_or_too_small"
+                )
                 return
-            ocr_res = read_plate_image(plate_crop, min_confidence=0.20)
-            if ocr_res:
-                best_ocr = max(ocr_res, key=lambda x: x["confidence"])
+
+            ocr_res = None
+            if plate_crop is not None and plate_crop.size > 0:
+                ocr_res = read_plate_image(plate_crop, min_confidence=0.20)
+
+            # Fallback to vehicle crop if plate crop yielded no detection or low confidence
+            if (not ocr_res or max(ocr_res, key=lambda x: x["confidence"])["confidence"] < 0.60) and veh_crop is not None and veh_crop.size > 0:
+                veh_ocr = read_plate_image(veh_crop, min_confidence=0.20)
+                if veh_ocr:
+                    best_veh = max(veh_ocr, key=lambda x: x["confidence"])
+                    if not ocr_res or best_veh["confidence"] > max(ocr_res, key=lambda x: x["confidence"])["confidence"]:
+                        ocr_res = veh_ocr
+
+            if not ocr_res:
+                logger.info(
+                    f"[OCR DIAGNOSTIC] cam={self.camera_id} | track={track_id_str} | veh_crop={veh_dims} | "
+                    f"plate_crop={plate_dims} | raw='' | norm='' | conf=0.000 | rejected: no_text_detected"
+                )
+                return
+
+            best_ocr = max(ocr_res, key=lambda x: x["confidence"])
+            raw_text = str(best_ocr.get("raw_text", "")).strip()
+            norm_text = str(best_ocr.get("normalized_text") or normalize_plate_text(raw_text)).strip()
+            conf = float(best_ocr.get("confidence", 0.0))
+
+            if len(norm_text) < 4 or conf < 0.35:
+                reason = "text_too_short" if len(norm_text) < 4 else f"confidence_too_low_{conf:.2f}"
+                logger.info(
+                    f"[OCR DIAGNOSTIC] cam={self.camera_id} | track={track_id_str} | veh_crop={veh_dims} | "
+                    f"plate_crop={plate_dims} | raw='{raw_text}' | norm='{norm_text}' | conf={conf:.3f} | rejected: {reason}"
+                )
+                return
+
+            logger.info(
+                f"[OCR DIAGNOSTIC] cam={self.camera_id} | track={track_id_str} | veh_crop={veh_dims} | "
+                f"plate_crop={plate_dims} | raw='{raw_text}' | norm='{norm_text}' | conf={conf:.3f} | accepted"
+            )
+
+            now_iso = datetime.now(timezone.utc).isoformat()
+
+            # Record read in temporal fusion
+            self.fusion.add_ocr_read(
+                camera_id=self.camera_id,
+                track_id=track_id_str,
+                frame_id=frame_id,
+                raw_text=raw_text,
+                confidence=conf,
+                timestamp=now_iso,
+            )
+
+            # Re-evaluate fused track
+            vehicle_type = "car"
+            vehicle_colour = "white"
+            obs_uuid = None
+            persisted = False
+            with self._lock:
+                trk = self.vehicle_tracks.get(matched_id)
+                if trk:
+                    trk["ocr_success_count"] = trk.get("ocr_success_count", 0) + 1
+                    if conf >= 0.85:
+                        trk["plate_confirmed"] = True
+                    vehicle_type = trk.get("type", "car")
+                    vehicle_colour = trk.get("color", "white")
+                    obs_uuid = trk.get("obs_uuid")
+                    persisted = trk.get("persisted", False)
+
+            fused_record = self.fusion.fuse_track(
+                camera_id=self.camera_id,
+                track_id=track_id_str,
+                vehicle_type=vehicle_type,
+                vehicle_colour=vehicle_colour,
+            )
+
+            fused_plate = fused_record.get("fused_plate_text", norm_text)
+            fused_conf = fused_record.get("fused_confidence", conf)
+            ocr_status = "READ" if fused_plate != "NOT READ" else "NOT READ"
+
+            with self._lock:
+                trk = self.vehicle_tracks.get(matched_id)
+                if trk:
+                    trk["plate_number"] = fused_plate
+                    trk["ocr_confidence"] = fused_conf
+
+                # Update active vehicle metadata if it belongs to this track or is currently unread
+                act_track = self.active_vehicle_data.get("track_id")
+                if act_track == track_id_str or self.active_vehicle_data.get("plate_number") in [None, "NOT READ"]:
+                    self.active_vehicle_data["plate_number"] = fused_plate
+                    self.active_vehicle_data["ocr_confidence"] = fused_conf
+                    self.active_vehicle_data["ocr_status"] = ocr_status
+
+                # Update recent detections
+                for d in self.recent_detections:
+                    if d.get("track_id") == track_id_str:
+                        d["plate_number"] = fused_plate
+                        d["ocr_confidence"] = fused_conf
+
+            # If track already persisted in DB, update observation
+            if persisted and obs_uuid and self._db_engine and not is_db_in_backoff():
+                try:
+                    from sqlalchemy.orm import Session
+                    with Session(self._db_engine) as session:
+                        update_observation_plate(
+                            session=session,
+                            observation_id=obs_uuid,
+                            fused_plate_text=fused_plate,
+                            fused_confidence=fused_conf,
+                            ocr_read={
+                                "raw_text": raw_text,
+                                "confidence": conf,
+                                "timestamp": now_iso,
+                            },
+                        )
+                except Exception as up_err:
+                    logger.warning(f"Failed to update observation plate in DB: {up_err}")
+            elif not persisted:
+                # Flag pending plate update in case DB persistence is currently in-flight
                 with self._lock:
                     trk = self.vehicle_tracks.get(matched_id)
                     if trk:
-                        trk["ocr_success_count"] = trk.get("ocr_success_count", 0) + 1
-                        if best_ocr["confidence"] >= 0.85:
-                            trk["plate_confirmed"] = True
-                self.fusion.add_ocr_read(
-                    camera_id=self.camera_id,
-                    track_id=track_id_str,
-                    frame_id=frame_id,
-                    raw_text=best_ocr["raw_text"],
-                    confidence=best_ocr["confidence"],
-                    timestamp=datetime.now(timezone.utc).isoformat(),
-                )
+                        trk["pending_plate_update"] = {
+                            "plate_text": fused_plate,
+                            "confidence": fused_conf,
+                            "ocr_read": {
+                                "raw_text": raw_text,
+                                "confidence": conf,
+                                "timestamp": now_iso,
+                            },
+                        }
         except Exception as e:
-            logger.debug(f"Async OCR error for {track_id_str}: {e}")
+            logger.warning(f"Async OCR error for {track_id_str}: {e}")
         finally:
             with self._lock:
                 trk = self.vehicle_tracks.get(matched_id)
@@ -1061,6 +1212,18 @@ class ManagedCameraWorker:
     ):
         """Extract appearance embedding and persist vehicle observation asynchronously."""
         try:
+            # Re-fetch latest fused plate and reads from fusion in case OCR completed
+            latest_fused = self.fusion.fuse_track(
+                camera_id=self.camera_id,
+                track_id=track_id_str,
+                vehicle_type=vehicle_type,
+                vehicle_colour=vehicle_colour,
+            )
+            if latest_fused and latest_fused.get("fused_plate_text") != "NOT READ":
+                plate_text = latest_fused.get("fused_plate_text")
+                ocr_conf = latest_fused.get("fused_confidence")
+                ocr_reads = list(latest_fused.get("reads_history", []))
+
             appearance_embedding = None
             emb_status = "pending"
             emb_reason = None
@@ -1108,6 +1271,7 @@ class ManagedCameraWorker:
                     embedding_attempts=1,
                 )
                 if db_obs:
+                    pending_update = None
                     with self._lock:
                         trk = self.vehicle_tracks.get(matched_id)
                         if trk:
@@ -1117,6 +1281,18 @@ class ManagedCameraWorker:
                             if appearance_embedding is not None:
                                 trk["has_embedding"] = True
                                 trk["last_embedded_score"] = crop_score
+                            pending_update = trk.pop("pending_plate_update", None)
+                    if pending_update:
+                        try:
+                            update_observation_plate(
+                                session=session,
+                                observation_id=db_obs.observation_id,
+                                fused_plate_text=pending_update["plate_text"],
+                                fused_confidence=pending_update["confidence"],
+                                ocr_read=pending_update.get("ocr_read"),
+                            )
+                        except Exception as p_err:
+                            logger.warning(f"Pending plate update failed: {p_err}")
                     try:
                         from app.modules.identity import match_new_observation
                         match_new_observation(session, db_obs)
@@ -1245,7 +1421,7 @@ class CameraScenarioManager:
             time.sleep(0.05)
 
     def _init_cameras(self):
-        """Initialize cameras from data/camera_config.json or default CityFlow S04 cameras."""
+        """Initialize cameras from data/camera_config.json or default CityFlow S05 cameras."""
         config_path = _get_config_path()
         saved_configs: Dict[str, Any] = {}
 
@@ -1258,10 +1434,10 @@ class CameraScenarioManager:
 
         # Default camera setup if no config file exists
         default_defs = [
-            {"camera_id": "c020", "name": "Camera 020", "source_type": "video", "source_path": "footage/c020/vdo.avi", "scenario": "S04", "fps": 10.0, "sync_offset_s": 25.905, "enabled": True},
-            {"camera_id": "c023", "name": "Camera 023", "source_type": "video", "source_path": "footage/c023/vdo.avi", "scenario": "S04", "fps": 10.0, "sync_offset_s": 45.716, "enabled": True},
-            {"camera_id": "c029", "name": "Camera 029", "source_type": "video", "source_path": "footage/c029/vdo.avi", "scenario": "S04", "fps": 10.0, "sync_offset_s": 125.788, "enabled": True},
-            {"camera_id": "c035", "name": "Camera 035", "source_type": "video", "source_path": "footage/c035/vdo.avi", "scenario": "S04", "fps": 10.0, "sync_offset_s": 165.568, "enabled": True},
+            {"camera_id": "c020", "name": "Camera 020", "source_type": "video", "source_path": "footage/S05/c020/vdo.avi", "scenario": "S05", "fps": 10.0, "sync_offset_s": 0.0, "enabled": True},
+            {"camera_id": "c023", "name": "Camera 023", "source_type": "video", "source_path": "footage/S05/c023/vdo.avi", "scenario": "S05", "fps": 10.0, "sync_offset_s": 0.0, "enabled": True},
+            {"camera_id": "c028", "name": "Camera 028", "source_type": "video", "source_path": "footage/S05/c028/vdo.avi", "scenario": "S05", "fps": 10.0, "sync_offset_s": 0.0, "enabled": True},
+            {"camera_id": "c029", "name": "Camera 029", "source_type": "video", "source_path": "footage/S05/c029/vdo.avi", "scenario": "S05", "fps": 10.0, "sync_offset_s": 0.0, "enabled": True},
         ]
 
         # Load sync mode from saved config
@@ -1273,6 +1449,22 @@ class CameraScenarioManager:
             cid = default_item["camera_id"]
             cfg = cameras_data.get(cid, default_item)
             self.cameras[cid] = ManagedCameraWorker(cid, cfg, self.controller)
+
+        self.recompute_max_duration()
+
+    def recompute_max_duration(self) -> float:
+        """Dynamically compute max scenario duration across all camera inputs."""
+        durations = []
+        with self._lock:
+            for w in self.cameras.values():
+                frames = w.total_frames or w.frame_count or 0
+                fps = w.fps if (w.fps and w.fps > 0) else 10.0
+                if frames > 0:
+                    durations.append((frames / fps) + (w.sync_offset_s or 0.0))
+        max_dur = max(durations) if durations else 425.5
+        with self.controller._lock:
+            self.controller.max_scenario_duration_s = round(max_dur, 3)
+        return self.controller.max_scenario_duration_s
 
     def save_configuration(self):
         """Persist current camera configuration and playback settings to data/camera_config.json."""
@@ -1295,7 +1487,7 @@ class CameraScenarioManager:
 
     def get_camera(self, camera_id: str) -> Optional[ManagedCameraWorker]:
         clean_id = camera_id.lower().strip()
-        alias_map = {"cam-13": "c020", "cam-14": "c023", "cam-15": "c029", "cam-16": "c035"}
+        alias_map = {"cam-13": "c020", "cam-14": "c023", "cam-15": "c028", "cam-16": "c029"}
         clean_id = alias_map.get(clean_id, clean_id)
         with self._lock:
             return self.cameras.get(clean_id)
@@ -1318,19 +1510,19 @@ class CameraScenarioManager:
 
         # 2. Detect scenario & sync offset for the new source
         sync_meta = load_cityflow_sync_metadata()
-        detected_scenario = "General"
+        detected_scenario = "S05"
         detected_offset = 0.0
 
-        for sc, sc_cams in sync_meta.items():
-            if sc.lower() in source_path.lower():
-                detected_scenario = sc
-                break
-            elif clean_id in sc_cams:
+        normalized_path = source_path.replace("\\", "/").lower()
+        for sc in sorted(sync_meta.keys(), reverse=True):
+            if f"/{sc.lower()}/" in normalized_path or normalized_path.startswith(f"{sc.lower()}/") or sc.lower() in normalized_path:
                 detected_scenario = sc
                 break
 
         if clean_id in sync_meta.get(detected_scenario, {}):
-            detected_offset = sync_meta[detected_scenario][clean_id].get("start_timestamp_s", 0.0)
+            detected_offset = float(sync_meta[detected_scenario][clean_id].get("start_timestamp_s", 0.0))
+        elif detected_scenario == "S05":
+            detected_offset = 0.0
 
         # 3. Update configuration and purge old video state
         with worker._lock:
@@ -1365,6 +1557,7 @@ class CameraScenarioManager:
 
         # 4. Restart worker
         worker.start()
+        self.recompute_max_duration()
         self.save_configuration()
 
         logger.info(f"[CAMERA UPDATE] {clean_id} switched to {source_type}: '{source_path}' (scenario={detected_scenario}, offset={detected_offset}s)")

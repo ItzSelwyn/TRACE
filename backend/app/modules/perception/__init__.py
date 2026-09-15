@@ -11,10 +11,10 @@ from typing import Any
 def _camera_offset_seconds(camera_id: str) -> float:
     """Return the known start timestamp for a camera in the CityFlow demo dataset."""
     offsets = {
-        "c020": 25.905,
-        "c023": 45.716,
-        "c029": 125.788,
-        "c035": 165.568,
+        "c020": 0.0,
+        "c023": 0.0,
+        "c028": 0.0,
+        "c029": 0.0,
     }
     return offsets.get(camera_id, 0.0)
 

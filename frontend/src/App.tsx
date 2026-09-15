@@ -207,7 +207,7 @@ const transformTrajectory = (plate: string, payload: any): VehicleTraceDataPaylo
         timestamp: formatTime(obs.captured_at),
         ocrConfidence: formattedConfidence,
         cameraName: obs.camera_name || `Camera ${index + 1}`,
-        location: obs.location || 'CityFlow S04 Corridor',
+        location: obs.location || 'CityFlow S05 Corridor',
         trackedTimeAgo: trackedTimeAgo,
         statusType: isAnomaly ? 'anomaly' : 'normal',
         statusMessage: statusMsg,
@@ -230,7 +230,7 @@ const transformTrajectory = (plate: string, payload: any): VehicleTraceDataPaylo
       return {
         id: `point-${index}`,
         cameraName: obs.camera_name || `Camera ${index + 1}`,
-        location: obs.location || 'CityFlow S04 Corridor',
+        location: obs.location || 'CityFlow S05 Corridor',
         pointType: isAnomaly ? 'anomaly' : index % 3 === 0 ? 'scanned' : 'trajectory',
         xPercent: 15 + index * 22,
         yPercent: 30 + (index % 2) * 20,
@@ -289,7 +289,7 @@ export const App: React.FC = () => {
 
     let isMounted = true;
     const loadVehicleTrace = async () => {
-      const plate = vehicleTracePayload.searchedPlate || 'TN 37 CY 1234';
+      const plate = vehicleTracePayload.searchedPlate || '334';
       try {
         const response = await fetch(`${API_BASE_URL}/vehicles/${encodeURIComponent(plate)}/trajectory`);
         if (!response.ok) return;

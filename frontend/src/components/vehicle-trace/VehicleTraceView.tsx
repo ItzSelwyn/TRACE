@@ -9,6 +9,24 @@ import {
 } from "@/components/ui/map";
 import { snapTrajectoryToRoads } from '../../data/roadGeometry';
 
+export interface CrossCameraPathItem {
+  vehicle_id: string;
+  label: string;
+  description: string;
+  camera_count: number;
+  cameras: string[];
+  is_corridor: boolean;
+}
+
+const DEFAULT_CROSS_PATHS: CrossCameraPathItem[] = [
+  { vehicle_id: '334', label: 'Vehicle 334 (4-Cam Corridor)', description: 'c020 → c023 → c028 → c029', camera_count: 4, cameras: ['c020', 'c023', 'c028', 'c029'], is_corridor: true },
+  { vehicle_id: '396', label: 'Vehicle 396 (4-Cam Corridor)', description: 'c020 → c023 → c028 → c029', camera_count: 4, cameras: ['c020', 'c023', 'c028', 'c029'], is_corridor: true },
+  { vehicle_id: '336', label: 'Vehicle 336 (4-Cam Corridor)', description: 'c020 → c023 → c028 → c029', camera_count: 4, cameras: ['c020', 'c023', 'c028', 'c029'], is_corridor: true },
+  { vehicle_id: '354', label: 'Vehicle 354 (4-Cam Corridor)', description: 'c020 → c023 → c028 → c029', camera_count: 4, cameras: ['c020', 'c023', 'c028', 'c029'], is_corridor: true },
+  { vehicle_id: '420', label: 'Vehicle 420 (c020 → c023 → c028)', description: 'c020 → c023 → c028', camera_count: 3, cameras: ['c020', 'c023', 'c028'], is_corridor: false },
+  { vehicle_id: '486', label: 'Vehicle 486 (c028 → c029)', description: 'c028 → c029', camera_count: 2, cameras: ['c028', 'c029'], is_corridor: false },
+];
+
 interface VehicleTraceViewProps {
   data: VehicleTraceDataPayload;
   onSearchPlate?: (plateQuery: string) => void;
@@ -21,11 +39,32 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
   const [searchQuery, setSearchQuery] = useState(data.searchedPlate || '');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [selectedTimestamps, setSelectedTimestamps] = useState<string[]>(['24 hrs ago']);
+  const [crossCameraPaths, setCrossCameraPaths] = useState<CrossCameraPathItem[]>(DEFAULT_CROSS_PATHS);
 
   // Keep search input synced if searchedPlate updates from parent
   React.useEffect(() => {
     setSearchQuery(data.searchedPlate || '');
   }, [data.searchedPlate]);
+
+  // Fetch active cross-camera paths dynamically from backend
+  React.useEffect(() => {
+    let isMounted = true;
+    const fetchPaths = async () => {
+      try {
+        const res = await fetch('/vehicles/cross-camera-paths');
+        if (res.ok) {
+          const payload = await res.json();
+          if (isMounted && payload?.paths && Array.isArray(payload.paths) && payload.paths.length > 0) {
+            setCrossCameraPaths(payload.paths);
+          }
+        }
+      } catch (_) {}
+    };
+    fetchPaths();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([
     'North Highway 16',
     'North Highway 15',
@@ -65,7 +104,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
 
   const mapCenter: [number, number] = validStops.length > 0
     ? [validStops[0].lng, validStops[0].lat]
-    : [-90.675, 42.507];
+    : [-90.6847, 42.4991];
 
   return (
     <div className="space-y-4 max-w-[1600px] mx-auto pb-6 select-none font-body bg-[#000000]">
@@ -78,7 +117,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search Plate (e.g. TN 37 CY 1234) or Vehicle ID (e.g. 260, 261, 272, TRK-001)"
+              placeholder="Search Vehicle ID (e.g. 334, 396, 336, 420) or Plate Number"
               className="w-full bg-[#000000] focus:border-[#F2D04E] text-white placeholder-[#A0A0A0] text-sm rounded-[3px] py-3 pl-4 pr-12 outline-none font-body transition-all"
             />
             <button
@@ -140,7 +179,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                   <h4 className="text-white font-bold tracking-wider uppercase text-[11px] font-body block mb-1">
                     Location
                   </h4>
-                  {['Camera 020 (W Locust & Grandview)', 'Camera 023 (Grandview & Delhi)', 'Camera 029 (N Grandview & University)', 'Camera 035 (Highway 20 Corridor)'].map((item) => {
+                  {['Camera 020 (University Ave & Walnut)', 'Camera 023 (University Ave & Nevada)', 'Camera 028 (Grandview Roundabout)', 'Camera 029 (University Ave & Alta Pl)'].map((item) => {
                     const isChecked = selectedLocations.includes(item);
                     return (
                       <div
@@ -161,60 +200,37 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
           </div>
         </div>
 
-        {/* Quick Suggestion Chips for Multi-Camera Trajectories */}
-        <div className="flex items-center gap-2 overflow-x-auto text-xs pt-1">
+        {/* Dynamic Suggestion Chips for Multi-Camera Trajectories */}
+        <div className="flex items-center gap-2 overflow-x-auto text-xs pt-1 no-scrollbar">
           <span className="text-[#AEA793] font-semibold text-[11px] uppercase tracking-wider whitespace-nowrap">
             Cross-Camera Paths:
           </span>
-          <button
-            type="button"
-            onClick={() => { setSearchQuery('260'); onSearchPlate && onSearchPlate('260'); }}
-            className={`px-2.5 py-1 rounded-[3px] text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
-              searchQuery === '260'
-                ? 'bg-[#F2D04E] text-black font-bold'
-                : 'bg-[#1E1E1E] hover:bg-[#2A2A2A] border border-[#F2D04E]/40 text-[#F2D04E]'
-            }`}
-            title="CityFlow Vehicle 260 (Crosses all 4 cameras in corridor)"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-[#1B7A43]" />
-            <span>Vehicle 260 (4-Cam Corridor)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => { setSearchQuery('261'); onSearchPlate && onSearchPlate('261'); }}
-            className={`px-2.5 py-1 rounded-[3px] text-xs transition-all whitespace-nowrap cursor-pointer ${
-              searchQuery === '261'
-                ? 'bg-[#F2D04E] text-black font-bold'
-                : 'bg-[#1E1E1E] hover:bg-[#2A2A2A] border border-white/10 text-white/90'
-            }`}
-            title="CityFlow Vehicle 261 (Camera 020 -> Camera 023)"
-          >
-            Vehicle 261 (c020 → c023)
-          </button>
-          <button
-            type="button"
-            onClick={() => { setSearchQuery('272'); onSearchPlate && onSearchPlate('272'); }}
-            className={`px-2.5 py-1 rounded-[3px] text-xs transition-all whitespace-nowrap cursor-pointer ${
-              searchQuery === '272'
-                ? 'bg-[#F2D04E] text-black font-bold'
-                : 'bg-[#1E1E1E] hover:bg-[#2A2A2A] border border-white/10 text-white/90'
-            }`}
-            title="CityFlow Vehicle 272 (Camera 029 -> Camera 035)"
-          >
-            Vehicle 272 (c029 → c035)
-          </button>
-          <button
-            type="button"
-            onClick={() => { setSearchQuery('TN 37 CY 1234'); onSearchPlate && onSearchPlate('TN 37 CY 1234'); }}
-            className={`px-2.5 py-1 rounded-[3px] text-xs transition-all whitespace-nowrap cursor-pointer ${
-              searchQuery === 'TN 37 CY 1234'
-                ? 'bg-[#F2D04E] text-black font-bold'
-                : 'bg-[#1E1E1E] hover:bg-[#2A2A2A] border border-white/10 text-white/90'
-            }`}
-            title="Plate TN 37 CY 1234 (ANPR Multi-Camera Corridor)"
-          >
-            TN 37 CY 1234 (ANPR Plate)
-          </button>
+          {crossCameraPaths.map((path) => {
+            const isSelected = searchQuery === path.vehicle_id || data.searchedPlate === path.vehicle_id;
+            return (
+              <button
+                key={path.vehicle_id}
+                type="button"
+                onClick={() => {
+                  setSearchQuery(path.vehicle_id);
+                  onSearchPlate && onSearchPlate(path.vehicle_id);
+                }}
+                className={`px-2.5 py-1 rounded-[3px] text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                  isSelected
+                    ? 'bg-[#F2D04E] text-black font-bold shadow-sm'
+                    : path.is_corridor
+                    ? 'bg-[#1E1E1E] hover:bg-[#2A2A2A] border border-[#F2D04E]/40 text-[#F2D04E]'
+                    : 'bg-[#1E1E1E] hover:bg-[#2A2A2A] border border-white/10 text-white/90'
+                }`}
+                title={`CityFlow Vehicle ${path.vehicle_id} (${path.description})`}
+              >
+                {path.is_corridor && (
+                  <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-black' : 'bg-[#1B7A43]'}`} />
+                )}
+                <span>{path.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -252,7 +268,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                   </div>
                   <p className="text-sm font-bold text-white">No Vehicle Observations Found</p>
                   <p className="text-xs text-[#AEA793] max-w-xs leading-relaxed">
-                    No trajectory records matched &ldquo;{searchQuery || data.searchedPlate}&rdquo;. Try searching a valid track ID (e.g. TRK-009) or CityFlow vehicle ID (e.g. 260).
+                    No trajectory records matched &ldquo;{searchQuery || data.searchedPlate}&rdquo;. Try selecting a cross-camera path above or searching a CityFlow vehicle ID (e.g. 334, 396, 336, 420).
                   </p>
                 </div>
               ) : (

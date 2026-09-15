@@ -63,10 +63,10 @@ def _create_mock_ocr():
 
 # Camera start offsets for CityFlow dataset
 _camera_offsets: Dict[str, float] = {
-    "c020": 25.905,
-    "c023": 45.716,
-    "c029": 125.788,
-    "c035": 165.568,
+    "c020": 0.0,
+    "c023": 0.0,
+    "c028": 0.0,
+    "c029": 0.0,
 }
 
 

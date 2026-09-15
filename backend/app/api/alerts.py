@@ -126,7 +126,7 @@ def _get_fallback_alerts(
             triggered_at=now,
             reviewed=False,
             camera_name="Camera 035 (Highway 20 Corridor)",
-            location="CityFlow S04 Corridor",
+            location="CityFlow S05 Corridor",
             vehicle_type="SUV",
             vehicle_color="BLUE",
             confidence=92,
@@ -143,7 +143,7 @@ def _get_fallback_alerts(
             triggered_at=now,
             reviewed=False,
             camera_name="Camera 020 (W Locust & Grandview)",
-            location="CityFlow S04 Corridor",
+            location="CityFlow S05 Corridor",
             vehicle_type="SEDAN",
             vehicle_color="RED",
             confidence=84,
@@ -161,7 +161,7 @@ def _get_fallback_alerts(
             reviewed=True,
             reviewed_at=now,
             camera_name="Camera 035 (Highway 20 Corridor)",
-            location="CityFlow S04 Corridor",
+            location="CityFlow S05 Corridor",
             vehicle_type="TRUCK",
             vehicle_color="ORANGE",
             confidence=94,
@@ -179,7 +179,7 @@ def _get_fallback_alerts(
             reviewed=True,
             reviewed_at=now,
             camera_name="Camera 023 (Grandview & Delhi)",
-            location="CityFlow S04 Corridor",
+            location="CityFlow S05 Corridor",
             vehicle_type="SUV",
             vehicle_color="BLUE",
             confidence=90,
@@ -247,7 +247,7 @@ async def get_alerts(
             cam_res = await db.execute(select(Camera).where(Camera.camera_id == alert.camera_id))
             cam = cam_res.scalars().first()
             cam_name = cam.name if cam else f"Camera {str(alert.camera_id)[:4]}"
-            cam_loc = cam.zone or "CityFlow S04 Corridor" if cam else "North Highway 02"
+            cam_loc = cam.zone or "CityFlow S05 Corridor" if cam else "North Highway 02"
 
             # Default vehicle attributes
             veh_type = "SUV" if "37" in alert.plate_text else "SEDAN" if not alert.reviewed else "TRUCK"
@@ -435,7 +435,7 @@ async def update_alert(
             reviewed_by=current_user.user_id if current_user else None,
             reviewed_at=now if review.reviewed else None,
             camera_name="Camera 035 (Highway 20 Corridor)",
-            location="CityFlow S04 Corridor",
+            location="CityFlow S05 Corridor",
             vehicle_type="SUV",
             vehicle_color="BLUE",
             confidence=92,
