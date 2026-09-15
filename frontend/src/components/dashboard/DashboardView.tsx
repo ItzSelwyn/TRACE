@@ -29,16 +29,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <TopStatsHeader
         stats={data.topStats}
         onSearch={onSearchPlate}
+        onNavigateBlacklist={() => onNavigateSection('blacklist')}
       />
 
       {/* Main Dashboard 2-Column Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-1.5">
-        {/* Left Column: 2x2 Camera Grid (7/12 width) */}
-        <div className="lg:col-span-7 flex flex-col">
+        {/* Left Column: Cameras, Recent Alerts & Network Analysis (7/12 width) */}
+        <div className="lg:col-span-7 flex flex-col gap-1.5">
+          {/* 1. Cameras Section */}
           <CameraGrid
             cameras={data.cameras}
             selectedCameraId={selectedCameraId}
             onSelectCamera={onSelectCamera}
+          />
+
+          {/* 2. Recent Alerts Section (Beneath Cameras Section) */}
+          <RecentAlerts
+            alerts={data.recentAlerts}
+            onViewAlertTrace={onViewTrace}
+            onNavigateAlerts={() => onNavigateSection('alerts')}
+          />
+
+          {/* 3. Network Analysis Section (Beneath Recent Alerts Section) */}
+          <NetworkAnalysis
+            stats={data.networkStats}
+            onNavigateCameras={() => onNavigateSection('cameras')}
           />
         </div>
 
@@ -48,26 +63,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             data={data.modelAnalysis}
             selectedCameraId={selectedCameraId}
             onViewTrace={onViewTrace}
-          />
-        </div>
-      </div>
-
-      {/* Bottom Dashboard 2-Column Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-1.5 pt-0.5">
-        {/* Left Column: Recent Alerts (7/12 width) */}
-        <div className="lg:col-span-7 flex flex-col">
-          <RecentAlerts
-            alerts={data.recentAlerts}
-            onViewAlertTrace={onViewTrace}
-            onNavigateAlerts={() => onNavigateSection('alerts')}
-          />
-        </div>
-
-        {/* Right Column: Network Analysis Stats (5/12 width) */}
-        <div className="lg:col-span-5 flex flex-col">
-          <NetworkAnalysis
-            stats={data.networkStats}
-            onNavigateCameras={() => onNavigateSection('cameras')}
           />
         </div>
       </div>

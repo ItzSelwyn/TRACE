@@ -34,7 +34,19 @@ def _get_ocr() -> Any:
     global _ocr_instance
     if _ocr_instance is None and _PADDLEOCR_AVAILABLE:
         try:
-            _ocr_instance = PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
+            import logging as _py_logging
+            import os
+            os.environ["FLAGS_use_mkldnn"] = "0"
+            os.environ["FLAGS_use_onednn"] = "0"
+            _py_logging.getLogger("ppocr").setLevel(_py_logging.ERROR)
+
+            _ocr_instance = PaddleOCR(
+                use_angle_cls=False,
+                lang="en",
+                enable_mkldnn=False,
+                use_gpu=False,
+                show_log=False,
+            )
         except Exception:
             _ocr_instance = None
     return _ocr_instance or _create_mock_ocr()
@@ -51,10 +63,10 @@ def _create_mock_ocr():
 
 # Camera start offsets for CityFlow dataset
 _camera_offsets: Dict[str, float] = {
-    "c020": 25.905,
-    "c023": 45.716,
-    "c029": 125.788,
-    "c035": 165.568,
+    "c020": 0.0,
+    "c023": 0.0,
+    "c028": 0.0,
+    "c029": 0.0,
 }
 
 
@@ -196,6 +208,11 @@ class VideoProcessor:
             vehicle_id, is_moving, displacement = self._match_track_with_motion(cx, cy, frame_id, vehicle_type)
             plate_text = f"TRACE-{self.camera_id}-{vehicle_id}"
 
+            x1, y1, x2, y2 = [int(v) for v in bbox]
+            crop = frame[max(0, y1):min(frame.shape[0], y2), max(0, x1):min(frame.shape[1], x2)]
+            from app.modules.perception.pipeline import _detect_crop_color
+            v_color = _detect_crop_color(crop) if crop is not None and crop.size > 0 else ("White" if cls_id == 2 else "Grey")
+
             detection = DetectionResult(
                 frame_id=frame_id,
                 timestamp=timestamp,
@@ -204,7 +221,7 @@ class VideoProcessor:
                 confidence=conf,
                 plate_text=plate_text,
                 vehicle_type=vehicle_type,
-                vehicle_colour="White" if cls_id == 2 else "Grey",
+                vehicle_colour=v_color,
                 is_moving=is_moving,
                 displacement=displacement,
             )

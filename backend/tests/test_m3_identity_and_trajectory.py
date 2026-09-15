@@ -188,14 +188,13 @@ class TestComputeIdentityScore:
         """Verify multi-modal formula in ANPR mode with proportional redistribution."""
         # Both plates identical -> plate_sim = 1.0
         # OBS_A conf=0.92, OBS_B conf=0.88, both daytime with SAMPLE_PROFILE_DAY (rel=0.95)
-        # ocr_conf = 0.855; plate evidence = 1.0*(0.25 + 0.75*0.855) = 0.89125
+        # ocr_conf = 0.855; plate evidence = 1.0*0.6 + 0.855*0.4 = 0.942
         # temporal (900s > 600s max) = 0.85, transition = 1.0, colour = 1.0, type = 1.0
-        # Total score with appearance redistributed = 0.9135
+        # Total score with appearance redistributed = 0.9389
         result = compute_identity_score(OBS_A, OBS_B, SAMPLE_PROFILE_DAY, SAMPLE_PROFILE_DAY)
-        assert abs(result["identity_score"] - 0.9135) < 0.01
+        assert abs(result["identity_score"] - 0.9389) < 0.01
         assert result["mode"] == "ANPR"
         assert result["match_confidence_label"] == "confirmed"
-
 
 
 

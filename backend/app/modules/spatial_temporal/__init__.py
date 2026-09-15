@@ -21,7 +21,11 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.config import settings
-from app.modules.spatial_temporal.road_graph import build_road_graph, get_road_graph
+from app.modules.spatial_temporal.road_graph import (
+    build_road_graph,
+    canonical_camera_id,
+    get_road_graph,
+)
 
 # ---------------------------------------------------------------------------
 # 1. Shortest path (Dijkstra, weight = min_travel_time_s)
@@ -40,46 +44,49 @@ def shortest_path(
     Parameters
     ----------
     graph: road graph dict returned by build_road_graph()
-    from_id, to_id: camera_id strings
+    from_id, to_id: camera_id strings (UUID, alias, or short code)
 
     Returns
     -------
     (min_travel_time_s, [from_id, ..., to_id]) — the ordered camera path.
     If from_id == to_id returns (0, [from_id]).
     """
-    if from_id == to_id:
+    c_from = canonical_camera_id(from_id)
+    c_to = canonical_camera_id(to_id)
+
+    if c_from == c_to:
         return (0, [from_id])
 
     adj = graph.get("adj", {})
-    dist: dict[str, int] = {from_id: 0}
-    prev: dict[str, str | None] = {from_id: None}
-    heap: list[tuple[int, str]] = [(0, from_id)]
+    dist: dict[str, int] = {c_from: 0}
+    prev: dict[str, str | None] = {c_from: None}
+    heap: list[tuple[int, str]] = [(0, c_from)]
 
     while heap:
         cost, node = heapq.heappop(heap)
-        if node == to_id:
+        if node == c_to:
             break
         if cost > dist.get(node, float("inf")):
             continue
         for neighbour in adj.get(node, []):
-            nid = neighbour["to_camera_id"]
+            nid = canonical_camera_id(neighbour["to_camera_id"])
             new_cost = cost + neighbour["min_travel_time_s"]
             if new_cost < dist.get(nid, float("inf")):
                 dist[nid] = new_cost
                 prev[nid] = node
                 heapq.heappush(heap, (new_cost, nid))
 
-    if to_id not in dist:
+    if c_to not in dist:
         return (float("inf"), [])  # type: ignore[return-value]
 
     # Reconstruct path
     path: list[str] = []
-    cursor: str | None = to_id
+    cursor: str | None = c_to
     while cursor is not None:
         path.append(cursor)
         cursor = prev.get(cursor)
     path.reverse()
-    return (dist[to_id], path)
+    return (dist[c_to], path)
 
 
 # ---------------------------------------------------------------------------
@@ -88,8 +95,12 @@ def shortest_path(
 
 def _direct_edge(graph: dict[str, Any], from_id: str, to_id: str) -> dict[str, Any] | None:
     """Return the direct edge dict from from_id to to_id, or None."""
-    for edge in graph.get("adj", {}).get(from_id, []):
-        if edge["to_camera_id"] == to_id:
+    c_from = canonical_camera_id(from_id)
+    c_to = canonical_camera_id(to_id)
+    adj = graph.get("adj", {})
+    edges = adj.get(c_from, []) or adj.get(from_id, [])
+    for edge in edges:
+        if canonical_camera_id(edge["to_camera_id"]) == c_to:
             return edge
     return None
 
@@ -202,11 +213,17 @@ def check_impossible_journey(
         distance_km = 0.0
         speed_limit = float("inf")
         for i in range(len(path) - 1):
-            for edge in adj.get(path[i], []):
-                if edge["to_camera_id"] == path[i + 1]:
+            u = canonical_camera_id(path[i])
+            v = canonical_camera_id(path[i + 1])
+            edge_found = False
+            for edge in adj.get(u, []) or adj.get(path[i], []):
+                if canonical_camera_id(edge["to_camera_id"]) == v:
                     distance_km += edge["distance_km"]
                     speed_limit = min(speed_limit, edge["speed_limit_kmph"])
+                    edge_found = True
                     break
+            if not edge_found:
+                distance_km += 0.7
         if speed_limit == float("inf"):
             speed_limit = 60  # safe fallback
 
@@ -284,6 +301,26 @@ def detect_camera_inconsistency(observations: list[dict[str, Any]]) -> list[dict
 # 6. Duplicate plate detection
 # ---------------------------------------------------------------------------
 
+def is_valid_anpr_plate(plate: str | None) -> bool:
+    """Return True only if plate is a genuine ANPR license plate string.
+
+    Excludes empty strings, missing values, placeholders ('NOT READ', 'UNKNOWN'),
+    and purely numeric IDs (like CityFlow ground truth vehicle IDs '260').
+    """
+    if not plate:
+        return False
+    p = str(plate).strip().upper()
+    if p in {"NOT READ", "UNKNOWN", "NONE", "NULL", "UNREADABLE", "UNCONFIRMED", "CANDIDATE"}:
+        return False
+    # If purely numeric, it's a CityFlow vehicle ID, not an ANPR plate
+    if p.isdigit():
+        return False
+    # Must have at least 3 characters and contain at least one letter
+    if len(p) < 3 or not any(c.isalpha() for c in p):
+        return False
+    return True
+
+
 def detect_duplicate_plates(
     observations: list[dict[str, Any]],
     graph: dict[str, Any] | None = None,
@@ -305,12 +342,12 @@ def detect_duplicate_plates(
     g = graph or get_road_graph()
     duplicates: list[dict[str, Any]] = []
 
-    # Group by plate text
+    # Group by plate text (only for valid ANPR plates)
     from collections import defaultdict
     by_plate: dict[str, list[tuple[int, dict[str, Any]]]] = defaultdict(list)
     for idx, obs in enumerate(observations):
         plate = str(obs.get("fused_plate_text", "")).strip()
-        if plate:
+        if is_valid_anpr_plate(plate):
             by_plate[plate].append((idx, obs))
 
     for plate, entries in by_plate.items():
@@ -424,8 +461,9 @@ def reconstruct_trajectory(
         dup_indices.add(d["obs_index_a"])
         dup_indices.add(d["obs_index_b"])
 
-    # --- Impossible journey (consecutive pairs) ----------------------------
+    # --- Impossible journey & implied speed (consecutive pairs) -----------
     impossible_indices: dict[int, dict[str, Any]] = {}
+    journey_indices: dict[int, dict[str, Any]] = {}
     for i in range(len(sorted_obs) - 1):
         obs_a = sorted_obs[i]
         obs_b = sorted_obs[i + 1]
@@ -444,6 +482,7 @@ def reconstruct_trajectory(
             continue
 
         ij = check_impossible_journey(cam_a, cam_b, time_gap_s, g, mult)
+        journey_indices[i + 1] = ij
         if ij["is_impossible_journey"]:
             # Annotate the *later* observation (obs_b at index i+1)
             impossible_indices[i + 1] = ij
@@ -462,6 +501,9 @@ def reconstruct_trajectory(
         annotated_obs.setdefault("is_impossible_journey", False)
         annotated_obs.setdefault("anomaly_type", None)
         annotated_obs.setdefault("implied_speed_kmph", None)
+
+        if idx in journey_indices:
+            annotated_obs["implied_speed_kmph"] = journey_indices[idx].get("implied_speed_kmph")
 
         if idx in impossible_indices:
             ij_info = impossible_indices[idx]

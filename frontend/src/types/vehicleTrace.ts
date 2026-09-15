@@ -22,7 +22,7 @@ export interface ChronologyObservation {
   id: string;
   plateNumber: string;
   timestamp: string;      // e.g. "07:08:35 am"
-  ocrConfidence: number;  // e.g. 92 for 92%
+  ocrConfidence: number | string;  // e.g. 92 for 92% or "85"
   cameraName: string;     // e.g. "Camera 16"
   location: string;       // e.g. "North Highway 08"
   trackedTimeAgo: string; // e.g. "Tracked 2 mins ago"
@@ -33,6 +33,8 @@ export interface ChronologyObservation {
   identityScore?: number;                  // 0–1 from backend identity_score
   confidenceLabel?: MatchConfidenceLabel;  // from backend match_confidence_label
   evidence?: IdentityEvidence;             // full evidence breakdown
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface TrajectoryMapPoint {

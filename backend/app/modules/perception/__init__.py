@@ -11,36 +11,43 @@ from typing import Any
 def _camera_offset_seconds(camera_id: str) -> float:
     """Return the known start timestamp for a camera in the CityFlow demo dataset."""
     offsets = {
-        "c020": 25.905,
-        "c023": 45.716,
-        "c029": 125.788,
-        "c035": 165.568,
+        "c020": 0.0,
+        "c023": 0.0,
+        "c028": 0.0,
+        "c029": 0.0,
     }
     return offsets.get(camera_id, 0.0)
 
 
+_GT_CACHE: dict[str, dict[str, list[dict[str, Any]]]] = {}
+
+
 def load_ground_truth_by_camera(dataset_path: str | Path, *, camera_ids: list[str] | None = None) -> dict[str, list[dict[str, Any]]]:
-    """Load the repo's normalized CityFlow ground-truth JSONL and group it by camera."""
+    """Load the repo's normalized CityFlow ground-truth JSONL and group it by camera with in-memory caching."""
+    global _GT_CACHE
     dataset_file = Path(dataset_path)
     if not dataset_file.exists():
         return {}
 
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    selected = set(camera_ids or [])
+    cache_key = str(dataset_file.resolve())
+    if cache_key not in _GT_CACHE:
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        with dataset_file.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                if not line.strip():
+                    continue
+                record = json.loads(line)
+                camera_id = record.get("camera_id")
+                if camera_id:
+                    grouped.setdefault(camera_id, []).append(record)
+        _GT_CACHE[cache_key] = grouped
 
-    with dataset_file.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            record = json.loads(line)
-            camera_id = record.get("camera_id")
-            if not camera_id:
-                continue
-            if selected and camera_id not in selected:
-                continue
-            grouped.setdefault(camera_id, []).append(record)
+    cached = _GT_CACHE[cache_key]
+    if not camera_ids:
+        return cached
 
-    return grouped
+    selected = set(camera_ids)
+    return {cid: recs for cid, recs in cached.items() if cid in selected}
 
 
 def process_camera_cycle(

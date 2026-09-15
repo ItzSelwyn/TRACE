@@ -18,27 +18,27 @@ def test_discover_sources():
     assert "images" in sources
     assert "scenarios" in sources
 
-    # Check that CityFlow S04 cameras are discovered
+    # Check that CityFlow S05 cameras are discovered
     vpaths = [v["path"] for v in sources["videos"]]
     assert any("c020" in p for p in vpaths)
     assert any("c023" in p for p in vpaths)
+    assert any("c028" in p for p in vpaths)
     assert any("c029" in p for p in vpaths)
-    assert any("c035" in p for p in vpaths)
 
     # Check images discovered
     assert len(sources["images"]) > 0
 
 
 def test_cityflow_sync_metadata():
-    """Verify S04 timestamp and framenum offsets match dataset ground truth."""
+    """Verify S05 timestamp and framenum offsets match dataset ground truth."""
     sync_meta = load_cityflow_sync_metadata()
-    assert "S04" in sync_meta
-    s04 = sync_meta["S04"]
-    assert "c020" in s04
-    assert s04["c020"]["start_timestamp_s"] == 25.905
-    assert s04["c023"]["start_timestamp_s"] == 45.716
-    assert s04["c029"]["start_timestamp_s"] == 125.788
-    assert s04["c035"]["start_timestamp_s"] == 165.568
+    assert "S05" in sync_meta
+    s05 = sync_meta["S05"]
+    assert "c020" in s05
+    assert s05["c020"]["start_timestamp_s"] == 0.0
+    assert s05["c023"]["start_timestamp_s"] == 0.0
+    assert s05["c028"]["start_timestamp_s"] == 0.0
+    assert s05["c029"]["start_timestamp_s"] == 0.0
 
 
 def test_admin_list_cameras():
@@ -51,9 +51,16 @@ def test_admin_list_cameras():
     cams = {c["camera_id"]: c for c in payload["cameras"]}
     assert "c020" in cams
     assert "c023" in cams
+    assert "c028" in cams
     assert "c029" in cams
-    assert "c035" in cams
-    assert cams["c020"]["sync_offset_s"] == 25.905
+    assert cams["c020"]["sync_offset_s"] == 0.0
+    assert cams["c023"]["sync_offset_s"] == 0.0
+    assert cams["c028"]["sync_offset_s"] == 0.0
+    assert cams["c029"]["sync_offset_s"] == 0.0
+    assert cams["c020"]["scenario"] == "S05"
+    assert cams["c023"]["scenario"] == "S05"
+    assert cams["c028"]["scenario"] == "S05"
+    assert cams["c029"]["scenario"] == "S05"
 
 
 def test_admin_get_sources():
@@ -114,9 +121,9 @@ def test_admin_camera_source_hot_swap():
     assert len(sources["images"]) > 0
     img_path = sources["images"][0]["path"]
 
-    # Swap c035 to image
+    # Swap c029 to image
     res = client.patch(
-        "/admin/cameras/c035/source",
+        "/admin/cameras/c029/source",
         json={"source_path": img_path, "source_type": "image"},
     )
     assert res.status_code == 200
@@ -126,12 +133,14 @@ def test_admin_camera_source_hot_swap():
 
     # Swap back to video
     res = client.patch(
-        "/admin/cameras/c035/source",
-        json={"source_path": "footage/c035/vdo.avi", "source_type": "video"},
+        "/admin/cameras/c029/source",
+        json={"source_path": "footage/S05/c029/vdo.avi", "source_type": "video"},
     )
     assert res.status_code == 200
     cam = res.json()["camera"]
     assert cam["source_type"] == "video"
+    assert cam["scenario"] == "S05"
+    assert cam["sync_offset_s"] == 0.0
 
 
 def test_admin_camera_preview():

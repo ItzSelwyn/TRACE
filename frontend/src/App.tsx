@@ -3,6 +3,10 @@ import { Header } from './components/layout/Header';
 import { Sidebar, NavRoute } from './components/layout/Sidebar';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { VehicleTraceView } from './components/vehicle-trace/VehicleTraceView';
+import { AnalyticsView } from './components/analytics/AnalyticsView';
+import { AlertsView } from './components/alerts/AlertsView';
+import { BlacklistView } from './components/blacklist/BlacklistView';
+import { CamerasView } from './components/cameras/CamerasView';
 import { AdminCameraView } from './components/admin/AdminCameraView';
 import { HomeView } from './components/home/HomeView';
 import { mockDashboardData } from './data/mockDashboardData';
@@ -22,7 +26,11 @@ const formatTime = (iso: string) => {
   });
 };
 
-const transformPerceptionStatus = (payload: any, activeCamId: string = 'c020'): DashboardDataPayload => {
+const transformPerceptionStatus = (
+  payload: any,
+  activeCamId: string = 'c020',
+  dynamicBlacklistCount?: number
+): DashboardDataPayload => {
   const cameras = Object.entries(payload?.cameras ?? {}).map(([cameraId, camera]: [string, any]) => {
     const status = camera?.camera_status ?? 'online';
     const observations = camera?.observations ?? [];
@@ -45,6 +53,11 @@ const transformPerceptionStatus = (payload: any, activeCamId: string = 'c020'): 
     (total: number, camera: any) => total + ((camera?.observations ?? []).length || 0),
     0
   );
+
+  // Dynamic metrics from backend status payload
+  const activeScansCount = payload?.active_scans ?? activeScans ?? 0;
+  const realBlacklistsCount = dynamicBlacklistCount ?? payload?.blacklists_count ?? 3;
+  const uptimeFormatted = payload?.uptime_formatted ?? '32m';
 
   // Helper to parse clean 3-digit TRK ID without concatenating camera numbers
   const parseCleanTrackId = (raw: any, fallbackNum: number = 1): string => {
@@ -89,8 +102,8 @@ const transformPerceptionStatus = (payload: any, activeCamId: string = 'c020'): 
 
   return {
     topStats: {
-      activeScans: activeScans || 24,
-      blacklistsCount: 10,
+      activeScans: activeScansCount,
+      blacklistsCount: realBlacklistsCount,
       systemStatus: downCount > 0 ? 'DEGRADED' : 'OPTIMAL',
     },
     cameras: cameras.length ? cameras : mockDashboardData.cameras,
@@ -114,7 +127,7 @@ const transformPerceptionStatus = (payload: any, activeCamId: string = 'c020'): 
       : mockDashboardData.modelAnalysis,
     recentAlerts: [],
     networkStats: {
-      uptimeFormatted: '5hrs',
+      uptimeFormatted: uptimeFormatted,
       camerasActive: onlineCount || 4,
       camerasDown: downCount,
       totalCameras: cameras.length || 4,
@@ -125,13 +138,24 @@ const transformPerceptionStatus = (payload: any, activeCamId: string = 'c020'): 
 const transformTrajectory = (plate: string, payload: any): VehicleTraceDataPayload => {
   const observations = Array.isArray(payload?.observations) ? payload.observations : [];
 
+  if (observations.length === 0) {
+    return {
+      searchedPlate: plate,
+      totalScans: 0,
+      totalAnomalies: 0,
+      selectedTimeWindow: '24hrs',
+      chronology: [],
+      mapPoints: [],
+    };
+  }
+
   const anomalyCount = payload?.total_anomalies ?? observations.filter(
     (obs: any) => obs.is_impossible_journey || obs.anomaly_type || obs.match_confidence_label === 'candidate'
   ).length;
 
   return {
     searchedPlate: plate,
-    totalScans: observations.length || 4,
+    totalScans: observations.length,
     totalAnomalies: anomalyCount,
     selectedTimeWindow: '24hrs',
     chronology: observations.map((obs: any, index: number) => {
@@ -150,18 +174,47 @@ const transformTrajectory = (plate: string, payload: any): VehicleTraceDataPaylo
       const hasValidPlate = obs.fused_plate_text && obs.fused_plate_text !== 'NOT READ' && !String(obs.fused_plate_text).startsWith('TRACE-');
       const displayIdentifier = hasValidPlate ? obs.fused_plate_text : (obs.track_id || payload?.vehicle_id || plate);
 
+      let formattedConfidence: number | string;
+      if (hasValidPlate) {
+        formattedConfidence = Math.round((obs.fused_confidence ?? 0.9) * 100);
+      } else if (obs.identity_score !== null && obs.identity_score !== undefined) {
+        formattedConfidence = Math.round(obs.identity_score * 100);
+      } else {
+        formattedConfidence = 85;
+      }
+
+      let trackedTimeAgo: string;
+      if (index === 0) {
+        trackedTimeAgo = 'Initial Detection';
+      } else {
+        const prevObs = observations[index - 1];
+        const currTime = new Date(obs.captured_at).getTime();
+        const prevTime = new Date(prevObs.captured_at).getTime();
+        const diffSeconds = Math.round(Math.abs(currTime - prevTime) / 1000);
+        if (isNaN(diffSeconds) || diffSeconds === 0) {
+          trackedTimeAgo = `Sequence step ${index + 1}`;
+        } else if (diffSeconds < 60) {
+          trackedTimeAgo = `+${diffSeconds}s from previous camera`;
+        } else {
+          const mins = Math.round(diffSeconds / 60);
+          trackedTimeAgo = `+${mins} min${mins === 1 ? '' : 's'} from previous camera`;
+        }
+      }
+
       return {
         id: `obs-${index}`,
         plateNumber: displayIdentifier,
         timestamp: formatTime(obs.captured_at),
-        ocrConfidence: Math.round((obs.fused_confidence ?? 0.9) * 100),
+        ocrConfidence: formattedConfidence,
         cameraName: obs.camera_name || `Camera ${index + 1}`,
-        location: 'Bangalore Road Network',
-        trackedTimeAgo: index === 0 ? 'Tracked 2 mins ago' : `Tracked ${index + 1} mins ago`,
+        location: obs.location || 'CityFlow S05 Corridor',
+        trackedTimeAgo: trackedTimeAgo,
         statusType: isAnomaly ? 'anomaly' : 'normal',
         statusMessage: statusMsg,
         identityScore: obs.identity_score ?? undefined,
         confidenceLabel: label as any,
+        latitude: obs.latitude,
+        longitude: obs.longitude,
         evidence: obs.evidence
           ? {
               plate_similarity: obs.evidence.plate_similarity,
@@ -177,7 +230,7 @@ const transformTrajectory = (plate: string, payload: any): VehicleTraceDataPaylo
       return {
         id: `point-${index}`,
         cameraName: obs.camera_name || `Camera ${index + 1}`,
-        location: 'Bangalore Road Network',
+        location: obs.location || 'CityFlow S05 Corridor',
         pointType: isAnomaly ? 'anomaly' : index % 3 === 0 ? 'scanned' : 'trajectory',
         xPercent: 15 + index * 22,
         yPercent: 30 + (index % 2) * 20,
@@ -198,11 +251,24 @@ export const App: React.FC = () => {
     let isMounted = true;
     const loadDashboard = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/perception/status`);
-        if (!response.ok) return;
-        const payload = await response.json();
-        if (isMounted) {
-          setDashboardData(transformPerceptionStatus(payload, selectedCameraId));
+        const [statusRes, blacklistRes] = await Promise.allSettled([
+          fetch(`${API_BASE_URL}/perception/status`),
+          fetch(`${API_BASE_URL}/blacklist`),
+        ]);
+
+        let dynamicBlacklistCount: number | undefined = undefined;
+        if (blacklistRes.status === 'fulfilled' && blacklistRes.value.ok) {
+          try {
+            const bData = await blacklistRes.value.json();
+            dynamicBlacklistCount = typeof bData?.total === 'number' ? bData.total : (bData?.entries?.length ?? undefined);
+          } catch (_) {}
+        }
+
+        if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
+          const payload = await statusRes.value.json();
+          if (isMounted) {
+            setDashboardData(transformPerceptionStatus(payload, selectedCameraId, dynamicBlacklistCount));
+          }
         }
       } catch (err) {
         console.warn('Backend offline, using mock dashboard data:', err);
@@ -223,7 +289,7 @@ export const App: React.FC = () => {
 
     let isMounted = true;
     const loadVehicleTrace = async () => {
-      const plate = vehicleTracePayload.searchedPlate || 'TN 37 CY 1234';
+      const plate = vehicleTracePayload.searchedPlate || '334';
       try {
         const response = await fetch(`${API_BASE_URL}/vehicles/${encodeURIComponent(plate)}/trajectory`);
         if (!response.ok) return;
@@ -243,7 +309,16 @@ export const App: React.FC = () => {
   }, [currentRoute, vehicleTracePayload.searchedPlate]);
 
   const handleNavigate = (route: NavRoute | string) => {
-    if (route === 'dashboard' || route === 'vehicle-trace' || route === 'admin-cameras' || route === 'home') {
+    if (
+      route === 'dashboard' || 
+      route === 'vehicle-trace' || 
+      route === 'analytics' || 
+      route === 'alerts' || 
+      route === 'blacklist' || 
+      route === 'cameras' || 
+      route === 'admin-cameras' || 
+      route === 'home'
+    ) {
       setCurrentRoute(route as NavRoute | 'home');
     }
   };
@@ -271,7 +346,7 @@ export const App: React.FC = () => {
   const isHomeScreen = currentRoute === 'home';
 
   return (
-    <div className="min-h-screen bg-[#151515] text-white flex flex-col font-sans select-none overflow-x-hidden">
+    <div className="h-screen bg-[#000000] text-white flex flex-col font-sans select-none overflow-hidden">
       {!isHomeScreen && (
         <Header 
           currentRoute={currentRoute} 
@@ -287,42 +362,63 @@ export const App: React.FC = () => {
           />
         )}
 
-        <main className={`flex-1 overflow-y-auto bg-[#151515] ${isHomeScreen ? 'p-0' : 'p-4 md:p-6'}`}>
-          {currentRoute === 'home' && (
-            <HomeView onNavigate={handleNavigate} />
-          )}
+        <main className={`flex-1 overflow-y-auto bg-[#000000] flex flex-col justify-between ${isHomeScreen ? 'p-0' : 'p-4 md:p-6'}`}>
+          <div className="flex-1">
+            {currentRoute === 'home' && (
+              <HomeView onNavigate={handleNavigate} />
+            )}
 
-          {currentRoute === 'dashboard' && (
-            <DashboardView
-              data={dashboardData}
-              selectedCameraId={selectedCameraId}
-              onSelectCamera={handleSelectCamera}
-              onSearchPlate={handleSearchPlate}
-              onViewTrace={handleViewTrace}
-              onNavigateSection={(section) => handleNavigate(section as NavRoute)}
-            />
-          )}
+            {currentRoute === 'dashboard' && (
+              <DashboardView
+                data={dashboardData}
+                selectedCameraId={selectedCameraId}
+                onSelectCamera={handleSelectCamera}
+                onSearchPlate={handleSearchPlate}
+                onViewTrace={handleViewTrace}
+                onNavigateSection={(section) => handleNavigate(section as NavRoute)}
+              />
+            )}
 
-          {currentRoute === 'vehicle-trace' && (
-            <VehicleTraceView
-              data={vehicleTracePayload}
-              onSearchPlate={handleSearchPlate}
-            />
-          )}
+            {currentRoute === 'vehicle-trace' && (
+              <VehicleTraceView
+                data={vehicleTracePayload}
+                onSearchPlate={handleSearchPlate}
+              />
+            )}
 
-          {currentRoute === 'admin-cameras' && (
-            <AdminCameraView />
+            {currentRoute === 'analytics' && (
+              <AnalyticsView />
+            )}
+
+            {currentRoute === 'alerts' && (
+              <AlertsView />
+            )}
+
+            {currentRoute === 'blacklist' && (
+              <BlacklistView
+                onSearchPlate={handleSearchPlate}
+                onViewTrace={handleViewTrace}
+              />
+            )}
+
+            {currentRoute === 'cameras' && (
+              <CamerasView />
+            )}
+
+            {currentRoute === 'admin-cameras' && (
+              <AdminCameraView />
+            )}
+          </div>
+
+          {!isHomeScreen && (
+            <footer className="bg-transparent pt-6 pb-2 text-center select-none z-20">
+              <p className="text-[11px] text-[#A0A0A0] font-body">
+                © 2026 TRACE - Tracking, Recognition, Analytics & City-wide Traffic Enforcement. All Rights Reserved.
+              </p>
+            </footer>
           )}
         </main>
       </div>
-
-      {!isHomeScreen && (
-        <footer className="bg-[#151515] py-2.5 px-4 text-center select-none z-20 border-t border-white/5">
-          <p className="text-[11px] text-[#A0A0A0] font-body">
-            © 2026 TRACE — Tracking, Recognition, Analytics & City-wide Traffic Enforcement. All Rights Reserved.
-          </p>
-        </footer>
-      )}
     </div>
   );
 };

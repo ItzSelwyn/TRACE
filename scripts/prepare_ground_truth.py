@@ -7,8 +7,8 @@ import json
 from pathlib import Path
 
 EXPECTED_COLUMNS = 10
-SELECTED_SCENE = "S04"
-SELECTED_CAMERAS = ("c020", "c023", "c029", "c035")
+SELECTED_SCENE = "S05"
+SELECTED_CAMERAS = ("c020", "c023", "c028", "c029")
 
 
 def parse_args() -> argparse.Namespace:
@@ -21,8 +21,9 @@ def parse_args() -> argparse.Namespace:
 
 def resolve_gt_path(dataset_root: Path, camera_id: str) -> Path:
     candidates = [
-        dataset_root / "train" / SELECTED_SCENE / camera_id / "gt" / "gt.txt",
+        dataset_root / "footage" / SELECTED_SCENE / camera_id / "gt" / "gt.txt",
         dataset_root / SELECTED_SCENE / camera_id / "gt" / "gt.txt",
+        dataset_root / "train" / SELECTED_SCENE / camera_id / "gt" / "gt.txt",
         dataset_root / camera_id / "gt" / "gt.txt",
     ]
 
