@@ -307,7 +307,7 @@ export const BlacklistView: React.FC<BlacklistViewProps> = ({
                           className={`text-xs py-1 px-1 rounded-[3px] cursor-pointer flex items-center justify-between transition-colors font-body ${
                             isSelected
                               ? 'text-white font-medium'
-                              : 'text-[#AEA793] hover:text-white'
+                              : 'text-[#A0A0A0] hover:text-white'
                           }`}
                         >
                           <span>{timeOption}</span>
@@ -318,8 +318,8 @@ export const BlacklistView: React.FC<BlacklistViewProps> = ({
                   </div>
                 </div>
 
-                {/* Section Horizontal Divider in #AEA793 */}
-                <div className="my-3 border-b border-[#AEA793]" />
+                {/* Section Horizontal Divider in #A0A0A0 */}
+                <div className="my-3 border-b border-[#A0A0A0]" />
 
                 {/* Section 2: Dates */}
                 <div>
@@ -336,7 +336,7 @@ export const BlacklistView: React.FC<BlacklistViewProps> = ({
                           className={`text-xs py-1 px-1 rounded-[3px] cursor-pointer flex items-center justify-between transition-colors font-body ${
                             isSelected
                               ? 'text-white font-medium'
-                              : 'text-[#AEA793] hover:text-white'
+                              : 'text-[#A0A0A0] hover:text-white'
                           }`}
                         >
                           <span>{dateOption}</span>
@@ -530,7 +530,7 @@ export const BlacklistView: React.FC<BlacklistViewProps> = ({
                 <button
                   type="button"
                   onClick={() => handleViewTraceJump(selectedEntry.plateNumber)}
-                  className="bg-[#1E1E1E] text-[#AEA793] font-bold font-body text-xs px-3 py-1 rounded-[3px] flex items-center gap-1.5 cursor-pointer"
+                  className="bg-[#1E1E1E] text-[#A0A0A0] font-bold font-body text-xs px-3 py-1 rounded-[3px] flex items-center gap-1.5 cursor-pointer"
                 >
                   <span>VIEW RECONSTRUCTED TRAJECTORY</span>
                   <img src="/assets/diagonal_arrow.svg" alt="Arrow" className="w-3 h-3 object-contain" />

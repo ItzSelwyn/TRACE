@@ -19,28 +19,24 @@
   }
 }
 
-/* Custom dark scrollbar */
+/* Remove all scrollbars while preserving scroll functionality */
+*::-webkit-scrollbar,
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
-::-webkit-scrollbar-track {
-  background: #000000;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #2E2E2E;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #F2D04E;
+*, html, body {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
 }
 
 /* Hide scrollbar utility */
 .no-scrollbar::-webkit-scrollbar {
   display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 .no-scrollbar {
   -ms-overflow-style: none !important;

@@ -362,7 +362,7 @@ export const App: React.FC = () => {
           />
         )}
 
-        <main className={`flex-1 overflow-y-auto bg-[#000000] flex flex-col justify-between ${isHomeScreen ? 'p-0' : 'p-4 md:p-6'}`}>
+        <main className={`flex-1 overflow-y-auto no-scrollbar bg-[#000000] flex flex-col justify-between ${isHomeScreen ? 'p-0' : 'p-4 md:p-6'}`}>
           <div className="flex-1">
             {currentRoute === 'home' && (
               <HomeView onNavigate={handleNavigate} />

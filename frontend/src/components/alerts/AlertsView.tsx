@@ -227,7 +227,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedVerifications, setSelectedVerifications, item)}
-                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -237,7 +237,7 @@ export const AlertsView: React.FC = () => {
                     );
                   })}
                 </div>
-                <div className="border-b border-[#AEA793]" />
+                <div className="border-b border-[#A0A0A0]" />
 
                 {/* 2. Location Category */}
                 <div className="space-y-2">
@@ -250,7 +250,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedLocations, setSelectedLocations, item)}
-                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -260,7 +260,7 @@ export const AlertsView: React.FC = () => {
                     );
                   })}
                 </div>
-                <div className="border-b border-[#AEA793]" />
+                <div className="border-b border-[#A0A0A0]" />
 
                 {/* 3. CCTV Cameras Category */}
                 <div className="space-y-2">
@@ -273,7 +273,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedCameras, setSelectedCameras, item)}
-                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -283,7 +283,7 @@ export const AlertsView: React.FC = () => {
                     );
                   })}
                 </div>
-                <div className="border-b border-[#AEA793]" />
+                <div className="border-b border-[#A0A0A0]" />
 
                 {/* 4. Vehicle Type Category */}
                 <div className="space-y-2">
@@ -296,7 +296,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedTypes, setSelectedTypes, item)}
-                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -306,7 +306,7 @@ export const AlertsView: React.FC = () => {
                     );
                   })}
                 </div>
-                <div className="border-b border-[#AEA793]" />
+                <div className="border-b border-[#A0A0A0]" />
 
                 {/* 5. Vehicle Color Category */}
                 <div className="space-y-2">
@@ -319,7 +319,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedColors, setSelectedColors, item)}
-                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -329,7 +329,7 @@ export const AlertsView: React.FC = () => {
                     );
                   })}
                 </div>
-                <div className="border-b border-[#AEA793]" />
+                <div className="border-b border-[#A0A0A0]" />
 
                 {/* 6. Category Section */}
                 <div className="space-y-2">
@@ -342,7 +342,7 @@ export const AlertsView: React.FC = () => {
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedCategories, setSelectedCategories, item)}
-                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -376,10 +376,10 @@ export const AlertsView: React.FC = () => {
             return (
               <div
                 key={item.id}
-                className="bg-[#151515] rounded-[3px] p-5 md:px-6 flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all"
+                className="bg-[#151515] rounded-[3px] p-5 md:px-6 flex flex-col md:flex-row md:items-center gap-6 lg:gap-8 transition-all"
               >
-                {/* Left Section: Car Icon & Primary Meta */}
-                <div className="flex items-center gap-5">
+                {/* Left Section: Car Icon & Primary Meta (fixed width ensures identical horizontal alignment across cards) */}
+                <div className="flex items-center gap-5 w-full md:w-[380px] lg:w-[420px] shrink-0">
                   <div className="shrink-0">
                     <img
                       src={isUnverified ? '/assets/alert_car_red.svg' : '/assets/alert_car_grey.svg'}
@@ -388,7 +388,7 @@ export const AlertsView: React.FC = () => {
                     />
                   </div>
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 min-w-0">
                     <div className="flex items-center gap-3">
                       <h2
                         className={`text-lg md:text-xl font-bold font-body tracking-wide ${
@@ -399,7 +399,7 @@ export const AlertsView: React.FC = () => {
                       </h2>
 
                       <span
-                        className={`text-[10px] font-body font-bold px-2 py-0.5 rounded-[3px] tracking-wider text-[#151515] ${
+                        className={`text-[10px] font-body font-bold px-2 py-0.5 rounded-[3px] tracking-wider text-[#151515] shrink-0 ${
                           isUnverified
                             ? 'bg-[#AC251D]'
                             : 'bg-[#A0A0A0]'
@@ -409,43 +409,43 @@ export const AlertsView: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="text-xs md:text-sm font-body text-white/90 space-y-0.5">
+                    <div className="text-xs md:text-sm font-body text-white/90 space-y-0.5 whitespace-nowrap">
                       <p>
                         <span className="text-[#A0A0A0]">Vehicle Type : </span>
-                        <span className="font-semibold text-[#AEA793]">{item.vehicleType}</span>
+                        <span className="font-semibold text-[#A0A0A0]">{item.vehicleType}</span>
                       </p>
                       <p>
                         <span className="text-[#A0A0A0]">Vehicle Color : </span>
-                        <span className="font-semibold text-[#AEA793]">{item.vehicleColor}</span>
+                        <span className="font-semibold text-[#A0A0A0]">{item.vehicleColor}</span>
                       </p>
                       <p>
                         <span className="text-[#A0A0A0]">Scanned Timestamp : </span>
-                        <span className="font-semibold text-[#AEA793]">{item.scannedTimestamp}</span>
+                        <span className="font-semibold text-[#A0A0A0]">{item.scannedTimestamp}</span>
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Center Section: Camera & Location Info */}
-                <div className="space-y-1.5 text-xs md:text-sm font-body text-white/90 min-w-[220px]">
+                {/* Center Section: Camera & Location Info (consistent left alignment with clean multi-line reason support) */}
+                <div className="space-y-1.5 text-xs md:text-sm font-body text-white/90 flex-1 min-w-0 max-w-xl">
                   <div className="flex items-center gap-2">
-                    <img src="/assets/alert_camera.svg" alt="Camera" className="w-4 h-4 object-contain opacity-80" />
-                    <span className="font-semibold text-[#AEA793]">{item.cameraName}</span>
+                    <img src="/assets/alert_camera.svg" alt="Camera" className="w-4 h-4 object-contain opacity-80 shrink-0" />
+                    <span className="font-semibold text-[#A0A0A0]">{item.cameraName}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <img src="/assets/alert_location.svg" alt="Location" className="w-4 h-4 object-contain opacity-80" />
-                    <span className="font-semibold text-[#AEA793]">{item.location}</span>
+                    <img src="/assets/alert_location.svg" alt="Location" className="w-4 h-4 object-contain opacity-80 shrink-0" />
+                    <span className="font-semibold text-[#A0A0A0]">{item.location}</span>
                   </div>
                   {item.reason && (
-                    <p className="pt-0.5">
+                    <p className="pt-0.5 leading-snug break-words max-w-md lg:max-w-lg">
                       <span className="text-[#A0A0A0]">Reason : </span>
-                      <span className="font-semibold text-[#AEA793]">{item.reason}</span>
+                      <span className="font-semibold text-[#A0A0A0]">{item.reason}</span>
                     </p>
                   )}
                 </div>
 
-                {/* Right Section: Confidence Badge & Verify Action Button */}
-                <div className="flex flex-col items-end justify-between gap-4 shrink-0">
+                {/* Right Section: Confidence Badge & Verify Action Button (pinned to the right edge) */}
+                <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center gap-4 shrink-0 md:ml-auto w-full md:w-auto">
                   {/* Confidence rate box: No stroke, text in #151515, corner radius 3, color as per rate for unverified, #A0A0A0 for verified */}
                   <div
                     className={`px-3 py-1 rounded-[3px] font-body font-bold text-sm tracking-wider text-[#151515] ${

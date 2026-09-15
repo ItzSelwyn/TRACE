@@ -62,12 +62,12 @@ export const RecentAlerts: React.FC<RecentAlertsProps> = ({
               {/* Subtitle: Camera & Location Stacked Lines */}
               <div className="space-y-1.5 text-xs md:text-sm text-[#A0A0A0] font-body mb-3">
                 <div className="flex items-center gap-2">
-                  <img src="/assets/camera_aea793.svg" alt="Camera" className="w-4 h-4 object-contain" />
+                  <img src="/assets/camera_a0a0a0.svg" alt="Camera" className="w-4 h-4 object-contain" />
                   <span>{alert.cameraName} ({alert.location})</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <img src="/assets/alert_location.svg" alt="Location" className="w-4 h-4 object-contain opacity-80" />
-                  <span className="font-semibold text-[#AEA793]">North Highway 06</span>
+                  <span className="font-semibold text-[#A0A0A0]">North Highway 06</span>
                 </div>
               </div>
 
@@ -75,7 +75,7 @@ export const RecentAlerts: React.FC<RecentAlertsProps> = ({
               <div className="flex justify-end pt-1">
                 <button
                   onClick={() => onViewAlertTrace && onViewAlertTrace(alert.plateNumber)}
-                  className="bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#AEA793] hover:text-white font-bold font-body text-xs md:text-sm px-4 py-1.5 rounded-[3px] flex items-center gap-1.5 cursor-pointer transition-all"
+                  className="bg-[#1E1E1E] hover:bg-[#2A2A2A] text-[#A0A0A0] hover:text-white font-bold font-body text-xs md:text-sm px-4 py-1.5 rounded-[3px] flex items-center gap-1.5 cursor-pointer transition-all"
                 >
                   <span>VIEW</span>
                   <img src="/assets/diagonal_arrow.svg" alt="Arrow" className="w-3.5 h-3.5 object-contain" />

@@ -32,9 +32,9 @@ interface VehicleTraceViewProps {
   onSearchPlate?: (plateQuery: string) => void;
 }
 
-export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({ 
-  data, 
-  onSearchPlate 
+export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
+  data,
+  onSearchPlate
 }) => {
   const [searchQuery, setSearchQuery] = useState(data.searchedPlate || '');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -58,7 +58,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
             setCrossCameraPaths(payload.paths);
           }
         }
-      } catch (_) {}
+      } catch (_) { }
     };
     fetchPaths();
     return () => {
@@ -146,7 +146,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
 
             {/* Filter Dropdown Popup Menu */}
             {isFilterOpen && (
-              <div 
+              <div
                 className="absolute right-0 mt-3 w-64 md:w-72 bg-[#000000] rounded-[3px] z-50 p-4 space-y-4 text-xs font-body"
                 style={{ boxShadow: '0px 14px 35px rgba(0, 0, 0, 0.3)' }}
               >
@@ -161,7 +161,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedTimestamps, setSelectedTimestamps, item)}
-                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -172,7 +172,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                   })}
                 </div>
 
-                <div className="border-b border-[#AEA793]" />
+                <div className="border-b border-[#A0A0A0]" />
 
                 {/* 2. Location Category */}
                 <div className="space-y-2">
@@ -185,7 +185,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                       <div
                         key={item}
                         onClick={() => toggleFilter(selectedLocations, setSelectedLocations, item)}
-                        className="flex items-center justify-between text-[#AEA793] font-body cursor-pointer hover:text-white py-0.5"
+                        className="flex items-center justify-between text-[#A0A0A0] font-body cursor-pointer hover:text-white py-0.5"
                       >
                         <span>{item}</span>
                         {isChecked && (
@@ -202,7 +202,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
 
         {/* Dynamic Suggestion Chips for Multi-Camera Trajectories */}
         <div className="flex items-center gap-2 overflow-x-auto text-xs pt-1 no-scrollbar">
-          <span className="text-[#AEA793] font-semibold text-[11px] uppercase tracking-wider whitespace-nowrap">
+          <span className="text-[#A0A0A0] font-semibold text-[11px] uppercase tracking-wider whitespace-nowrap">
             Cross-Camera Paths:
           </span>
           {crossCameraPaths.map((path) => {
@@ -215,18 +215,12 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                   setSearchQuery(path.vehicle_id);
                   onSearchPlate && onSearchPlate(path.vehicle_id);
                 }}
-                className={`px-2.5 py-1 rounded-[3px] text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
-                  isSelected
-                    ? 'bg-[#F2D04E] text-black font-bold shadow-sm'
-                    : path.is_corridor
-                    ? 'bg-[#1E1E1E] hover:bg-[#2A2A2A] border border-[#F2D04E]/40 text-[#F2D04E]'
-                    : 'bg-[#1E1E1E] hover:bg-[#2A2A2A] border border-white/10 text-white/90'
-                }`}
+                className={`px-2.5 py-1 rounded-[3px] text-xs font-semibold whitespace-nowrap flex items-center cursor-pointer bg-[#000000] border-none outline-none ${isSelected
+                    ? 'text-[#F2D04E] font-bold'
+                    : 'text-[#A0A0A0]'
+                  }`}
                 title={`CityFlow Vehicle ${path.vehicle_id} (${path.description})`}
               >
-                {path.is_corridor && (
-                  <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-black' : 'bg-[#1B7A43]'}`} />
-                )}
                 <span>{path.label}</span>
               </button>
             );
@@ -260,14 +254,14 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
             <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
               {data.chronology.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center text-[#A0A0A0] space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-[#1e1e1e] flex items-center justify-center text-[#AEA793]/60">
+                  <div className="w-12 h-12 rounded-full bg-[#1e1e1e] flex items-center justify-center text-[#A0A0A0]/60">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <circle cx="11" cy="11" r="8" />
                       <line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
                   </div>
                   <p className="text-sm font-bold text-white">No Vehicle Observations Found</p>
-                  <p className="text-xs text-[#AEA793] max-w-xs leading-relaxed">
+                  <p className="text-xs text-[#A0A0A0] max-w-xs leading-relaxed">
                     No trajectory records matched &ldquo;{searchQuery || data.searchedPlate}&rdquo;. Try selecting a cross-camera path above or searching a CityFlow vehicle ID (e.g. 334, 396, 336, 420).
                   </p>
                 </div>
@@ -301,7 +295,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                       <div className="flex items-center justify-between text-xs text-[#A0A0A0] font-body mb-2">
                         <div className="flex items-center gap-1.5">
                           <svg width="14" height="14" viewBox="0 0 20 19" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5">
-                            <path d="M16.3235 12.8229L14.3235 11.6647L18 8.90284L20 10.061L16.3235 12.8229ZM10.5294 9.88286L14.3529 7.03189L5.08824 1.74573L2.88235 5.51732L10.5294 9.88286ZM0 19V17.2181H6.17647V9.43739L2 7.06159C1.56726 6.80501 1.28755 6.43893 1.16088 5.96338C1.03402 5.48782 1.09804 5.03226 1.35294 4.5967L3.55882 0.884505C3.81373 0.468739 4.17157 0.196512 4.63235 0.0678227C5.09314 -0.0608666 5.52941 -0.00642109 5.94118 0.231159L17.5588 6.85371L10.6471 11.9914L7.94118 10.4471V17.2181C7.94118 17.7082 7.76843 18.1276 7.42294 18.4764C7.07726 18.8255 6.66176 19 6.17647 19H0Z" fill="#AEA793"/>
+                            <path d="M16.3235 12.8229L14.3235 11.6647L18 8.90284L20 10.061L16.3235 12.8229ZM10.5294 9.88286L14.3529 7.03189L5.08824 1.74573L2.88235 5.51732L10.5294 9.88286ZM0 19V17.2181H6.17647V9.43739L2 7.06159C1.56726 6.80501 1.28755 6.43893 1.16088 5.96338C1.03402 5.48782 1.09804 5.03226 1.35294 4.5967L3.55882 0.884505C3.81373 0.468739 4.17157 0.196512 4.63235 0.0678227C5.09314 -0.0608666 5.52941 -0.00642109 5.94118 0.231159L17.5588 6.85371L10.6471 11.9914L7.94118 10.4471V17.2181C7.94118 17.7082 7.76843 18.1276 7.42294 18.4764C7.07726 18.8255 6.66176 19 6.17647 19H0Z" fill="#A0A0A0" />
                           </svg>
                           <span>{item.cameraName} ({item.location})</span>
                         </div>
@@ -359,11 +353,11 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                 <span>Cross-Camera Route ({validStops.length} Camera Sightings)</span>
               </span>
             ) : validStops.length === 1 ? (
-              <span className="bg-white/5 border border-white/15 text-[#AEA793] text-[11px] font-medium px-2.5 py-1 rounded-[3px]">
+              <span className="bg-white/5 border border-white/15 text-[#A0A0A0] text-[11px] font-medium px-2.5 py-1 rounded-[3px]">
                 Single Camera Detection
               </span>
             ) : (
-              <span className="bg-white/5 border border-white/10 text-[#666666] text-[11px] font-medium px-2.5 py-1 rounded-[3px]">
+              <span className="bg-[#000000] text-[#A0A0A0] text-[11px] font-medium px-2.5 py-1 rounded-[3px]">
                 No Route Points
               </span>
             )}
@@ -382,9 +376,8 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                   <MapMarker key={`${stop.name}-${index}`} longitude={stop.lng} latitude={stop.lat}>
                     <MarkerContent>
                       <div
-                        className={`flex size-5 items-center justify-center rounded-full border-2 border-white text-[11px] font-bold shadow-lg transition-transform hover:scale-125 ${
-                          isAnomaly ? 'bg-[#971D1B] text-white' : index === 0 ? 'bg-[#1B7A43] text-white' : 'bg-[#F2D04E] text-[#151515]'
-                        }`}
+                        className={`flex size-5 items-center justify-center rounded-full border-2 border-white text-[11px] font-bold shadow-lg transition-transform hover:scale-125 ${isAnomaly ? 'bg-[#971D1B] text-white' : index === 0 ? 'bg-[#1B7A43] text-white' : 'bg-[#F2D04E] text-[#151515]'
+                          }`}
                       >
                         {index + 1}
                       </div>

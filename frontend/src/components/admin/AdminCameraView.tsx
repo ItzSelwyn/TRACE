@@ -538,7 +538,7 @@ export const AdminCameraView: React.FC = () => {
               ADMIN / DEV
             </span>
           </div>
-          <p className="text-xs text-[#AEA793] font-body mt-1">
+          <p className="text-xs text-[#A0A0A0] font-body mt-1">
             Dynamically switch camera inputs, synchronize CityFlow multi-camera scenario timing, and inspect perception model crops.
           </p>
         </div>
@@ -547,21 +547,19 @@ export const AdminCameraView: React.FC = () => {
         <div className="flex items-center gap-2 bg-[#151515] p-1.5 rounded-[3px]">
           <button
             onClick={() => setActiveTab('cameras')}
-            className={`px-4 py-2 rounded-[3px] text-xs font-heading font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-              activeTab === 'cameras'
+            className={`px-4 py-2 rounded-[3px] text-xs font-heading font-bold uppercase tracking-wider transition-colors cursor-pointer ${activeTab === 'cameras'
                 ? 'bg-[#F2D04E] text-[#000000]'
-                : 'text-[#AEA793] hover:text-white hover:bg-white/5'
-            }`}
+                : 'text-[#A0A0A0] hover:text-white hover:bg-white/5'
+              }`}
           >
             Camera & Playback
           </button>
           <button
             onClick={() => setActiveTab('debugger')}
-            className={`px-4 py-2 rounded-[3px] text-xs font-heading font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-              activeTab === 'debugger'
+            className={`px-4 py-2 rounded-[3px] text-xs font-heading font-bold uppercase tracking-wider transition-colors cursor-pointer ${activeTab === 'debugger'
                 ? 'bg-[#F2D04E] text-[#000000]'
-                : 'text-[#AEA793] hover:text-white hover:bg-white/5'
-            }`}
+                : 'text-[#A0A0A0] hover:text-white hover:bg-white/5'
+              }`}
           >
             Model Visual Debugger
           </button>
@@ -573,11 +571,11 @@ export const AdminCameraView: React.FC = () => {
         <>
           {/* Master Timeline & Synchronization Bar */}
           <div className="bg-[#1E1E1E] p-4 rounded-[3px] shadow-lg space-y-4">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-3 border-b border-[#AEA793]/20">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-3">
               {/* Digital Master Clock */}
               <div className="flex items-center gap-4">
                 <div className="bg-[#151515] px-4 py-2 rounded-[3px]">
-                  <div className="text-[10px] text-[#AEA793] font-heading font-bold uppercase tracking-wider">
+                  <div className="text-[10px] text-[#A0A0A0] font-heading font-bold uppercase tracking-wider">
                     Master Scenario Timeline (T_master)
                   </div>
                   <div className="text-2xl font-heading font-bold text-[#F2D04E] tracking-wider">
@@ -586,7 +584,7 @@ export const AdminCameraView: React.FC = () => {
                 </div>
 
                 <div className="text-xs space-y-1 font-heading">
-                  <div className="text-[#AEA793]">
+                  <div className="text-[#A0A0A0]">
                     Mode:{' '}
                     <span className="font-bold text-white">
                       {playback?.sync_mode === 'synchronized'
@@ -594,7 +592,7 @@ export const AdminCameraView: React.FC = () => {
                         : 'Independent Camera Playback'}
                     </span>
                   </div>
-                  <div className="text-[11px] text-[#AEA793]">
+                  <div className="text-[11px] text-[#A0A0A0]">
                     Formula: T_local(cam) = T_master - T_start(cam)
                   </div>
                 </div>
@@ -628,11 +626,10 @@ export const AdminCameraView: React.FC = () => {
                     <button
                       key={spd}
                       onClick={() => handleChangeSpeed(spd)}
-                      className={`px-2 py-1 text-[11px] font-heading font-bold rounded-[3px] cursor-pointer transition-colors ${
-                        playback?.playback_speed === spd
+                      className={`px-2 py-1 text-[11px] font-heading font-bold rounded-[3px] cursor-pointer transition-colors ${playback?.playback_speed === spd
                           ? 'bg-[#F2D04E] text-[#000000]'
-                          : 'text-[#AEA793] hover:text-white'
-                      }`}
+                          : 'text-[#A0A0A0] hover:text-white'
+                        }`}
                     >
                       {spd}x
                     </button>
@@ -642,11 +639,10 @@ export const AdminCameraView: React.FC = () => {
                 {/* Sync Mode Toggle */}
                 <button
                   onClick={handleToggleSyncMode}
-                  className={`px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors ${
-                    playback?.sync_mode === 'synchronized'
+                  className={`px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors ${playback?.sync_mode === 'synchronized'
                       ? 'bg-[#1B7A43]/20 text-[#1B7A43]'
                       : 'bg-[#B8860B]/20 text-[#B8860B]'
-                  }`}
+                    }`}
                   title="Toggle between synchronized multi-camera timeline vs independent playback"
                 >
                   {playback?.sync_mode === 'synchronized' ? 'SYNC: ON (S05)' : 'INDEPENDENT'}
@@ -655,11 +651,10 @@ export const AdminCameraView: React.FC = () => {
                 {/* Loop Scenario Toggle */}
                 <button
                   onClick={handleToggleLoop}
-                  className={`px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors ${
-                    playback?.loop_scenario
+                  className={`px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors ${playback?.loop_scenario
                       ? 'bg-[#F2D04E]/20 text-[#F2D04E]'
                       : 'bg-[#151515] text-[#A0A0A0]'
-                  }`}
+                    }`}
                 >
                   LOOP: {playback?.loop_scenario ? 'ON' : 'OFF'}
                 </button>
@@ -668,7 +663,7 @@ export const AdminCameraView: React.FC = () => {
 
             {/* Visual Timeline Progress Bar */}
             <div className="space-y-1 font-heading">
-              <div className="flex justify-between text-[10px] text-[#AEA793]">
+              <div className="flex justify-between text-[10px] text-[#A0A0A0]">
                 <span>00:00 (Scenario Start)</span>
                 <span>
                   Active: {formatLiveTime(liveMasterTime)} / {maxDurationFormatted} (CityFlow S05)
@@ -701,9 +696,8 @@ export const AdminCameraView: React.FC = () => {
               return (
                 <div
                   key={cam.camera_id}
-                  className={`bg-[#1E1E1E] rounded-[3px] p-4 shadow-md flex flex-col justify-between ${
-                    isEnabled ? 'opacity-100' : 'opacity-70'
-                  }`}
+                  className={`bg-[#1E1E1E] rounded-[3px] p-4 shadow-md flex flex-col justify-between ${isEnabled ? 'opacity-100' : 'opacity-70'
+                    }`}
                 >
                   {/* Card Header */}
                   <div>
@@ -731,7 +725,7 @@ export const AdminCameraView: React.FC = () => {
                           }}
                         />
                       ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-[#AEA793] space-y-2">
+                        <div className="w-full h-full flex flex-col items-center justify-center text-[#A0A0A0] space-y-2">
                           <span className="text-xs font-heading font-bold uppercase tracking-wider">
                             Camera Feed Disabled
                           </span>
@@ -739,7 +733,7 @@ export const AdminCameraView: React.FC = () => {
                       )}
 
                       {/* Video Stream Info Overlay */}
-                      <div className="absolute top-2 left-2 bg-[#151515]/90 px-2 py-1 rounded-[3px] text-[10px] font-heading text-[#AEA793]">
+                      <div className="absolute top-2 left-2 bg-[#151515]/90 px-2 py-1 rounded-[3px] text-[10px] font-heading text-[#A0A0A0]">
                         {cam.source_type.toUpperCase()}: {cam.source_path.split('/').pop()}
                       </div>
 
@@ -751,7 +745,7 @@ export const AdminCameraView: React.FC = () => {
                     {/* Timing & Source Details */}
                     <div className="grid grid-cols-2 gap-2 bg-[#151515] p-2.5 rounded-[3px] text-xs mb-3 font-heading">
                       <div>
-                        <span className="text-[#AEA793] block text-[10px] uppercase font-bold">
+                        <span className="text-[#A0A0A0] block text-[10px] uppercase font-bold">
                           Scenario / Offset
                         </span>
                         <span className="text-white font-semibold">
@@ -759,19 +753,19 @@ export const AdminCameraView: React.FC = () => {
                         </span>
                       </div>
                       <div>
-                        <span className="text-[#AEA793] block text-[10px] uppercase font-bold">
+                        <span className="text-[#A0A0A0] block text-[10px] uppercase font-bold">
                           Local Time (T_local)
                         </span>
                         <span className="text-[#F2D04E] font-bold">
                           {isWaiting
                             ? `WAITING (-${(cam.sync_offset_s - liveMasterTime).toFixed(1)}s)`
                             : isEnded
-                            ? `ENDED (${videoDuration.toFixed(1)}s)`
-                            : `${computedLocalTime.toFixed(2)}s`}
+                              ? `ENDED (${videoDuration.toFixed(1)}s)`
+                              : `${computedLocalTime.toFixed(2)}s`}
                         </span>
                       </div>
-                      <div className="col-span-2 pt-1 border-t border-[#AEA793]/20 truncate">
-                        <span className="text-[#AEA793] text-[10px] uppercase font-bold mr-1">
+                      <div className="col-span-2 pt-1 truncate">
+                        <span className="text-[#A0A0A0] text-[10px] uppercase font-bold mr-1">
                           Source:
                         </span>
                         <span className="text-white/80 text-[11px] truncate">
@@ -782,7 +776,7 @@ export const AdminCameraView: React.FC = () => {
                   </div>
 
                   {/* Card Actions */}
-                  <div className="flex items-center gap-2 pt-2 border-t border-[#AEA793]/20">
+                  <div className="flex items-center gap-2 pt-2">
                     <button
                       onClick={() => handleOpenSourceModal(cam)}
                       className="flex-1 py-2 px-3 bg-[#F2D04E] text-[#000000] font-heading font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors flex items-center justify-center gap-1.5"
@@ -800,11 +794,10 @@ export const AdminCameraView: React.FC = () => {
 
                     <button
                       onClick={() => handleToggleEnable(cam)}
-                      className={`py-2 px-3 font-heading font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors ${
-                        isEnabled
+                      className={`py-2 px-3 font-heading font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors ${isEnabled
                           ? 'bg-[#971D1B]/20 text-[#971D1B]'
                           : 'bg-[#1B7A43]/20 text-[#1B7A43]'
-                      }`}
+                        }`}
                     >
                       {isEnabled ? 'Disable' : 'Enable'}
                     </button>
@@ -823,7 +816,7 @@ export const AdminCameraView: React.FC = () => {
             <h2 className="text-base font-bold font-heading uppercase tracking-wider text-white">
               Perception Model Visual Crop & Attribute Debugger
             </h2>
-            <p className="text-xs text-[#AEA793] font-body mt-1">
+            <p className="text-xs text-[#A0A0A0] font-body mt-1">
               Select any test image from <code className="text-[#F2D04E] font-mono">data/</code> to inspect real YOLO vehicle localization, color classifier crops, and PaddleOCR license plate recognition results side-by-side.
             </p>
           </div>
@@ -831,7 +824,7 @@ export const AdminCameraView: React.FC = () => {
           {/* Test Image Selector Bar */}
           <div className="bg-[#151515] p-4 rounded-[3px] flex flex-col md:flex-row items-stretch md:items-center gap-3">
             <div className="flex-1 space-y-1">
-              <label className="text-[11px] font-heading font-bold uppercase tracking-wider text-[#AEA793]">
+              <label className="text-[11px] font-heading font-bold uppercase tracking-wider text-[#A0A0A0]">
                 Select Discovered Test Image:
               </label>
               <select
@@ -848,7 +841,7 @@ export const AdminCameraView: React.FC = () => {
             </div>
 
             <div className="flex-1 space-y-1">
-              <label className="text-[11px] font-heading font-bold uppercase tracking-wider text-[#AEA793]">
+              <label className="text-[11px] font-heading font-bold uppercase tracking-wider text-[#A0A0A0]">
                 Or Enter Relative Path under data/:
               </label>
               <input
@@ -856,7 +849,7 @@ export const AdminCameraView: React.FC = () => {
                 value={debugImageInput}
                 onChange={(e) => setDebugImageInput(e.target.value)}
                 placeholder="e.g. TN/2.jpg or test1.jpg"
-                className="w-full bg-[#1E1E1E] text-white placeholder-[#AEA793] rounded-[3px] px-3 py-2 text-xs font-heading focus:outline-none"
+                className="w-full bg-[#1E1E1E] text-white placeholder-[#A0A0A0] rounded-[3px] px-3 py-2 text-xs font-heading focus:outline-none"
               />
             </div>
 
@@ -883,7 +876,7 @@ export const AdminCameraView: React.FC = () => {
               {/* Detection Summary Badges */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="bg-[#151515] p-3 rounded-[3px]">
-                  <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-[#AEA793] block">
+                  <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-[#A0A0A0] block">
                     Detected Vehicle
                   </span>
                   <div className="text-base font-bold text-white font-heading mt-0.5">
@@ -895,7 +888,7 @@ export const AdminCameraView: React.FC = () => {
                 </div>
 
                 <div className="bg-[#151515] p-3 rounded-[3px]">
-                  <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-[#AEA793] block">
+                  <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-[#A0A0A0] block">
                     Classified Colour
                   </span>
                   <div className="flex items-center gap-2 mt-0.5">
@@ -906,47 +899,47 @@ export const AdminCameraView: React.FC = () => {
                           debugResult.vehicle_colour === 'WHITE'
                             ? '#FFFFFF'
                             : debugResult.vehicle_colour === 'BLACK'
-                            ? '#1A1A1A'
-                            : debugResult.vehicle_colour === 'SILVER'
-                            ? '#A0A0A0'
-                            : debugResult.vehicle_colour === 'RED'
-                            ? '#971D1B'
-                            : debugResult.vehicle_colour === 'BLUE'
-                            ? '#3B82F6'
-                            : debugResult.vehicle_colour === 'YELLOW'
-                            ? '#F2D04E'
-                            : debugResult.vehicle_colour === 'GREEN'
-                            ? '#1B7A43'
-                            : '#888888',
+                              ? '#1A1A1A'
+                              : debugResult.vehicle_colour === 'SILVER'
+                                ? '#A0A0A0'
+                                : debugResult.vehicle_colour === 'RED'
+                                  ? '#971D1B'
+                                  : debugResult.vehicle_colour === 'BLUE'
+                                    ? '#3B82F6'
+                                    : debugResult.vehicle_colour === 'YELLOW'
+                                      ? '#F2D04E'
+                                      : debugResult.vehicle_colour === 'GREEN'
+                                        ? '#1B7A43'
+                                        : '#888888',
                       }}
                     />
                     <span className="text-base font-bold text-white font-heading">
                       {debugResult.vehicle_colour}
                     </span>
                   </div>
-                  <span className="text-[11px] text-[#AEA793] font-heading">HSV + Variance</span>
+                  <span className="text-[11px] text-[#A0A0A0] font-heading">HSV + Variance</span>
                 </div>
 
                 <div className="bg-[#151515] p-3 rounded-[3px]">
-                  <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-[#AEA793] block">
+                  <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-[#A0A0A0] block">
                     PaddleOCR Number Plate
                   </span>
                   <div className="text-base font-heading font-bold text-[#F2D04E] mt-0.5">
                     {debugResult.plate_number}
                   </div>
-                  <span className="text-[11px] text-[#AEA793] font-heading">
+                  <span className="text-[11px] text-[#A0A0A0] font-heading">
                     Status: {debugResult.plate_detected ? 'READ' : 'NOT READ'}
                   </span>
                 </div>
 
                 <div className="bg-[#151515] p-3 rounded-[3px]">
-                  <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-[#AEA793] block">
+                  <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-[#A0A0A0] block">
                     OCR Confidence
                   </span>
                   <div className="text-base font-bold text-white font-heading mt-0.5">
                     {debugResult.ocr_confidence ? `${(debugResult.ocr_confidence * 100).toFixed(1)}%` : 'N/A'}
                   </div>
-                  <span className="text-[11px] text-[#AEA793] font-heading">
+                  <span className="text-[11px] text-[#A0A0A0] font-heading">
                     Dims: {debugResult.dimensions}
                   </span>
                 </div>
@@ -967,7 +960,7 @@ export const AdminCameraView: React.FC = () => {
                         className="w-full h-full object-contain"
                       />
                     ) : (
-                      <span className="text-xs text-[#AEA793] font-heading">No detection</span>
+                      <span className="text-xs text-[#A0A0A0] font-heading">No detection</span>
                     )}
                   </div>
                 </div>
@@ -985,10 +978,10 @@ export const AdminCameraView: React.FC = () => {
                         className="w-full h-full object-contain"
                       />
                     ) : (
-                      <span className="text-xs text-[#AEA793] font-heading">No crop</span>
+                      <span className="text-xs text-[#A0A0A0] font-heading">No crop</span>
                     )}
                   </div>
-                  <div className="mt-2 text-[11px] text-[#AEA793] text-center font-heading">
+                  <div className="mt-2 text-[11px] text-[#A0A0A0] text-center font-heading">
                     Sampled Region: Vehicle Body Core
                   </div>
                 </div>
@@ -1006,7 +999,7 @@ export const AdminCameraView: React.FC = () => {
                         className="w-full h-full object-contain p-2"
                       />
                     ) : (
-                      <span className="text-xs text-[#AEA793] font-heading">No plate crop</span>
+                      <span className="text-xs text-[#A0A0A0] font-heading">No plate crop</span>
                     )}
                   </div>
                   <div className="mt-2 text-[11px] text-[#F2D04E] text-center font-heading font-bold">
@@ -1024,12 +1017,12 @@ export const AdminCameraView: React.FC = () => {
         <div className="fixed inset-0 z-50 bg-[#000000]/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#1E1E1E] rounded-[3px] w-full max-w-2xl overflow-hidden shadow-2xl space-y-4">
             {/* Modal Header */}
-            <div className="bg-[#151515] px-5 py-4 border-b border-[#AEA793]/20 flex items-center justify-between">
+            <div className="bg-[#151515] px-5 py-4 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-white font-heading uppercase tracking-wider">
                   Change Camera Input Source
                 </h3>
-                <p className="text-xs text-[#AEA793] font-heading">
+                <p className="text-xs text-[#A0A0A0] font-heading">
                   Select new video or still image for{' '}
                   <span className="text-[#F2D04E] font-bold">
                     {modalCamera.name} ({modalCamera.camera_id.toUpperCase()})
@@ -1038,7 +1031,7 @@ export const AdminCameraView: React.FC = () => {
               </div>
               <button
                 onClick={() => setModalCamera(null)}
-                className="text-[#AEA793] hover:text-white text-lg font-bold cursor-pointer"
+                className="text-[#A0A0A0] hover:text-white text-lg font-bold cursor-pointer"
               >
                 ✕
               </button>
@@ -1048,27 +1041,25 @@ export const AdminCameraView: React.FC = () => {
             <div className="px-5 space-y-4 max-h-[65vh] overflow-y-auto font-heading">
               {/* Type Switch */}
               <div className="flex items-center gap-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-[#AEA793]">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#A0A0A0]">
                   Input Type:
                 </span>
                 <div className="flex bg-[#151515] p-1 rounded-[3px]">
                   <button
                     onClick={() => setSelectedSourceType('video')}
-                    className={`px-3 py-1 text-xs font-bold uppercase rounded-[3px] cursor-pointer transition-colors ${
-                      selectedSourceType === 'video'
+                    className={`px-3 py-1 text-xs font-bold uppercase rounded-[3px] cursor-pointer transition-colors ${selectedSourceType === 'video'
                         ? 'bg-[#F2D04E] text-[#000000]'
-                        : 'text-[#AEA793] hover:text-white'
-                    }`}
+                        : 'text-[#A0A0A0] hover:text-white'
+                      }`}
                   >
                     Scenario Video
                   </button>
                   <button
                     onClick={() => setSelectedSourceType('image')}
-                    className={`px-3 py-1 text-xs font-bold uppercase rounded-[3px] cursor-pointer transition-colors ${
-                      selectedSourceType === 'image'
+                    className={`px-3 py-1 text-xs font-bold uppercase rounded-[3px] cursor-pointer transition-colors ${selectedSourceType === 'image'
                         ? 'bg-[#F2D04E] text-[#000000]'
-                        : 'text-[#AEA793] hover:text-white'
-                    }`}
+                        : 'text-[#A0A0A0] hover:text-white'
+                      }`}
                   >
                     Static Test Image
                   </button>
@@ -1078,7 +1069,7 @@ export const AdminCameraView: React.FC = () => {
               {/* Source Selection List */}
               {selectedSourceType === 'video' ? (
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-[#AEA793] block">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[#A0A0A0] block">
                     Available Discovered Videos in data/:
                   </label>
                   <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
@@ -1088,15 +1079,14 @@ export const AdminCameraView: React.FC = () => {
                         <div
                           key={vid.id}
                           onClick={() => setSelectedSourcePath(vid.path)}
-                          className={`p-3 rounded-[3px] cursor-pointer transition-colors flex items-center justify-between ${
-                            isSelected
+                          className={`p-3 rounded-[3px] cursor-pointer transition-colors flex items-center justify-between ${isSelected
                               ? 'bg-[#F2D04E]/15 text-white'
-                              : 'bg-[#151515] text-[#AEA793] hover:text-white hover:bg-white/5'
-                          }`}
+                              : 'bg-[#151515] text-[#A0A0A0] hover:text-white hover:bg-white/5'
+                            }`}
                         >
                           <div>
                             <div className="font-heading text-xs font-bold text-white">{vid.path}</div>
-                            <div className="text-[11px] text-[#AEA793]">
+                            <div className="text-[11px] text-[#A0A0A0]">
                               Scenario: {vid.scenario} | {vid.resolution} @ {vid.fps} FPS ({vid.duration_s}s)
                             </div>
                           </div>
@@ -1112,7 +1102,7 @@ export const AdminCameraView: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-[#AEA793] block">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[#A0A0A0] block">
                     Available Discovered Images in data/:
                   </label>
                   <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
@@ -1122,19 +1112,18 @@ export const AdminCameraView: React.FC = () => {
                         <div
                           key={img.id}
                           onClick={() => setSelectedSourcePath(img.path)}
-                          className={`p-3 rounded-[3px] cursor-pointer transition-colors flex items-center justify-between ${
-                            isSelected
+                          className={`p-3 rounded-[3px] cursor-pointer transition-colors flex items-center justify-between ${isSelected
                               ? 'bg-[#F2D04E]/15 text-white'
-                              : 'bg-[#151515] text-[#AEA793] hover:text-white hover:bg-white/5'
-                          }`}
+                              : 'bg-[#151515] text-[#A0A0A0] hover:text-white hover:bg-white/5'
+                            }`}
                         >
                           <div>
                             <div className="font-heading text-xs font-bold text-white">{img.path}</div>
-                            <div className="text-[11px] text-[#AEA793]">
+                            <div className="text-[11px] text-[#A0A0A0]">
                               Format: {img.format} | Resolution: {img.resolution}
                             </div>
                           </div>
-                          <span className="text-[11px] font-heading text-[#AEA793]">
+                          <span className="text-[11px] font-heading text-[#A0A0A0]">
                             {(img.size_bytes / 1024).toFixed(0)} KB
                           </span>
                         </div>
@@ -1145,8 +1134,8 @@ export const AdminCameraView: React.FC = () => {
               )}
 
               {/* Custom Path Override Input */}
-              <div className="pt-2 border-t border-[#AEA793]/20">
-                <label className="text-xs font-bold uppercase tracking-wider text-[#AEA793] block mb-1">
+              <div className="pt-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-[#A0A0A0] block mb-1">
                   Or Custom Relative Path under data/:
                 </label>
                 <input
@@ -1154,16 +1143,16 @@ export const AdminCameraView: React.FC = () => {
                   value={customPath}
                   onChange={(e) => setCustomPath(e.target.value)}
                   placeholder="e.g. footage/c020/vdo.avi or TN/1.jpg"
-                  className="w-full bg-[#151515] text-white placeholder-[#AEA793] rounded-[3px] px-3 py-2 text-xs font-heading focus:outline-none"
+                  className="w-full bg-[#151515] text-white placeholder-[#A0A0A0] rounded-[3px] px-3 py-2 text-xs font-heading focus:outline-none"
                 />
               </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="bg-[#151515] px-5 py-3 border-t border-[#AEA793]/20 flex items-center justify-end gap-3 font-heading">
+            <div className="bg-[#151515] px-5 py-3 flex items-center justify-end gap-3 font-heading">
               <button
                 onClick={() => setModalCamera(null)}
-                className="px-4 py-2 bg-[#151515] hover:bg-white/5 text-[#AEA793] hover:text-white font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors"
+                className="px-4 py-2 bg-[#151515] hover:bg-white/5 text-[#A0A0A0] hover:text-white font-bold text-xs uppercase tracking-wider rounded-[3px] cursor-pointer transition-colors"
               >
                 Cancel
               </button>
@@ -1183,18 +1172,18 @@ export const AdminCameraView: React.FC = () => {
       {previewData && (
         <div className="fixed inset-0 z-50 bg-[#000000]/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#1E1E1E] rounded-[3px] w-full max-w-3xl overflow-hidden shadow-2xl space-y-4">
-            <div className="bg-[#151515] px-5 py-4 border-b border-[#AEA793]/20 flex items-center justify-between">
+            <div className="bg-[#151515] px-5 py-4 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-white font-heading uppercase tracking-wider">
                   Live Snapshot: {previewData.name} ({previewData.camera_id.toUpperCase()})
                 </h3>
-                <p className="text-xs text-[#AEA793] font-heading">
+                <p className="text-xs text-[#A0A0A0] font-heading">
                   {previewData.source_type.toUpperCase()}: {previewData.source_path} | Frame: {previewData.current_frame_idx} / {previewData.total_frames}
                 </p>
               </div>
               <button
                 onClick={() => setPreviewData(null)}
-                className="text-[#AEA793] hover:text-white text-lg font-bold cursor-pointer"
+                className="text-[#A0A0A0] hover:text-white text-lg font-bold cursor-pointer"
               >
                 ✕
               </button>
@@ -1208,12 +1197,12 @@ export const AdminCameraView: React.FC = () => {
                   className="max-h-[60vh] object-contain"
                 />
               ) : (
-                <span className="text-xs text-[#AEA793] font-heading">No frame data</span>
+                <span className="text-xs text-[#A0A0A0] font-heading">No frame data</span>
               )}
             </div>
 
-            <div className="bg-[#151515] px-5 py-3 border-t border-[#AEA793]/20 flex items-center justify-between font-heading">
-              <span className="text-xs text-[#AEA793]">
+            <div className="bg-[#151515] px-5 py-3 flex items-center justify-between font-heading">
+              <span className="text-xs text-[#A0A0A0]">
                 Status: {previewData.status}
               </span>
               <button

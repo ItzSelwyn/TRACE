@@ -31,6 +31,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside 
+      onMouseEnter={() => setIsExpanded(true)}
+      onMouseLeave={() => setIsExpanded(false)}
       className={`bg-[#151515] h-full flex flex-col justify-start transition-all duration-300 relative z-20 select-none shrink-0 overflow-visible no-scrollbar ${
         isExpanded ? 'w-56' : 'w-16'
       }`}
@@ -83,19 +85,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           );
         })}
       </div>
-
-      {/* Sidebar Open Toggle Button */}
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="absolute -right-6 top-[330px] w-12 h-12 rounded-full flex items-center justify-center bg-[#151515] hover:bg-[#1E1E1E] transition-all border-none outline-none z-30 group cursor-pointer"
-        title={isExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
-      >
-        <img 
-          src="/assets/sidebar_open.svg" 
-          alt="Sidebar Toggle" 
-          className={`w-7 h-7 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
-        />
-      </button>
     </aside>
   );
 };

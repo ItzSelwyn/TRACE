@@ -228,7 +228,7 @@ export const CamerasView: React.FC = () => {
                       />
                       <span className="truncate">{cam.location}</span>
                     </div>
-                    <div className="space-y-1 text-[11px] border-t border-[#AEA793]/30 pt-1.5 font-body">
+                    <div className="space-y-1 text-[11px] border-t border-[#A0A0A0]/30 pt-1.5 font-body">
                       <div className="flex justify-between items-center text-[#A0A0A0]">
                         <span>Resolution</span>
                         <span className="text-white/90">{cam.resolution}</span>
@@ -305,7 +305,7 @@ export const CamerasView: React.FC = () => {
                     <div
                       key={ts}
                       onClick={() => setSelectedTimestamp(ts)}
-                      className="cursor-pointer py-1.5 px-1 flex items-center justify-between text-[#AEA793] hover:text-white"
+                      className="cursor-pointer py-1.5 px-1 flex items-center justify-between text-[#A0A0A0] hover:text-white"
                     >
                       <span>{ts}</span>
                       {selectedTimestamp === ts && (
@@ -317,7 +317,7 @@ export const CamerasView: React.FC = () => {
               </div>
 
               {/* Horizontal Divider */}
-              <div className="border-b border-[#AEA793]" />
+              <div className="border-b border-[#A0A0A0]" />
 
               {/* Location Category */}
               <div>
@@ -335,7 +335,7 @@ export const CamerasView: React.FC = () => {
                     <div
                       key={loc}
                       onClick={() => setSelectedLocation(loc)}
-                      className="cursor-pointer py-1.5 px-1 flex items-center justify-between text-[#AEA793] hover:text-white"
+                      className="cursor-pointer py-1.5 px-1 flex items-center justify-between text-[#A0A0A0] hover:text-white"
                     >
                       <span>{loc}</span>
                       {selectedLocation === loc && (
@@ -385,11 +385,8 @@ export const CamerasView: React.FC = () => {
               <div className="absolute bottom-0 inset-x-0 p-3 flex items-center justify-between text-xs font-body select-none pointer-events-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
                 <div>
                   <p className="font-bold text-white tracking-wide text-sm">{cam.name}</p>
-                  <p className="text-[11px] text-[#AEA793]">{cam.location}</p>
+                  <p className="text-[11px] text-[#A0A0A0]">{cam.location}</p>
                 </div>
-                <span className="text-[10px] bg-[#1E1E1E]/90 text-[#F2D04E] font-semibold px-2 py-0.5 rounded-[3px] border border-[#F2D04E]/30 pointer-events-auto">
-                  {cam.resolution} • {cam.fps} FPS
-                </span>
               </div>
             </div>
           ))}
