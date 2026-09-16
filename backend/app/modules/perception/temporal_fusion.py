@@ -1,4 +1,4 @@
-"""Layer 1 — Perception Module: Track-level Temporal OCR Fusion Engine."""
+"""Layer 1 — Perception Module: Track-level Temporal OCR Fusion Engine with Sequence-Aligned Consensus."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from app.modules.perception.consensus_fusion import TrackTemporalConsensus
 from app.modules.perception.normalization import normalize_plate_text
 
 logger = logging.getLogger("trace.perception.temporal_fusion")
@@ -24,15 +25,19 @@ class OCRReadRecord:
     normalized_plate_text: str
     confidence: float
     bbox: Optional[List[Any]] = None
+    crop_quality_score: float = 0.5
+    variant: str = "ORIGINAL"
 
 
 class TemporalOCRFusion:
-    """Aggregates and fuses multi-frame OCR reads for tracked vehicles."""
+    """Aggregates and fuses multi-frame OCR reads for tracked vehicles using sequence alignment."""
 
     def __init__(self, min_samples_for_lock: int = 2):
         self.min_samples_for_lock = min_samples_for_lock
-        # Map: track_key (e.g. "c020:TRK-001" or "TRK-001") -> List[OCRReadRecord]
+        # Map: track_key (e.g. "c020:TRK-001") -> List[OCRReadRecord]
         self._track_reads: Dict[str, List[OCRReadRecord]] = defaultdict(list)
+        # Map: track_key -> TrackTemporalConsensus
+        self._track_consensus: Dict[str, TrackTemporalConsensus] = {}
 
     def add_ocr_read(
         self,
@@ -43,6 +48,9 @@ class TemporalOCRFusion:
         confidence: float,
         timestamp: Optional[str] = None,
         bbox: Optional[List[Any]] = None,
+        crop_quality_score: float = 0.5,
+        variant: str = "ORIGINAL",
+        char_scores: Optional[List[float]] = None,
     ) -> Optional[OCRReadRecord]:
         """Record a single frame OCR observation for a vehicle track."""
         norm_text = normalize_plate_text(raw_text)
@@ -59,10 +67,27 @@ class TemporalOCRFusion:
             normalized_plate_text=norm_text,
             confidence=round(float(confidence), 4),
             bbox=bbox,
+            crop_quality_score=round(float(crop_quality_score), 4),
+            variant=variant,
         )
 
         track_key = f"{camera_id}:{track_id}"
         self._track_reads[track_key].append(record)
+
+        if track_key not in self._track_consensus:
+            self._track_consensus[track_key] = TrackTemporalConsensus(str(track_id), camera_id)
+
+        self._track_consensus[track_key].add_candidate(
+            frame_id=frame_id,
+            raw_text=raw_text,
+            normalized_text=norm_text,
+            confidence=confidence,
+            crop_quality_score=crop_quality_score,
+            variant=variant,
+            char_scores=char_scores,
+            timestamp=ts,
+        )
+
         return record
 
     def fuse_track(
@@ -72,47 +97,39 @@ class TemporalOCRFusion:
         vehicle_type: str = "car",
         vehicle_colour: str = "white",
     ) -> Dict[str, Any]:
-        """Compute the temporally fused plate reading for a given track.
-        
-        Returns a dictionary formatted for TRACE vehicle_observations schema.
-        """
+        """Compute sequence-aligned temporally fused plate reading for a given track."""
         track_key = f"{camera_id}:{track_id}"
         reads = self._track_reads.get(track_key, [])
+        consensus_mgr = self._track_consensus.get(track_key)
 
-        if not reads:
+        if not reads or consensus_mgr is None:
             return {
                 "camera_id": camera_id,
                 "track_id": str(track_id),
                 "fused_plate_text": "NOT READ",
                 "fused_confidence": None,
+                "raw_ocr_text": "",
+                "corrected_plate_text": "NOT READ",
+                "display_plate": "NOT READ",
+                "ocr_confidence": None,
+                "correction_confidence": None,
+                "plate_status": "NOT_READ",
+                "inferred_positions": [],
+                "is_synthetic": False,
                 "vehicle_type": vehicle_type,
                 "vehicle_colour": vehicle_colour,
                 "ocr_samples_count": 0,
                 "reads_history": [],
             }
 
-        # Weighted temporal voting: aggregate confidence scores per unique candidate text
-        candidate_scores: Dict[str, float] = defaultdict(float)
-        candidate_counts: Dict[str, int] = defaultdict(int)
-        candidate_max_conf: Dict[str, float] = defaultdict(float)
+        res = consensus_mgr.compute_consensus()
+        status = res.get("plate_status", "NOT_READ")
+        corr_text = res.get("corrected_plate_text", "NOT READ")
+        conf = res.get("ocr_confidence")
 
-        for r in reads:
-            text = r.normalized_plate_text
-            # Exponentially weight higher confidence reads
-            weight = r.confidence ** 1.5
-            candidate_scores[text] += weight
-            candidate_counts[text] += 1
-            if r.confidence > candidate_max_conf[text]:
-                candidate_max_conf[text] = r.confidence
-
-        # Select candidate with highest cumulative weighted score
-        best_candidate = max(candidate_scores.keys(), key=lambda t: (candidate_scores[t], candidate_counts[t]))
-        
-        # Calculate fused confidence: base max confidence + small bonus for multi-frame agreement (capped at 0.99)
-        base_conf = candidate_max_conf[best_candidate]
-        agreement_ratio = candidate_counts[best_candidate] / len(reads)
-        sample_bonus = min(0.08, 0.02 * (candidate_counts[best_candidate] - 1))
-        fused_conf = min(0.99, round(base_conf * (0.92 + 0.08 * agreement_ratio) + sample_bonus, 4))
+        # Trusted genuine plate for DB persistence and re-id is only populated if READ or INFERRED
+        trusted_plate = corr_text if status in ["READ", "INFERRED"] else "NOT READ"
+        trusted_conf = conf if trusted_plate != "NOT READ" else None
 
         first_seen = reads[0].timestamp
         last_seen = reads[-1].timestamp
@@ -120,8 +137,16 @@ class TemporalOCRFusion:
         return {
             "camera_id": camera_id,
             "track_id": str(track_id),
-            "fused_plate_text": best_candidate,
-            "fused_confidence": fused_conf,
+            "fused_plate_text": trusted_plate,
+            "fused_confidence": trusted_conf,
+            "raw_ocr_text": res.get("raw_ocr_text", ""),
+            "corrected_plate_text": corr_text,
+            "display_plate": res.get("display_plate", trusted_plate),
+            "ocr_confidence": conf,
+            "correction_confidence": res.get("correction_confidence"),
+            "plate_status": status,
+            "inferred_positions": res.get("inferred_positions", []),
+            "is_synthetic": False,
             "vehicle_type": vehicle_type,
             "vehicle_colour": vehicle_colour,
             "ocr_samples_count": len(reads),
@@ -134,6 +159,8 @@ class TemporalOCRFusion:
                     "normalized_text": r.normalized_plate_text,
                     "confidence": r.confidence,
                     "timestamp": r.timestamp,
+                    "crop_quality_score": r.crop_quality_score,
+                    "variant": r.variant,
                 }
                 for r in reads
             ],
@@ -143,4 +170,9 @@ class TemporalOCRFusion:
         """Prune track history when vehicle leaves the scene."""
         track_key = f"{camera_id}:{track_id}"
         self._track_reads.pop(track_key, None)
+        self._track_consensus.pop(track_key, None)
 
+    def clear_all(self) -> None:
+        """Prune all tracks on dataset reset or camera restart."""
+        self._track_reads.clear()
+        self._track_consensus.clear()
