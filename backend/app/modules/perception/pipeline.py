@@ -160,6 +160,12 @@ class PerceptionPipeline:
         ]
         resolved_path = next((c for c in candidates if c.exists()), Path(yolo_model_path))
         self.model = YOLO(str(resolved_path))
+        try:
+            import torch
+            if torch.cuda.is_available():
+                self.model.to("cuda")
+        except Exception:
+            pass
 
         # Temporal OCR Fusion engine
         self.fusion = TemporalOCRFusion()
@@ -269,11 +275,14 @@ class PerceptionPipeline:
 
         # 1. YOLO Detection with ByteTrack Tracking (persist=True, tracker="bytetrack.yaml")
         try:
+            import torch
+            dev = 0 if torch.cuda.is_available() else "cpu"
             results = self.model.track(
                 frame,
                 persist=True,
                 tracker="bytetrack.yaml",
                 conf=self.confidence,
+                device=dev,
                 verbose=False,
             )[0]
         except Exception as e:

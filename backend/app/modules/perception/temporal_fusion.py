@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from app.modules.perception.normalization import normalize_plate_text
+from app.modules.perception.normalization import is_valid_indian_plate, normalize_plate_text
 
 logger = logging.getLogger("trace.perception.temporal_fusion")
 
@@ -46,7 +46,7 @@ class TemporalOCRFusion:
     ) -> Optional[OCRReadRecord]:
         """Record a single frame OCR observation for a vehicle track."""
         norm_text = normalize_plate_text(raw_text)
-        if not norm_text or confidence <= 0.0:
+        if not norm_text or confidence <= 0.0 or not is_valid_indian_plate(norm_text):
             return None
 
         ts = timestamp or datetime.now(timezone.utc).isoformat()
@@ -108,6 +108,20 @@ class TemporalOCRFusion:
         # Select candidate with highest cumulative weighted score
         best_candidate = max(candidate_scores.keys(), key=lambda t: (candidate_scores[t], candidate_counts[t]))
         
+        if not is_valid_indian_plate(best_candidate):
+            return {
+                "camera_id": camera_id,
+                "track_id": str(track_id),
+                "fused_plate_text": "NOT READ",
+                "fused_confidence": None,
+                "vehicle_type": vehicle_type,
+                "vehicle_colour": vehicle_colour,
+                "ocr_samples_count": len(reads),
+                "first_seen": reads[0].timestamp,
+                "last_seen": reads[-1].timestamp,
+                "reads_history": [],
+            }
+
         # Calculate fused confidence: base max confidence + small bonus for multi-frame agreement (capped at 0.99)
         base_conf = candidate_max_conf[best_candidate]
         agreement_ratio = candidate_counts[best_candidate] / len(reads)

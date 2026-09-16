@@ -57,9 +57,9 @@ def locate_plate_candidate(image: np.ndarray) -> Optional[List[int]]:
         return None
     try:
         h, w = image.shape[:2]
-        # Bumper search band: 25% to 85% of vehicle height
-        search_y1 = int(h * 0.25)
-        search_y2 = int(h * 0.85)
+        # Bumper search band: 48% to 98% of vehicle height (strictly avoids windshield text/stickers)
+        search_y1 = int(h * 0.48)
+        search_y2 = int(h * 0.98)
         roi = image[search_y1:search_y2, :]
         rh, rw = roi.shape[:2]
         if rh < 10 or rw < 20:
@@ -87,13 +87,13 @@ def locate_plate_candidate(image: np.ndarray) -> Optional[List[int]]:
             aspect = float(cw) / max(1, ch)
             area = cw * ch
             cx = x + cw / 2.0
-            # Horizontal center should be within 20% to 80% of vehicle width
-            # Candidate plate width must be at least 25% of vehicle width to filter out small emblems
-            if 1.8 <= aspect <= 6.5 and cw >= int(rw * 0.25) and cw <= int(rw * 0.85) and ch >= 12:
-                if 0.20 * rw <= cx <= 0.80 * rw:
+            # Allow aspect from 1.2 (square/commercial 2-line plates) to 6.5 (standard rectangular plates)
+            # Center can be across 10% to 92% of vehicle width (commercial vehicles mount plates on left/right bumper)
+            if 1.2 <= aspect <= 6.5 and cw >= int(rw * 0.12) and cw <= int(rw * 0.90) and ch >= 10:
+                if 0.10 * rw <= cx <= 0.92 * rw:
                     patch = gray[y:y + ch, x:x + cw]
                     center_dist = abs(cx - rw / 2.0) / (rw / 2.0)
-                    score = (float(np.std(patch)) * area) / (1.0 + 0.5 * center_dist)
+                    score = (float(np.std(patch)) * area) / (1.0 + 0.3 * center_dist)
                     candidates.append((score, [x, search_y1 + y, x + cw, search_y1 + y + ch]))
 
         if candidates:
@@ -131,21 +131,23 @@ def extract_plate_crop(
         crop = image[crop_y1:crop_y2, crop_x1:crop_x2]
     else:
         candidate_box = locate_plate_candidate(image)
-        if candidate_box and len(candidate_box) == 4:
+        cand_w = (candidate_box[2] - candidate_box[0]) if candidate_box and len(candidate_box) == 4 else 0
+        cand_h = (candidate_box[3] - candidate_box[1]) if candidate_box and len(candidate_box) == 4 else 0
+        if candidate_box and len(candidate_box) == 4 and cand_w >= max(38, int(w * 0.22)) and cand_h >= 14:
             x1, y1, x2, y2 = candidate_box
-            pad_x = max(4, int((x2 - x1) * 0.10))
-            pad_y = max(4, int((y2 - y1) * 0.20))
+            pad_x = max(6, int((x2 - x1) * 0.15))
+            pad_y = max(6, int((y2 - y1) * 0.25))
             crop_x1 = max(0, x1 - pad_x)
             crop_y1 = max(0, y1 - pad_y)
             crop_x2 = min(w, x2 + pad_x)
             crop_y2 = min(h, y2 + pad_y)
             crop = image[crop_y1:crop_y2, crop_x1:crop_x2]
         else:
-            # Safe bumper crop: 45% to 90% height, 12% to 88% width
-            crop_y1 = int(h * 0.45)
-            crop_y2 = int(h * 0.90)
-            crop_x1 = int(w * 0.12)
-            crop_x2 = int(w * 0.88)
+            # Safe bumper crop: 50% to 98% height, full bumper width (strictly avoids windshield)
+            crop_y1 = int(h * 0.50)
+            crop_y2 = int(h * 0.98)
+            crop_x1 = max(0, int(w * 0.02))
+            crop_x2 = min(w, int(w * 0.98))
             crop = image[crop_y1:crop_y2, crop_x1:crop_x2]
 
     if crop.size == 0 or crop.shape[0] < 4 or crop.shape[1] < 4:

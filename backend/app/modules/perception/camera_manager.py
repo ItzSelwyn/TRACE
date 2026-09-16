@@ -19,7 +19,12 @@ import numpy as np
 
 from app.config import settings
 from app.modules.appearance.preprocessing import score_crop_quality
-from app.modules.perception.normalization import normalize_plate_text
+from app.modules.perception.normalization import (
+    is_complete_indian_plate,
+    is_valid_indian_plate,
+    normalize_plate_text,
+    stitch_indian_plate_reads,
+)
 from app.modules.perception.ocr_engine import read_plate_image
 from app.modules.perception.persistence import (
     is_db_in_backoff,
@@ -122,18 +127,27 @@ def _get_yolo_model() -> Optional[Any]:
                 from ultralytics import YOLO
 
                 candidates = [
+                    _PROJECT_ROOT / "yolov8n.pt",
+                    _PROJECT_ROOT / "models" / "yolov8n.pt",
                     _PROJECT_ROOT / "backend" / "models" / "yolov8n.pt",
+                    _PROJECT_ROOT / "backend" / "yolov8n.pt",
                     _PROJECT_ROOT / "backend" / settings.YOLO_MODEL_PATH,
+                    Path.cwd() / "yolov8n.pt",
                     Path.cwd() / "models" / "yolov8n.pt",
                     Path.cwd() / settings.YOLO_MODEL_PATH,
-                    _PROJECT_ROOT / "backend" / "yolov8n.pt",
-                    _PROJECT_ROOT / "backend" / "yolo8n.pt",
-                    Path.cwd() / "yolov8n.pt",
-                    Path.cwd() / "yolo8n.pt",
+                    Path.cwd().parent / "yolov8n.pt",
                 ]
+                import torch
+                dev = 0 if torch.cuda.is_available() else "cpu"
                 model_file = next((c for c in candidates if c.exists()), None)
                 if model_file:
                     _YOLO_MODEL = YOLO(str(model_file))
+                else:
+                    _YOLO_MODEL = YOLO("yolov8n.pt")
+                try:
+                    _YOLO_MODEL.to(dev)
+                except Exception:
+                    pass
             except Exception as e:
                 logger.warning(f"Could not load YOLO model: {e}")
                 _YOLO_MODEL = None
@@ -142,25 +156,33 @@ def _get_yolo_model() -> Optional[Any]:
 
 def _create_yolo_model() -> Optional[Any]:
     """Create an independent YOLO model instance for dedicated worker thread tracking."""
-    try:
-        from ultralytics import YOLO
+    with _YOLO_LOCK:
+        try:
+            import torch
+            from ultralytics import YOLO
 
-        candidates = [
-            _PROJECT_ROOT / "backend" / "models" / "yolov8n.pt",
-            _PROJECT_ROOT / "backend" / settings.YOLO_MODEL_PATH,
-            Path.cwd() / "models" / "yolov8n.pt",
-            Path.cwd() / settings.YOLO_MODEL_PATH,
-            _PROJECT_ROOT / "backend" / "yolov8n.pt",
-            _PROJECT_ROOT / "backend" / "yolo8n.pt",
-            Path.cwd() / "yolov8n.pt",
-            Path.cwd() / "yolo8n.pt",
-        ]
-        model_file = next((c for c in candidates if c.exists()), None)
-        if model_file:
-            return YOLO(str(model_file))
-    except Exception as e:
-        logger.warning(f"Could not load YOLO model: {e}")
-    return None
+            dev = 0 if torch.cuda.is_available() else "cpu"
+            candidates = [
+                _PROJECT_ROOT / "yolov8n.pt",
+                _PROJECT_ROOT / "models" / "yolov8n.pt",
+                _PROJECT_ROOT / "backend" / "models" / "yolov8n.pt",
+                _PROJECT_ROOT / "backend" / "yolov8n.pt",
+                _PROJECT_ROOT / "backend" / settings.YOLO_MODEL_PATH,
+                Path.cwd() / "yolov8n.pt",
+                Path.cwd() / "models" / "yolov8n.pt",
+                Path.cwd() / settings.YOLO_MODEL_PATH,
+                Path.cwd().parent / "yolov8n.pt",
+            ]
+            model_file = next((c for c in candidates if c.exists()), None)
+            m = YOLO(str(model_file)) if model_file else YOLO("yolov8n.pt")
+            try:
+                m.to(dev)
+            except Exception:
+                pass
+            return m
+        except Exception as e:
+            logger.warning(f"Could not load YOLO model: {e}")
+        return None
 
 
 def _get_config_path() -> Path:
@@ -287,7 +309,7 @@ class ManagedCameraWorker:
         self.persisted_tracks: set[int] = set()
         self.fusion = TemporalOCRFusion()
         self.last_seek_version: int = 0
-        self.model: Optional[Any] = _create_yolo_model()
+        self.model: Optional[Any] = None
         self.current_detection_count: int = 0
 
         # Fast live traffic metrics cache (lock-free read for analytics)
@@ -317,6 +339,8 @@ class ManagedCameraWorker:
             "status": "MONITORING",
             "recent_detections": [],
         }
+        self.last_plate_recognized_veh: Optional[Dict[str, Any]] = None
+        self.last_plate_recognized_time: float = 0.0
 
         # Condition variable for non-polling, zero-duplicate frame streaming
         self._frame_cond = threading.Condition(self._lock)
@@ -542,6 +566,15 @@ class ManagedCameraWorker:
                         stop_event.wait(0.05)
                         continue
 
+                    # If scenario looped or timeline rewound before current playback position
+                    expected_f = int(local_time * self.fps)
+                    if expected_f < last_rendered_frame_idx - 10:
+                        target_f = min(total_frames - 1, max(0, expected_f))
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, target_f)
+                        last_rendered_frame_idx = target_f - 1
+                        self.current_frame_idx = target_f
+                        self._reset_tracking_state()
+
                     if last_rendered_frame_idx >= total_frames - 1:
                         # Reached end of scenario footage -> hold cleanly on last frame
                         with self._lock:
@@ -698,6 +731,25 @@ class ManagedCameraWorker:
                         self.cached_raw_jpeg = raw_buf.tobytes()
                         self._frame_cond.notify_all()
 
+            # Refresh timestamp on cached YOLO annotated frame so live feed never looks frozen
+            if hasattr(self, "_cached_yolo_mat") and self._cached_yolo_mat is not None:
+                yolo_osd = self._cached_yolo_mat.copy()
+                cv2.putText(
+                    yolo_osd,
+                    f"CAM {self.camera_id.upper()} [AI LIVE] - {time.strftime('%H:%M:%S')}",
+                    (12, 24),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.55,
+                    (0, 242, 254),
+                    1,
+                    cv2.LINE_AA,
+                )
+                _, y_buf = cv2.imencode(".jpg", yolo_osd, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+                if _:
+                    with self._lock:
+                        if self._generation == generation and self._running and not stop_event.is_set():
+                            self.cached_yolo_jpeg = y_buf.tobytes()
+
             stop_event.wait(1.0 / max(1.0, self.fps))
 
     def _process_and_cache_frame(
@@ -734,6 +786,8 @@ class ManagedCameraWorker:
 
         # 2. YOLO + ByteTrack Inference
         yolo_frame = resized_raw.copy()
+        if self.model is None:
+            self.model = _create_yolo_model()
         model = self.model or _get_yolo_model()
         active_veh = None
         top_motion_score = -1.0
@@ -741,12 +795,15 @@ class ManagedCameraWorker:
 
         if model is not None:
             try:
+                import torch
+                dev = 0 if torch.cuda.is_available() else "cpu"
                 results = model.track(
                     resized_raw,
                     persist=True,
                     tracker="bytetrack.yaml",
                     classes=[2, 3, 5, 7],
                     conf=0.25,
+                    device=dev,
                     verbose=False,
                 )[0]
                 yolo_frame = results.plot()
@@ -859,23 +916,32 @@ class ManagedCameraWorker:
                         track_ocr_attempts = trk.get("ocr_attempts", 0)
                         last_ocr = trk.get("last_ocr_frame", -999)
                         is_confirmed = trk.get("plate_confirmed", False)
-                        has_enough_reads = trk.get("ocr_success_count", 0) >= 3
+                        has_enough_reads = trk.get("ocr_success_count", 0) >= 3 and is_confirmed
                         in_ocr = trk.get("ocr_in_flight", False)
+
+                        box_w = max(1, x2 - x1)
+                        box_h = max(1, y2 - y1)
+                        box_area = box_w * box_h
+
+                        # Opportunistic OCR: allow attempts when vehicle is new, gets closer (larger area), or periodically
+                        last_ocr_area = trk.get("last_ocr_area", 0)
+                        has_grown_closer = (box_area >= last_ocr_area * 1.25)
 
                         should_ocr = (
                             ocr_runs_this_frame < 2
                             and not is_confirmed
                             and not has_enough_reads
                             and not in_ocr
-                            and track_ocr_attempts < 8
+                            and track_ocr_attempts < 18
                             and veh_crop.size > 0
-                            and veh_crop.shape[1] >= 65
-                            and veh_crop.shape[0] >= 45
-                            and (frame_id - last_ocr >= 10 or is_new)
+                            and veh_crop.shape[1] >= 50
+                            and veh_crop.shape[0] >= 35
+                            and (frame_id - last_ocr >= 7 or is_new or (has_grown_closer and frame_id - last_ocr >= 4))
                         )
 
                         if should_ocr:
                             trk["last_ocr_frame"] = frame_id
+                            trk["last_ocr_area"] = box_area
                             trk["ocr_attempts"] = track_ocr_attempts + 1
                             trk["ocr_in_flight"] = True
                             ocr_runs_this_frame += 1
@@ -902,6 +968,7 @@ class ManagedCameraWorker:
                             plate_text = trk["plate_number"]
                             ocr_conf = trk.get("ocr_confidence")
                         ocr_status = "READ" if plate_text != "NOT READ" else "NOT READ"
+                        has_valid_plate = bool(plate_text and plate_text != "NOT READ")
 
                         # Update recent detections list
                         ex_idx = next((i for i, d in enumerate(self.recent_detections) if d.get("track_id") == track_id_str), None)
@@ -920,7 +987,13 @@ class ManagedCameraWorker:
                             self.recent_detections[ex_idx] = rec_entry
                         else:
                             self.recent_detections.insert(0, rec_entry)
-                            self.recent_detections = self.recent_detections[:10]
+                        
+                        # Re-sort recent_detections so vehicles with recognized plates stay prioritized at top
+                        self.recent_detections.sort(
+                            key=lambda d: 1 if (d.get("plate_number") and d["plate_number"] != "NOT READ") else 0,
+                            reverse=True,
+                        )
+                        self.recent_detections = self.recent_detections[:10]
 
                         # Persist observation to DB (Asynchronously on background thread to never stall video FPS)
                         if self._db_engine and not is_db_in_backoff():
@@ -956,12 +1029,15 @@ class ManagedCameraWorker:
                                         crop_score,
                                     )
 
-                        box_w = max(1, x2 - x1)
-                        box_h = max(1, y2 - y1)
-                        box_area = box_w * box_h
-                        motion_score = (1000.0 if is_moving else 0.0) + disp + (conf * 10.0) + (box_area / 1000.0)
-                        if motion_score > top_motion_score:
-                            top_motion_score = motion_score
+                        # Prioritize showing the vehicle with recognized number plate in Model Analysis info
+                        base_motion = (1000.0 if is_moving else 0.0) + min(disp * 2.0, 500.0) + (conf * 50.0) + (box_area / 500.0)
+                        plate_priority = 50000.0 if has_valid_plate else 0.0
+                        if trk.get("plate_confirmed", False) or trk.get("ocr_success_count", 0) > 0:
+                            plate_priority += 15000.0
+
+                        candidate_score = base_motion + plate_priority
+                        if candidate_score > top_motion_score:
+                            top_motion_score = candidate_score
                             active_veh = {
                                 "camera_id": self.camera_id,
                                 "camera_name": self.name,
@@ -1015,6 +1091,8 @@ class ManagedCameraWorker:
             except Exception as e:
                 pass
 
+        self._cached_yolo_mat = yolo_frame.copy()
+
         cv2.putText(
             yolo_frame,
             f"CAM {self.camera_id.upper()} [AI LIVE] - {time.strftime('%H:%M:%S')}",
@@ -1037,6 +1115,9 @@ class ManagedCameraWorker:
                 self.cached_yolo_jpeg = yolo_bytes
             if active_veh is not None:
                 self.active_vehicle_data.update(active_veh)
+                if active_veh.get("plate_number") and active_veh["plate_number"] != "NOT READ":
+                    self.last_plate_recognized_veh = dict(active_veh)
+                    self.last_plate_recognized_time = time.time()
             self.active_vehicle_data["recent_detections"] = list(self.recent_detections)
             self.current_detection_count = num_detected
             self.current_frame_idx = frame_id
@@ -1062,32 +1143,43 @@ class ManagedCameraWorker:
                 )
                 return
 
-            ocr_res = None
+            combined_reads: List[Dict[str, Any]] = []
             if plate_crop is not None and plate_crop.size > 0:
-                ocr_res = read_plate_image(plate_crop, min_confidence=0.20)
+                p_res = read_plate_image(plate_crop, min_confidence=0.15)
+                if p_res:
+                    combined_reads.extend(p_res)
 
-            # Fallback to vehicle crop if plate crop yielded no detection or low confidence
-            if (not ocr_res or max(ocr_res, key=lambda x: x["confidence"])["confidence"] < 0.60) and veh_crop is not None and veh_crop.size > 0:
-                veh_ocr = read_plate_image(veh_crop, min_confidence=0.20)
-                if veh_ocr:
-                    best_veh = max(veh_ocr, key=lambda x: x["confidence"])
-                    if not ocr_res or best_veh["confidence"] > max(ocr_res, key=lambda x: x["confidence"])["confidence"]:
-                        ocr_res = veh_ocr
+            # Also check vehicle crop for full context, scanning lower 60% to avoid windshield text/stickers
+            if veh_crop is not None and veh_crop.size > 0:
+                vh, vw = veh_crop.shape[:2]
+                lower_veh = veh_crop[int(vh * 0.40):, :] if vh >= 100 else veh_crop
+                v_res = read_plate_image(lower_veh, min_confidence=0.15)
+                if v_res:
+                    for vr in v_res:
+                        if not any(cr.get("raw_text") == vr.get("raw_text") for cr in combined_reads):
+                            combined_reads.append(vr)
 
-            if not ocr_res:
+            if not combined_reads:
                 logger.info(
                     f"[OCR DIAGNOSTIC] cam={self.camera_id} | track={track_id_str} | veh_crop={veh_dims} | "
                     f"plate_crop={plate_dims} | raw='' | norm='' | conf=0.000 | rejected: no_text_detected"
                 )
                 return
 
-            best_ocr = max(ocr_res, key=lambda x: x["confidence"])
-            raw_text = str(best_ocr.get("raw_text", "")).strip()
-            norm_text = str(best_ocr.get("normalized_text") or normalize_plate_text(raw_text)).strip()
-            conf = float(best_ocr.get("confidence", 0.0))
+            best_stitched = stitch_indian_plate_reads(combined_reads)
+            if not best_stitched:
+                logger.info(
+                    f"[OCR DIAGNOSTIC] cam={self.camera_id} | track={track_id_str} | veh_crop={veh_dims} | "
+                    f"plate_crop={plate_dims} | raw='' | norm='' | conf=0.000 | rejected: no_valid_candidate"
+                )
+                return
 
-            if len(norm_text) < 4 or conf < 0.35:
-                reason = "text_too_short" if len(norm_text) < 4 else f"confidence_too_low_{conf:.2f}"
+            raw_text = str(best_stitched.get("raw_text", "")).strip()
+            norm_text = str(best_stitched.get("normalized_text") or normalize_plate_text(raw_text)).strip()
+            conf = float(best_stitched.get("confidence", 0.0))
+
+            if not is_valid_indian_plate(norm_text) or conf < 0.35:
+                reason = "invalid_indian_plate" if not is_valid_indian_plate(norm_text) else f"confidence_too_low_{conf:.2f}"
                 logger.info(
                     f"[OCR DIAGNOSTIC] cam={self.camera_id} | track={track_id_str} | veh_crop={veh_dims} | "
                     f"plate_crop={plate_dims} | raw='{raw_text}' | norm='{norm_text}' | conf={conf:.3f} | rejected: {reason}"
@@ -1120,7 +1212,8 @@ class ManagedCameraWorker:
                 trk = self.vehicle_tracks.get(matched_id)
                 if trk:
                     trk["ocr_success_count"] = trk.get("ocr_success_count", 0) + 1
-                    if conf >= 0.85:
+                    # Only lock confirmed status if it conforms to a complete valid Indian registration plate
+                    if is_complete_indian_plate(norm_text) and conf >= 0.82:
                         trk["plate_confirmed"] = True
                     vehicle_type = trk.get("type", "car")
                     vehicle_colour = trk.get("color", "white")
@@ -1136,6 +1229,9 @@ class ManagedCameraWorker:
 
             fused_plate = fused_record.get("fused_plate_text", norm_text)
             fused_conf = fused_record.get("fused_confidence", conf)
+            if not is_valid_indian_plate(fused_plate):
+                fused_plate = "NOT READ"
+                fused_conf = None
             ocr_status = "READ" if fused_plate != "NOT READ" else "NOT READ"
 
             with self._lock:
@@ -1381,6 +1477,20 @@ class ManagedCameraWorker:
 
     def get_active_vehicle(self) -> Dict[str, Any]:
         with self._lock:
+            # 1. If currently tracked active vehicle has a recognized plate, return it immediately
+            cur_plate = self.active_vehicle_data.get("plate_number")
+            if cur_plate and cur_plate != "NOT READ":
+                return dict(self.active_vehicle_data)
+
+            # 2. If current active vehicle is NOT READ, check if we recently recognized a vehicle with a plate
+            # (within the last 8 seconds). Prioritize showcasing the plate-recognized vehicle!
+            now = time.time()
+            if self.last_plate_recognized_veh and (now - self.last_plate_recognized_time <= 8.0):
+                rec_veh = dict(self.last_plate_recognized_veh)
+                rec_veh["recent_detections"] = list(self.recent_detections)
+                rec_veh["timestamp"] = time.strftime("%I:%M:%S %p")
+                return rec_veh
+
             return dict(self.active_vehicle_data)
 
     def get_live_scan_count(self) -> int:

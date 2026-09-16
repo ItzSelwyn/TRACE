@@ -78,18 +78,21 @@ def _get_yolo_model() -> Optional[Any]:
                 from ultralytics import YOLO
 
                 candidates = [
+                    _PROJECT_ROOT / "yolov8n.pt",
+                    _PROJECT_ROOT / "models" / "yolov8n.pt",
                     _PROJECT_ROOT / "backend" / "models" / "yolov8n.pt",
+                    _PROJECT_ROOT / "backend" / "yolov8n.pt",
                     _PROJECT_ROOT / "backend" / settings.YOLO_MODEL_PATH,
+                    Path.cwd() / "yolov8n.pt",
                     Path.cwd() / "models" / "yolov8n.pt",
                     Path.cwd() / settings.YOLO_MODEL_PATH,
-                    _PROJECT_ROOT / "backend" / "yolov8n.pt",
-                    _PROJECT_ROOT / "backend" / "yolo8n.pt",
-                    Path.cwd() / "yolov8n.pt",
-                    Path.cwd() / "yolo8n.pt",
+                    Path.cwd().parent / "yolov8n.pt",
                 ]
                 model_file = next((c for c in candidates if c.exists()), None)
                 if model_file:
                     _YOLO_MODEL = YOLO(str(model_file))
+                else:
+                    _YOLO_MODEL = YOLO("yolov8n.pt")
             except Exception as e:
                 print(f"Warning: Could not load YOLO model: {e}")
                 _YOLO_MODEL = None
@@ -102,18 +105,20 @@ def _create_yolo_model() -> Optional[Any]:
         from ultralytics import YOLO
 
         candidates = [
+            _PROJECT_ROOT / "yolov8n.pt",
+            _PROJECT_ROOT / "models" / "yolov8n.pt",
             _PROJECT_ROOT / "backend" / "models" / "yolov8n.pt",
-            _PROJECT_ROOT / "backend" / settings.YOLO_MODEL_PATH,
+            _PROJECT_ROOT / "backend" / "yolov8n.pt",
+            _PROJECT_ROOT / settings.YOLO_MODEL_PATH,
+            Path.cwd() / "yolov8n.pt",
             Path.cwd() / "models" / "yolov8n.pt",
             Path.cwd() / settings.YOLO_MODEL_PATH,
-            _PROJECT_ROOT / "backend" / "yolov8n.pt",
-            _PROJECT_ROOT / "backend" / "yolo8n.pt",
-            Path.cwd() / "yolov8n.pt",
-            Path.cwd() / "yolo8n.pt",
+            Path.cwd().parent / "yolov8n.pt",
         ]
         model_file = next((c for c in candidates if c.exists()), None)
         if model_file:
             return YOLO(str(model_file))
+        return YOLO("yolov8n.pt")
     except Exception as e:
         print(f"Warning: Could not load YOLO model: {e}")
     return None
@@ -703,6 +708,16 @@ async def get_perception_status(
 
         dataset_records = load_ground_truth_by_camera(DATASET_PATH, camera_ids=DEFAULT_CAMERA_IDS)
         camera_results = process_all_cameras(DEFAULT_CAMERA_IDS, dataset_records=dataset_records)
+
+        # Sync camera_status with live CameraScenarioManager so active corridor cameras are never marked down
+        try:
+            mgr = get_camera_manager()
+            for cid, res in camera_results.items():
+                cam_w = mgr.get_camera(cid)
+                if cam_w and cam_w.enabled and cam_w.status_label not in ["DISABLED", "FAILED", "OFFLINE"]:
+                    res["camera_status"] = "online"
+        except Exception:
+            pass
 
         # Dynamic active scans across all live camera feeds
         active_scans_count = 0
