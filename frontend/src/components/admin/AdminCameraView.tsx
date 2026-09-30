@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useDataset } from '../../context/DatasetContext';
 
 interface CameraItem {
   camera_id: string;
@@ -187,6 +188,90 @@ export const AdminCameraView: React.FC = () => {
   const [debugResult, setDebugResult] = useState<DebugResult | null>(null);
   const [isDebugRunning, setIsDebugRunning] = useState<boolean>(false);
   const [debugError, setDebugError] = useState<string | null>(null);
+
+  // Global Dataset Switcher State from Context
+  const {
+    activeDataset,
+    label: activeDatasetLabel,
+    availableDatasets,
+    isSwitching,
+    error: datasetError,
+    switchDataset,
+  } = useDataset();
+  const [switchNotification, setSwitchNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleDatasetChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newDataset = e.target.value;
+    if (newDataset === activeDataset || isSwitching) return;
+    setSwitchNotification(null);
+    const ok = await switchDataset(newDataset);
+    if (ok) {
+      setSwitchNotification({ type: 'success', message: `Active dataset successfully switched to ${newDataset}` });
+      setTimeout(() => {
+        fetchData();
+      }, 500);
+    } else {
+      setSwitchNotification({ type: 'error', message: datasetError || `Failed to switch to dataset ${newDataset}` });
+    }
+  };
+
+  // ANPR Demo Fallback State
+  const [demoFallbackEnabled, setDemoFallbackEnabled] = useState<boolean>(false);
+  const [demoFallbackRate, setDemoFallbackRate] = useState<number>(30);
+  const [isUpdatingFallback, setIsUpdatingFallback] = useState<boolean>(false);
+  const [fallbackNotification, setFallbackNotification] = useState<string | null>(null);
+
+  // Load fallback settings on mount
+  useEffect(() => {
+    fetch('/admin/anpr/demo-fallback')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.config) {
+          setDemoFallbackEnabled(Boolean(data.config.enabled));
+          setDemoFallbackRate(Math.round((data.config.fallback_rate ?? 0.3) * 100));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleToggleFallback = async (enabled: boolean) => {
+    setIsUpdatingFallback(true);
+    try {
+      const res = await fetch('/admin/anpr/demo-fallback', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enabled,
+          fallback_rate: demoFallbackRate / 100,
+        }),
+      });
+      const data = await res.json();
+      if (data?.config) {
+        setDemoFallbackEnabled(Boolean(data.config.enabled));
+        setFallbackNotification(enabled ? 'Demo Fallback Active' : 'Demo Fallback Off');
+        setTimeout(() => setFallbackNotification(null), 3000);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsUpdatingFallback(false);
+    }
+  };
+
+  const handleRateChange = async (ratePct: number) => {
+    setDemoFallbackRate(ratePct);
+    try {
+      await fetch('/admin/anpr/demo-fallback', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fallback_rate: ratePct / 100,
+        }),
+      });
+    } catch {
+      // ignore
+    }
+  };
 
   const formatLiveTime = (seconds: number) => {
     const s = Math.max(0, seconds);
@@ -566,6 +651,144 @@ export const AdminCameraView: React.FC = () => {
             Model Visual Debugger
           </button>
         </div>
+      </div>
+
+      {/* Global Dataset Switcher Bar */}
+      <div className="bg-[#1E1E1E] p-4 rounded-[3px] shadow-lg border border-[#F2D04E]/30 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-heading font-bold text-[#AEA793] uppercase tracking-wider">
+              Active Dataset
+            </span>
+            <span className="w-2 h-2 rounded-full bg-[#1B7A43] animate-pulse" />
+            <span className="text-xs font-bold text-white font-heading">
+              [{activeDatasetLabel || activeDataset}]
+            </span>
+          </div>
+          <p className="text-[11px] text-[#A0A0A0] font-body">
+            Global perception footage & camera map selector. Switches all 4 camera streams (C020, C023, C028, C029) and map coordinates.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <select
+              value={activeDataset}
+              onChange={handleDatasetChange}
+              disabled={isSwitching}
+              className="bg-[#151515] border border-[#F2D04E]/60 hover:border-[#F2D04E] text-[#F2D04E] font-heading font-bold text-sm px-4 py-2.5 rounded-[3px] outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed appearance-none pr-10 min-w-[210px] transition-all"
+            >
+              {availableDatasets.map((ds) => (
+                <option key={ds.id} value={ds.id} className="bg-[#151515] text-white">
+                  {ds.label}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[#F2D04E]">
+              {isSwitching ? (
+                <svg className="animate-spin h-4 w-4 text-[#F2D04E]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              ) : (
+                <span className="text-xs">▼</span>
+              )}
+            </div>
+          </div>
+
+          {isSwitching && (
+            <span className="text-xs font-semibold text-[#F2D04E] animate-pulse">
+              Switching...
+            </span>
+          )}
+        </div>
+      </div>
+
+      {switchNotification && (
+        <div
+          className={`p-3 rounded-[3px] text-xs font-body flex items-center justify-between transition-all ${
+            switchNotification.type === 'success'
+              ? 'bg-[#1B7A43]/20 border border-[#1B7A43] text-[#1B7A43]'
+              : 'bg-[#971D1B]/20 border border-[#971D1B] text-[#971D1B]'
+          }`}
+        >
+          <span>{switchNotification.message}</span>
+          <button
+            onClick={() => setSwitchNotification(null)}
+            className="text-xs underline hover:opacity-80 ml-4 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Controlled ANPR Demo Fallback Configuration Card */}
+      <div className="bg-[#1E1E1E] p-4 rounded-[3px] shadow-lg border border-white/10 space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-heading font-bold text-[#AEA793] uppercase tracking-wider">
+                ANPR Moving-Vehicle Demo Fallback
+              </span>
+              <span className={`px-2 py-0.5 text-[10px] font-heading font-bold rounded-[3px] ${
+                demoFallbackEnabled ? 'bg-[#F2D04E]/20 text-[#F2D04E]' : 'bg-white/10 text-white/50'
+              }`}>
+                {demoFallbackEnabled ? 'ACTIVE' : 'OFF'}
+              </span>
+            </div>
+            <p className="text-[11px] text-[#A0A0A0] font-body mt-0.5">
+              Generates plausible Indian registration plates for distant/low-resolution moving vehicles. Strictly isolated from verified evidence and blacklist matching.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Toggle ON/OFF */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[#AEA793] font-body">Demo fallback plates:</span>
+              <button
+                type="button"
+                disabled={isUpdatingFallback}
+                onClick={() => handleToggleFallback(!demoFallbackEnabled)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer disabled:opacity-50 ${
+                  demoFallbackEnabled ? 'bg-[#1B7A43]' : 'bg-[#333333]'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    demoFallbackEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+              <span className="text-xs font-bold text-white font-heading">
+                {demoFallbackEnabled ? 'ON' : 'OFF'}
+              </span>
+            </div>
+
+            {/* Fallback Rate Slider */}
+            <div className="flex items-center gap-2 border-l border-white/10 pl-4">
+              <span className="text-xs text-[#AEA793] font-body">Fallback rate:</span>
+              <input
+                type="range"
+                min="5"
+                max="100"
+                step="5"
+                value={demoFallbackRate}
+                onChange={(e) => handleRateChange(Number(e.target.value))}
+                disabled={!demoFallbackEnabled}
+                className="w-24 accent-[#F2D04E] cursor-pointer disabled:opacity-40"
+              />
+              <span className="text-xs font-bold text-[#F2D04E] font-heading w-10">
+                {demoFallbackRate}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {fallbackNotification && (
+          <div className="text-xs text-[#1B7A43] font-bold font-body animate-pulse">
+            ✓ {fallbackNotification}
+          </div>
+        )}
       </div>
 
       {/* TAB 1: CAMERA & PLAYBACK CONTROL */}

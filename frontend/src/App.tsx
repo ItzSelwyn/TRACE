@@ -9,8 +9,9 @@ import { BlacklistView } from './components/blacklist/BlacklistView';
 import { CamerasView } from './components/cameras/CamerasView';
 import { AdminCameraView } from './components/admin/AdminCameraView';
 import { HomeView } from './components/home/HomeView';
+import { DatasetProvider, useDataset } from './context/DatasetContext';
 import { mockDashboardData } from './data/mockDashboardData';
-import { mockVehicleTraceData } from './data/mockVehicleTraceData';
+import { mockVehicleTraceData, getMockVehicleTraceData } from './data/mockVehicleTraceData';
 import { DashboardDataPayload } from './types/dashboard';
 import { VehicleTraceDataPayload } from './types/vehicleTrace';
 
@@ -32,7 +33,9 @@ const transformPerceptionStatus = (
   dynamicBlacklistCount?: number
 ): DashboardDataPayload => {
   const cameras = Object.entries(payload?.cameras ?? {}).map(([cameraId, camera]: [string, any]) => {
-    const status = camera?.camera_status ?? 'online';
+    const rawStatus = String(camera?.camera_status ?? 'online').toLowerCase();
+    const isOnline = rawStatus === 'online' || rawStatus === 'processing' || rawStatus === 'standby' || rawStatus === 'waiting' || rawStatus === 'active';
+    const status: 'online' | 'degraded' | 'down' = isOnline ? 'online' : 'down';
     const observations = camera?.observations ?? [];
     const latestObservation = observations[0] ?? null;
 
@@ -239,11 +242,18 @@ const transformTrajectory = (plate: string, payload: any): VehicleTraceDataPaylo
   };
 };
 
-export const App: React.FC = () => {
+const AppContent: React.FC = () => {
+  const { activeDataset } = useDataset();
   const [currentRoute, setCurrentRoute] = useState<NavRoute | 'home'>('home');
   const [selectedCameraId, setSelectedCameraId] = useState<string>('c020');
   const [dashboardData, setDashboardData] = useState<DashboardDataPayload>(mockDashboardData);
-  const [vehicleTracePayload, setVehicleTracePayload] = useState<VehicleTraceDataPayload>(mockVehicleTraceData);
+  const [vehicleTracePayload, setVehicleTracePayload] = useState<VehicleTraceDataPayload>(() => getMockVehicleTraceData(activeDataset));
+
+  // Reset selected camera, traces, and vehicle context to active dataset defaults on switch
+  useEffect(() => {
+    setSelectedCameraId('c020');
+    setVehicleTracePayload(getMockVehicleTraceData(activeDataset));
+  }, [activeDataset]);
 
   useEffect(() => {
     if (currentRoute !== 'dashboard') return;
@@ -289,16 +299,51 @@ export const App: React.FC = () => {
 
     let isMounted = true;
     const loadVehicleTrace = async () => {
-      const plate = vehicleTracePayload.searchedPlate || '334';
+      const isCbe = activeDataset === 'CBE';
+      let plate = vehicleTracePayload.searchedPlate;
+
+      // Handle explicitly cleared selection
+      if (plate === '') {
+        if (isMounted) {
+          setVehicleTracePayload({
+            searchedPlate: '',
+            totalScans: 0,
+            totalAnomalies: 0,
+            selectedTimeWindow: '24hrs',
+            chronology: [],
+            mapPoints: [],
+          });
+        }
+        return;
+      }
+
+      if (isCbe) {
+        if (!plate || plate === '334' || plate === '396' || plate === '336' || plate === '354' || plate === '420' || plate === '486') {
+          plate = 'TN47A1507';
+        }
+      } else {
+        if (!plate || plate.startsWith('TN') || plate.startsWith('KL')) {
+          plate = '334';
+        }
+      }
+
       try {
         const response = await fetch(`${API_BASE_URL}/vehicles/${encodeURIComponent(plate)}/trajectory`);
-        if (!response.ok) return;
+        if (!response.ok) {
+          if (isMounted) {
+            setVehicleTracePayload(getMockVehicleTraceData(activeDataset, plate));
+          }
+          return;
+        }
         const payload = await response.json();
         if (isMounted) {
           setVehicleTracePayload(transformTrajectory(plate, payload));
         }
       } catch (err) {
         console.warn('Backend offline, using mock trajectory data:', err);
+        if (isMounted) {
+          setVehicleTracePayload(getMockVehicleTraceData(activeDataset, plate));
+        }
       }
     };
 
@@ -306,7 +351,7 @@ export const App: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [currentRoute, vehicleTracePayload.searchedPlate]);
+  }, [currentRoute, vehicleTracePayload.searchedPlate, activeDataset]);
 
   const handleNavigate = (route: NavRoute | string) => {
     if (
@@ -420,6 +465,14 @@ export const App: React.FC = () => {
         </main>
       </div>
     </div>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <DatasetProvider>
+      <AppContent />
+    </DatasetProvider>
   );
 };
 

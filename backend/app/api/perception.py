@@ -704,6 +704,49 @@ async def get_perception_status(
         dataset_records = load_ground_truth_by_camera(DATASET_PATH, camera_ids=DEFAULT_CAMERA_IDS)
         camera_results = process_all_cameras(DEFAULT_CAMERA_IDS, dataset_records=dataset_records)
 
+        # Synchronize camera statuses and observations with authoritative CameraManager
+        try:
+            mgr = get_camera_manager()
+            if mgr:
+                for cid in DEFAULT_CAMERA_IDS:
+                    cam = mgr.get_camera(cid)
+                    if not cam:
+                        continue
+                    cam_dict = cam.to_dict()
+                    is_active = cam.enabled and cam_dict.get("status") not in ["DISABLED", "FAILED", "OFFLINE", "DOWN"]
+                    live_status = "online" if is_active else "down"
+
+                    if cid not in camera_results:
+                        camera_results[cid] = {
+                            "camera_id": cid,
+                            "camera_status": live_status,
+                            "processed_at": datetime.now(timezone.utc).isoformat(),
+                            "observations": [],
+                            "ocr_reads": [],
+                            "warning": None if is_active else f"Camera {cam_dict.get('status', 'DOWN')}",
+                        }
+                    else:
+                        camera_results[cid]["camera_status"] = live_status
+                        if is_active:
+                            camera_results[cid]["warning"] = None
+
+                    # If camera results observations is empty, populate from live camera worker state
+                    if not camera_results[cid].get("observations"):
+                        act = cam.get_active_vehicle()
+                        if act and act.get("track_id"):
+                            obs_entry = {
+                                "camera_id": cid,
+                                "track_id": act.get("track_id", "TRK-001"),
+                                "captured_at": datetime.now(timezone.utc).isoformat(),
+                                "fused_plate_text": act.get("plate_number", "NOT READ"),
+                                "fused_confidence": act.get("ocr_confidence") or 0.90,
+                                "vehicle_type": act.get("vehicle_type", "CAR"),
+                                "vehicle_colour": act.get("color", "WHITE"),
+                            }
+                            camera_results[cid]["observations"] = [obs_entry]
+        except Exception as e:
+            logger.debug(f"Camera manager sync error in /perception/status: {e}")
+
         # Dynamic active scans across all live camera feeds
         active_scans_count = 0
         try:
