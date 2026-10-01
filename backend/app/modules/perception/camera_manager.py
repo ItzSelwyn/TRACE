@@ -19,6 +19,12 @@ import numpy as np
 
 from app.config import settings
 from app.modules.appearance.preprocessing import score_crop_quality
+from app.modules.perception.candidate_ranking import score_candidate_frame
+from app.modules.perception.consensus_fusion import TrackTemporalConsensus
+from app.modules.perception.demo_fallback import (
+    get_demo_generator,
+    get_fallback_config,
+)
 from app.modules.perception.normalization import normalize_plate_text
 from app.modules.perception.ocr_engine import read_plate_image
 from app.modules.perception.persistence import (
@@ -28,8 +34,18 @@ from app.modules.perception.persistence import (
     update_observation_plate,
     upsert_observation_embedding,
 )
+from app.modules.perception.dataset_profiles import (
+    DATASET_PROFILES,
+    REQUIRED_CAMERAS,
+    get_active_dataset_key,
+    get_dataset_profile,
+    list_available_datasets,
+    set_active_dataset_key,
+    validate_dataset_footage,
+)
 from app.modules.perception.pipeline import _detect_crop_color
 from app.modules.perception.plate_localizer import extract_plate_crop
+from app.modules.perception.preprocessing_variants import generate_preprocessing_variants
 from app.modules.perception.source_discovery import (
     _get_project_data_dir,
     discover_sources,
@@ -172,7 +188,7 @@ class CameraPlaybackController:
     """Master scenario timeline and synchronization clock."""
 
     def __init__(self):
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self.sync_mode: str = "synchronized"  # "synchronized" | "independent"
         self.playback_state: str = "playing"  # "playing" | "paused" | "stopped"
         self.playback_speed: float = 1.0     # 0.25, 0.5, 1.0, 2.0, 4.0
@@ -229,6 +245,12 @@ class CameraPlaybackController:
                 self.seek_version += 1
         return self.get_status()
 
+    def reset(self, target_time_s: float = 0.0):
+        with self._lock:
+            self.master_time_s = max(0.0, float(target_time_s))
+            self.last_tick_time = time.time()
+            self.seek_version += 1
+
     def tick(self) -> float:
         with self._lock:
             now = time.time()
@@ -255,6 +277,7 @@ class ManagedCameraWorker:
         self._lock = threading.Lock()
         self._running = False
         self._generation: int = 0
+        self.dataset_generation: int = 0
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._cap: Optional[cv2.VideoCapture] = None
@@ -359,12 +382,6 @@ class ManagedCameraWorker:
                 self._stop_event.set()
             if hasattr(self, "_frame_cond"):
                 self._frame_cond.notify_all()
-            if self._cap is not None:
-                try:
-                    self._cap.release()
-                except Exception:
-                    pass
-                self._cap = None
             thread_to_join = self._thread
             self._thread = None
 
@@ -375,7 +392,7 @@ class ManagedCameraWorker:
                 pass
 
         if thread_to_join and thread_to_join.is_alive():
-            thread_to_join.join(timeout=2.0)
+            thread_to_join.join(timeout=1.0)
 
     def to_dict(self) -> Dict[str, Any]:
         with self._lock:
@@ -855,23 +872,34 @@ class ManagedCameraWorker:
                         stable_color = max(set(trk["colors"]), key=trk["colors"].count)
 
                         obs_id_str = f"TRACE-{self.camera_id.upper()}-{matched_id:03d}"
-                        track_id_str = f"TRK-{matched_id:03d}"                        # Plate OCR: Non-blocking background worker dispatch
+                        track_id_str = f"TRK-{matched_id:03d}"
                         track_ocr_attempts = trk.get("ocr_attempts", 0)
                         last_ocr = trk.get("last_ocr_frame", -999)
                         is_confirmed = trk.get("plate_confirmed", False)
                         has_enough_reads = trk.get("ocr_success_count", 0) >= 3
                         in_ocr = trk.get("ocr_in_flight", False)
 
+                        # Rank plate candidate crop
+                        plate_crop = extract_plate_crop(veh_crop) if veh_crop is not None and veh_crop.size > 0 else None
+                        cand_eval = score_candidate_frame(
+                            crop=plate_crop,
+                            bbox=[x1, y1, x2, y2],
+                            frame_shape=resized_raw.shape,
+                            det_conf=conf,
+                        )
+                        trk["best_candidate_score"] = max(trk.get("best_candidate_score", 0.0), cand_eval["composite_score"])
+
                         should_ocr = (
                             ocr_runs_this_frame < 2
                             and not is_confirmed
                             and not has_enough_reads
                             and not in_ocr
-                            and track_ocr_attempts < 8
+                            and track_ocr_attempts < 10
+                            and (cand_eval["is_promising"] or track_ocr_attempts < 3 or is_new)
                             and veh_crop.size > 0
-                            and veh_crop.shape[1] >= 65
-                            and veh_crop.shape[0] >= 45
-                            and (frame_id - last_ocr >= 10 or is_new)
+                            and veh_crop.shape[1] >= 50
+                            and veh_crop.shape[0] >= 35
+                            and (frame_id - last_ocr >= 8 or is_new)
                         )
 
                         if should_ocr:
@@ -879,7 +907,6 @@ class ManagedCameraWorker:
                             trk["ocr_attempts"] = track_ocr_attempts + 1
                             trk["ocr_in_flight"] = True
                             ocr_runs_this_frame += 1
-                            plate_crop = extract_plate_crop(veh_crop)
                             self._bg_executor.submit(
                                 self._async_ocr_task,
                                 matched_id,
@@ -887,6 +914,8 @@ class ManagedCameraWorker:
                                 frame_id,
                                 plate_crop.copy() if plate_crop is not None and plate_crop.size > 0 else None,
                                 veh_crop.copy() if veh_crop is not None and veh_crop.size > 0 else None,
+                                self.dataset_generation,
+                                cand_eval["composite_score"],
                             )
 
                         fused_record = self.fusion.fuse_track(
@@ -896,12 +925,63 @@ class ManagedCameraWorker:
                             vehicle_colour=stable_color,
                         )
 
+                        # Genuine OCR plate (only READ or INFERRED; otherwise "NOT READ")
                         plate_text = fused_record.get("fused_plate_text", "NOT READ")
                         ocr_conf = fused_record.get("fused_confidence")
                         if plate_text == "NOT READ" and trk.get("plate_number") and trk.get("plate_number") != "NOT READ":
                             plate_text = trk["plate_number"]
                             ocr_conf = trk.get("ocr_confidence")
-                        ocr_status = "READ" if plate_text != "NOT READ" else "NOT READ"
+
+                        plate_status = fused_record.get("plate_status", "NOT_READ")
+                        display_plate = fused_record.get("display_plate", plate_text)
+                        is_synthetic = False
+
+                        # If genuine OCR hasn't succeeded, evaluate demo fallback eligibility
+                        if plate_status not in ["READ", "INFERRED"]:
+                            if trk.get("is_synthetic") and trk.get("display_plate"):
+                                display_plate = trk["display_plate"]
+                                plate_status = "SYNTHETIC_DEMO"
+                                is_synthetic = True
+                                ocr_conf = "ESTIMATED"
+                            else:
+                                demo_gen = get_demo_generator()
+                                dataset_name = getattr(self, "scenario", "S05") or "S05"
+                                has_plate_crop = bool(
+                                    (plate_crop is not None and plate_crop.size > 0)
+                                    or (veh_crop is not None and veh_crop.size > 0)
+                                )
+                                eligible, reason = demo_gen.is_track_eligible(
+                                    dataset=dataset_name,
+                                    camera_id=self.camera_id,
+                                    track_id=track_id_str,
+                                    track_frames=trk["frames"],
+                                    ocr_attempts=track_ocr_attempts,
+                                    has_plate_evidence=has_plate_crop,
+                                    current_status=plate_status,
+                                )
+                                if eligible:
+                                    syn_plate = demo_gen.generate_plate(
+                                        dataset=dataset_name,
+                                        camera_id=self.camera_id,
+                                        track_id=track_id_str,
+                                        partial_text=fused_record.get("corrected_plate_text") if plate_status == "PARTIAL" else None,
+                                    )
+                                    display_plate = syn_plate
+                                    plate_status = "SYNTHETIC_DEMO"
+                                    is_synthetic = True
+                                    ocr_conf = "ESTIMATED"
+                                    trk["display_plate"] = syn_plate
+                                    trk["is_synthetic"] = True
+                                    trk["plate_status"] = "SYNTHETIC_DEMO"
+                        else:
+                            # Genuine OCR is authoritative and replaces any previous synthetic value
+                            display_plate = plate_text
+                            is_synthetic = False
+                            trk["display_plate"] = plate_text
+                            trk["is_synthetic"] = False
+                            trk["plate_status"] = plate_status
+
+                        ocr_status = plate_status
 
                         # Update recent detections list
                         ex_idx = next((i for i, d in enumerate(self.recent_detections) if d.get("track_id") == track_id_str), None)
@@ -911,7 +991,9 @@ class ManagedCameraWorker:
                             "track_id": track_id_str,
                             "vehicle_type": stable_type,
                             "color": stable_color,
-                            "plate_number": plate_text,
+                            "plate_number": display_plate,
+                            "plate_status": plate_status,
+                            "is_synthetic": is_synthetic,
                             "ocr_confidence": ocr_conf,
                             "timestamp": trk.get("first_seen", current_time_str),
                             "status": "PASSING" if is_moving else "DETECTED",
@@ -941,6 +1023,7 @@ class ManagedCameraWorker:
                                         best_crop_copy,
                                         crops_copy,
                                         trk.get("best_crop_score", 0.0),
+                                        self.dataset_generation,
                                     )
                             elif trk.get("obs_uuid") and settings.APPEARANCE_REID_ENABLED and not trk.get("emb_in_flight", False):
                                 # Continuous upgrade: If track lacks embedding or current crop is significantly better (+0.15 score)
@@ -954,6 +1037,7 @@ class ManagedCameraWorker:
                                         trk["obs_uuid"],
                                         veh_crop.copy(),
                                         crop_score,
+                                        self.dataset_generation,
                                     )
 
                         box_w = max(1, x2 - x1)
@@ -967,9 +1051,11 @@ class ManagedCameraWorker:
                                 "camera_name": self.name,
                                 "observation_id": obs_id_str,
                                 "track_id": track_id_str,
-                                "plate_number": plate_text,
+                                "plate_number": display_plate,
+                                "plate_status": plate_status,
+                                "is_synthetic": is_synthetic,
                                 "ocr_confidence": ocr_conf,
-                                "ocr_status": ocr_status,
+                                "ocr_status": plate_status,
                                 "detection_confidence": round(float(conf), 3),
                                 "vehicle_type": stable_type,
                                 "color": stable_color,
@@ -1001,6 +1087,7 @@ class ManagedCameraWorker:
                                 st_id,
                                 t["obs_uuid"],
                                 best_crop_copy,
+                                self.dataset_generation,
                             )
 
                     # Prune stale tracks when tracking table grows too large
@@ -1011,6 +1098,8 @@ class ManagedCameraWorker:
                         ]
                         for st in stale:
                             self.vehicle_tracks.pop(st, None)
+                            self.fusion.clear_track(self.camera_id, f"TRK-{st:03d}")
+                            get_demo_generator().clear_track(getattr(self, "scenario", "S05") or "S05", self.camera_id, f"TRK-{st:03d}")
 
             except Exception as e:
                 pass
@@ -1049,79 +1138,73 @@ class ManagedCameraWorker:
         frame_id: int,
         plate_crop: Optional[np.ndarray],
         veh_crop: Optional[np.ndarray],
+        dataset_gen: int = 0,
+        cand_score: float = 0.5,
     ):
-        """Execute PaddleOCR in background thread pool with crop fallback, state sync, and DB persistence."""
+        """Execute PaddleOCR in background thread pool with multi-variant preprocessing, consensus fusion, and controlled demo fallback."""
         try:
+            if self.dataset_generation != dataset_gen:
+                return
             veh_dims = f"{veh_crop.shape[0]}x{veh_crop.shape[1]}" if veh_crop is not None and veh_crop.size > 0 else "0x0"
             plate_dims = f"{plate_crop.shape[0]}x{plate_crop.shape[1]}" if plate_crop is not None and plate_crop.size > 0 else "0x0"
 
             if (plate_crop is None or plate_crop.size == 0) and (veh_crop is None or veh_crop.size == 0):
-                logger.info(
-                    f"[OCR DIAGNOSTIC] cam={self.camera_id} | track={track_id_str} | veh_crop={veh_dims} | "
-                    f"plate_crop={plate_dims} | raw='' | norm='' | conf=0.000 | rejected: crop_empty_or_too_small"
-                )
                 return
-
-            ocr_res = None
-            if plate_crop is not None and plate_crop.size > 0:
-                ocr_res = read_plate_image(plate_crop, min_confidence=0.20)
-
-            # Fallback to vehicle crop if plate crop yielded no detection or low confidence
-            if (not ocr_res or max(ocr_res, key=lambda x: x["confidence"])["confidence"] < 0.60) and veh_crop is not None and veh_crop.size > 0:
-                veh_ocr = read_plate_image(veh_crop, min_confidence=0.20)
-                if veh_ocr:
-                    best_veh = max(veh_ocr, key=lambda x: x["confidence"])
-                    if not ocr_res or best_veh["confidence"] > max(ocr_res, key=lambda x: x["confidence"])["confidence"]:
-                        ocr_res = veh_ocr
-
-            if not ocr_res:
-                logger.info(
-                    f"[OCR DIAGNOSTIC] cam={self.camera_id} | track={track_id_str} | veh_crop={veh_dims} | "
-                    f"plate_crop={plate_dims} | raw='' | norm='' | conf=0.000 | rejected: no_text_detected"
-                )
-                return
-
-            best_ocr = max(ocr_res, key=lambda x: x["confidence"])
-            raw_text = str(best_ocr.get("raw_text", "")).strip()
-            norm_text = str(best_ocr.get("normalized_text") or normalize_plate_text(raw_text)).strip()
-            conf = float(best_ocr.get("confidence", 0.0))
-
-            if len(norm_text) < 4 or conf < 0.35:
-                reason = "text_too_short" if len(norm_text) < 4 else f"confidence_too_low_{conf:.2f}"
-                logger.info(
-                    f"[OCR DIAGNOSTIC] cam={self.camera_id} | track={track_id_str} | veh_crop={veh_dims} | "
-                    f"plate_crop={plate_dims} | raw='{raw_text}' | norm='{norm_text}' | conf={conf:.3f} | rejected: {reason}"
-                )
-                return
-
-            logger.info(
-                f"[OCR DIAGNOSTIC] cam={self.camera_id} | track={track_id_str} | veh_crop={veh_dims} | "
-                f"plate_crop={plate_dims} | raw='{raw_text}' | norm='{norm_text}' | conf={conf:.3f} | accepted"
-            )
 
             now_iso = datetime.now(timezone.utc).isoformat()
+            detected_candidates: List[Tuple[Dict[str, Any], str]] = []
 
-            # Record read in temporal fusion
-            self.fusion.add_ocr_read(
-                camera_id=self.camera_id,
-                track_id=track_id_str,
-                frame_id=frame_id,
-                raw_text=raw_text,
-                confidence=conf,
-                timestamp=now_iso,
-            )
+            # 1. Generate and test controlled preprocessing variants
+            if plate_crop is not None and plate_crop.size > 0:
+                variants = generate_preprocessing_variants(
+                    plate_crop,
+                    limit_variants=["ORIGINAL", "UPSCALE_2X", "CLAHE", "DENOISED_SHARPEN", "ADAPTIVE_THRESH"],
+                )
+                for var_name, var_img in variants:
+                    var_ocr = read_plate_image(var_img, min_confidence=0.20)
+                    if var_ocr:
+                        for item in var_ocr:
+                            detected_candidates.append((item, var_name))
+                        # If a very high confidence read is obtained, stop testing remaining variants
+                        if any(item.get("confidence", 0.0) >= 0.80 for item in var_ocr):
+                            break
 
-            # Re-evaluate fused track
+            # 2. Fallback to vehicle crop if plate crop yielded no detections
+            if not detected_candidates and veh_crop is not None and veh_crop.size > 0:
+                veh_ocr = read_plate_image(veh_crop, min_confidence=0.20)
+                if veh_ocr:
+                    for item in veh_ocr:
+                        detected_candidates.append((item, "VEH_CROP"))
+
+            # 3. Add all valid candidate readings into the track temporal consensus
+            for ocr_item, var_name in detected_candidates:
+                raw_t = str(ocr_item.get("raw_text", "")).strip()
+                norm_t = str(ocr_item.get("normalized_text", "")).strip()
+                c_conf = float(ocr_item.get("confidence", 0.0))
+                if len(norm_t) >= 4 and c_conf >= 0.25:
+                    self.fusion.add_ocr_read(
+                        camera_id=self.camera_id,
+                        track_id=track_id_str,
+                        frame_id=frame_id,
+                        raw_text=raw_t,
+                        confidence=c_conf,
+                        timestamp=now_iso,
+                        crop_quality_score=cand_score,
+                        variant=var_name,
+                    )
+
+            # 4. Re-evaluate fused track
             vehicle_type = "car"
             vehicle_colour = "white"
             obs_uuid = None
             persisted = False
+            trk_frames = 1
+            trk_attempts = 1
             with self._lock:
                 trk = self.vehicle_tracks.get(matched_id)
                 if trk:
-                    trk["ocr_success_count"] = trk.get("ocr_success_count", 0) + 1
-                    if conf >= 0.85:
-                        trk["plate_confirmed"] = True
+                    trk_frames = trk.get("frames", 1)
+                    trk_attempts = trk.get("ocr_attempts", 1)
                     vehicle_type = trk.get("type", "car")
                     vehicle_colour = trk.get("color", "white")
                     obs_uuid = trk.get("obs_uuid")
@@ -1134,58 +1217,123 @@ class ManagedCameraWorker:
                 vehicle_colour=vehicle_colour,
             )
 
-            fused_plate = fused_record.get("fused_plate_text", norm_text)
-            fused_conf = fused_record.get("fused_confidence", conf)
-            ocr_status = "READ" if fused_plate != "NOT READ" else "NOT READ"
+            genuine_plate = fused_record.get("fused_plate_text", "NOT READ")
+            genuine_conf = fused_record.get("fused_confidence")
+            plate_status = fused_record.get("plate_status", "NOT_READ")
+            display_plate = fused_record.get("display_plate", genuine_plate)
+            is_synthetic = False
+            dataset_name = getattr(self, "scenario", "S05") or "S05"
+
+            if plate_status in ["READ", "INFERRED"]:
+                # Strong multi-frame consensus
+                with self._lock:
+                    trk = self.vehicle_tracks.get(matched_id)
+                    if trk:
+                        trk["plate_confirmed"] = True
+                        trk["ocr_success_count"] = trk.get("ocr_success_count", 0) + 1
+                        trk["plate_number"] = genuine_plate
+                        trk["display_plate"] = genuine_plate
+                        trk["plate_status"] = plate_status
+                        trk["is_synthetic"] = False
+                        trk["ocr_confidence"] = genuine_conf
+                logger.info(
+                    f"[OCR FUSION] dataset={dataset_name} cam={self.camera_id} track={track_id_str} "
+                    f"frames={trk_frames} candidates={fused_record.get('ocr_samples_count')} "
+                    f"best_raw={fused_record.get('raw_ocr_text')} fused={fused_record.get('corrected_plate_text')} "
+                    f"status={plate_status} ocr_conf={genuine_conf} "
+                    f"correction_conf={fused_record.get('correction_confidence')}"
+                )
+            else:
+                # Evaluate controlled synthetic demo fallback eligibility
+                demo_gen = get_demo_generator()
+                has_plate_crop = bool(
+                    (plate_crop is not None and plate_crop.size > 0)
+                    or (veh_crop is not None and veh_crop.size > 0)
+                )
+                eligible, reason = demo_gen.is_track_eligible(
+                    dataset=dataset_name,
+                    camera_id=self.camera_id,
+                    track_id=track_id_str,
+                    track_frames=trk_frames,
+                    ocr_attempts=trk_attempts,
+                    has_plate_evidence=has_plate_crop,
+                    current_status=plate_status,
+                )
+                if eligible:
+                    syn_plate = demo_gen.generate_plate(
+                        dataset=dataset_name,
+                        camera_id=self.camera_id,
+                        track_id=track_id_str,
+                        partial_text=fused_record.get("corrected_plate_text") if plate_status == "PARTIAL" else None,
+                    )
+                    display_plate = syn_plate
+                    plate_status = "SYNTHETIC_DEMO"
+                    is_synthetic = True
+                    with self._lock:
+                        trk = self.vehicle_tracks.get(matched_id)
+                        if trk:
+                            trk["display_plate"] = syn_plate
+                            trk["plate_status"] = "SYNTHETIC_DEMO"
+                            trk["is_synthetic"] = True
+                            trk["ocr_confidence"] = "ESTIMATED"
+                    logger.info(
+                        f"[OCR DEMO FALLBACK] dataset={dataset_name} cam={self.camera_id} track={track_id_str} "
+                        f"attempts={trk_attempts} partial={fused_record.get('raw_ocr_text', '')} "
+                        f"display={syn_plate} status=SYNTHETIC_DEMO persisted_as_real=false blacklist_eligible=false"
+                    )
+                else:
+                    logger.info(
+                        f"[OCR RESULT] dataset={dataset_name} cam={self.camera_id} track={track_id_str} "
+                        f"status={plate_status} reason={reason}"
+                    )
 
             with self._lock:
-                trk = self.vehicle_tracks.get(matched_id)
-                if trk:
-                    trk["plate_number"] = fused_plate
-                    trk["ocr_confidence"] = fused_conf
-
-                # Update active vehicle metadata if it belongs to this track or is currently unread
+                # Update active vehicle metadata if it belongs to this track
                 act_track = self.active_vehicle_data.get("track_id")
                 if act_track == track_id_str or self.active_vehicle_data.get("plate_number") in [None, "NOT READ"]:
-                    self.active_vehicle_data["plate_number"] = fused_plate
-                    self.active_vehicle_data["ocr_confidence"] = fused_conf
-                    self.active_vehicle_data["ocr_status"] = ocr_status
+                    self.active_vehicle_data["plate_number"] = display_plate
+                    self.active_vehicle_data["ocr_confidence"] = "ESTIMATED" if is_synthetic else genuine_conf
+                    self.active_vehicle_data["ocr_status"] = plate_status
+                    self.active_vehicle_data["plate_status"] = plate_status
+                    self.active_vehicle_data["is_synthetic"] = is_synthetic
 
                 # Update recent detections
                 for d in self.recent_detections:
                     if d.get("track_id") == track_id_str:
-                        d["plate_number"] = fused_plate
-                        d["ocr_confidence"] = fused_conf
+                        d["plate_number"] = display_plate
+                        d["ocr_confidence"] = "ESTIMATED" if is_synthetic else genuine_conf
+                        d["plate_status"] = plate_status
+                        d["is_synthetic"] = is_synthetic
 
-            # If track already persisted in DB, update observation
-            if persisted and obs_uuid and self._db_engine and not is_db_in_backoff():
+            # If track already persisted in DB, update observation with ONLY genuine plate
+            if genuine_plate != "NOT READ" and persisted and obs_uuid and self._db_engine and not is_db_in_backoff():
                 try:
                     from sqlalchemy.orm import Session
                     with Session(self._db_engine) as session:
                         update_observation_plate(
                             session=session,
                             observation_id=obs_uuid,
-                            fused_plate_text=fused_plate,
-                            fused_confidence=fused_conf,
+                            fused_plate_text=genuine_plate,
+                            fused_confidence=genuine_conf,
                             ocr_read={
-                                "raw_text": raw_text,
-                                "confidence": conf,
+                                "raw_text": fused_record.get("raw_ocr_text", ""),
+                                "confidence": genuine_conf,
                                 "timestamp": now_iso,
                             },
                         )
                 except Exception as up_err:
                     logger.warning(f"Failed to update observation plate in DB: {up_err}")
-            elif not persisted:
+            elif not persisted and genuine_plate != "NOT READ":
                 # Flag pending plate update in case DB persistence is currently in-flight
                 with self._lock:
                     trk = self.vehicle_tracks.get(matched_id)
                     if trk:
                         trk["pending_plate_update"] = {
-                            "plate_text": fused_plate,
-                            "confidence": fused_conf,
+                            "plate_text": genuine_plate,
+                            "confidence": genuine_conf,
                             "ocr_read": {
-                                "raw_text": raw_text,
-                                "confidence": conf,
+                                "raw_text": fused_record.get("raw_ocr_text", ""),
+                                "confidence": genuine_conf,
                                 "timestamp": now_iso,
                             },
                         }
@@ -1209,9 +1357,12 @@ class ManagedCameraWorker:
         best_crop: Optional[np.ndarray],
         crops_samples: list,
         crop_score: float,
+        dataset_gen: int = 0,
     ):
         """Extract appearance embedding and persist vehicle observation asynchronously."""
         try:
+            if self.dataset_generation != dataset_gen:
+                return
             # Re-fetch latest fused plate and reads from fusion in case OCR completed
             latest_fused = self.fusion.fuse_track(
                 camera_id=self.camera_id,
@@ -1306,12 +1457,14 @@ class ManagedCameraWorker:
                 if trk:
                     trk["persist_in_flight"] = False
 
-    def _async_upgrade_embedding(self, matched_id: int, obs_uuid: str, veh_crop: np.ndarray, crop_score: float):
-        """Extract upgraded appearance embedding on background worker thread."""
+    def _async_upgrade_embedding(self, matched_id: int, obs_uuid: str, crop: np.ndarray, crop_score: float, dataset_gen: int = 0):
+        """Extract higher-quality embedding when a sharper crop becomes available."""
         try:
+            if self.dataset_generation != dataset_gen:
+                return
             from app.modules.appearance import get_appearance_extractor
             extractor = get_appearance_extractor()
-            upg_emb, upg_reason = extractor.extract_with_reason(veh_crop, min_size=settings.APPEARANCE_MIN_CROP_SIZE)
+            upg_emb, upg_reason = extractor.extract_with_reason(crop, min_size=settings.APPEARANCE_MIN_CROP_SIZE)
             if upg_emb is not None:
                 from sqlalchemy.orm import Session
                 with Session(self._db_engine) as session:
@@ -1335,9 +1488,11 @@ class ManagedCameraWorker:
                 if trk:
                     trk["emb_in_flight"] = False
 
-    def _async_finalize_embedding(self, matched_id: int, obs_uuid: str, best_crop: Optional[np.ndarray]):
+    def _async_finalize_embedding(self, matched_id: int, obs_uuid: str, best_crop: Optional[np.ndarray], dataset_gen: int = 0):
         """Finalize embedding for exited vehicle track on background worker thread."""
         try:
+            if self.dataset_generation != dataset_gen:
+                return
             fin_emb = None
             fin_reason = "crop_too_small_or_empty"
             if best_crop is not None:
@@ -1399,9 +1554,11 @@ class CameraScenarioManager:
     """Singleton manager coordinating all TRACE camera inputs, dynamic hot-swapping, and playback."""
 
     def __init__(self):
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self.controller = CameraPlaybackController()
         self.cameras: Dict[str, ManagedCameraWorker] = {}
+        self.active_dataset: str = "S05"
+        self._dataset_generation: int = 0
         self._bg_timer_thread = threading.Thread(target=self._clock_tick_loop, daemon=True)
         self._bg_timer_running = True
 
@@ -1421,7 +1578,7 @@ class CameraScenarioManager:
             time.sleep(0.05)
 
     def _init_cameras(self):
-        """Initialize cameras from data/camera_config.json or default CityFlow S05 cameras."""
+        """Initialize cameras from active dataset configuration or saved camera_config.json."""
         config_path = _get_config_path()
         saved_configs: Dict[str, Any] = {}
 
@@ -1432,23 +1589,39 @@ class CameraScenarioManager:
             except Exception as e:
                 logger.warning(f"Could not load {config_path}: {e}")
 
-        # Default camera setup if no config file exists
-        default_defs = [
-            {"camera_id": "c020", "name": "Camera 020", "source_type": "video", "source_path": "footage/S05/c020/vdo.avi", "scenario": "S05", "fps": 10.0, "sync_offset_s": 0.0, "enabled": True},
-            {"camera_id": "c023", "name": "Camera 023", "source_type": "video", "source_path": "footage/S05/c023/vdo.avi", "scenario": "S05", "fps": 10.0, "sync_offset_s": 0.0, "enabled": True},
-            {"camera_id": "c028", "name": "Camera 028", "source_type": "video", "source_path": "footage/S05/c028/vdo.avi", "scenario": "S05", "fps": 10.0, "sync_offset_s": 0.0, "enabled": True},
-            {"camera_id": "c029", "name": "Camera 029", "source_type": "video", "source_path": "footage/S05/c029/vdo.avi", "scenario": "S05", "fps": 10.0, "sync_offset_s": 0.0, "enabled": True},
-        ]
+        # Authoritative active dataset resolution
+        active_ds = saved_configs.get("active_dataset") or get_active_dataset_key()
+        if active_ds not in DATASET_PROFILES:
+            active_ds = "S05"
+        self.active_dataset = active_ds
+        profile = get_dataset_profile(active_ds)
 
         # Load sync mode from saved config
         if saved_configs.get("sync_mode"):
             self.controller.sync_mode = saved_configs["sync_mode"]
 
         cameras_data = saved_configs.get("cameras", {})
-        for default_item in default_defs:
-            cid = default_item["camera_id"]
+        for cid in REQUIRED_CAMERAS:
+            prof_cam = profile["cameras"][cid]
+            default_item = {
+                "camera_id": cid,
+                "name": prof_cam["name"],
+                "source_type": prof_cam.get("source_type", "video"),
+                "source_path": prof_cam["source_path"],
+                "scenario": active_ds,
+                "fps": prof_cam.get("fps", 10.0),
+                "sync_offset_s": prof_cam.get("sync_offset_s", 0.0),
+                "latitude": prof_cam["latitude"],
+                "longitude": prof_cam["longitude"],
+                "location": prof_cam["location"],
+                "enabled": True,
+            }
             cfg = cameras_data.get(cid, default_item)
-            self.cameras[cid] = ManagedCameraWorker(cid, cfg, self.controller)
+            if cfg.get("scenario") != active_ds:
+                cfg = default_item
+            w = ManagedCameraWorker(cid, cfg, self.controller)
+            w.dataset_generation = self._dataset_generation
+            self.cameras[cid] = w
 
         self.recompute_max_duration()
 
@@ -1471,6 +1644,7 @@ class CameraScenarioManager:
         config_path = _get_config_path()
         try:
             data = {
+                "active_dataset": self.active_dataset,
                 "sync_mode": self.controller.sync_mode,
                 "loop_scenario": self.controller.loop_scenario,
                 "cameras": {cid: worker.to_dict() for cid, worker in self.cameras.items()},
@@ -1480,6 +1654,130 @@ class CameraScenarioManager:
                 json.dump(data, f, indent=2)
         except Exception as e:
             logger.error(f"Failed to persist camera config to {config_path}: {e}")
+
+    @property
+    def dataset_generation(self) -> int:
+        """Generation token incremented on each dataset switch."""
+        return self._dataset_generation
+
+    def get_active_dataset_info(self) -> Dict[str, Any]:
+        """Return authoritative metadata about current active dataset and selectable options."""
+        with self._lock:
+            profile = get_dataset_profile(self.active_dataset)
+            return {
+                "active_dataset": self.active_dataset,
+                "label": profile["label"],
+                "map_profile": profile["map_profile"],
+                "available_datasets": list_available_datasets(),
+            }
+
+    def switch_dataset(self, dataset_key: str) -> Dict[str, Any]:
+        """Atomically, thread-safely switch the global active perception dataset (S04, S05, CBE)."""
+        clean_key = dataset_key.upper().strip()
+        if clean_key not in DATASET_PROFILES:
+            raise ValueError(f"Invalid dataset '{dataset_key}'. Must be one of: {list(DATASET_PROFILES.keys())}")
+
+        # 1. Pre-validate footage existence BEFORE stopping any current workers
+        validate_dataset_footage(clean_key)
+        new_profile = get_dataset_profile(clean_key)
+
+        with self._lock:
+            prev_dataset = self.active_dataset
+            logger.info(f"Initiating global dataset switch: {prev_dataset} -> {clean_key}")
+
+            # 2. Invalidate pending async tasks immediately with generation bump
+            self._dataset_generation += 1
+
+            # 3. Safely stop and join existing camera workers
+            for w in self.cameras.values():
+                w.stop()
+
+            # 4. Clear master playback clock and set to 00:00:00
+            self.controller.reset(0.0)
+            get_demo_generator().clear_dataset()
+
+            # 5. Flush and reconfigure each camera worker
+            try:
+                for cid in REQUIRED_CAMERAS:
+                    w = self.cameras.get(cid)
+                    if not w:
+                        continue
+                    cam_info = new_profile["cameras"][cid]
+                    with w._lock:
+                        w.dataset_generation = self._dataset_generation
+                        w.source_path = cam_info["source_path"]
+                        w.source_type = cam_info.get("source_type", "video")
+                        w.scenario = clean_key
+                        w.name = cam_info["name"]
+                        w.location = cam_info["location"]
+                        w.latitude = cam_info["latitude"]
+                        w.longitude = cam_info["longitude"]
+                        w.fps = cam_info.get("fps", 10.0)
+                        w.sync_offset_s = cam_info.get("sync_offset_s", 0.0)
+                        w.current_frame_idx = 0
+                        w.current_local_time_s = 0.0
+                        w.cached_raw_jpeg = None
+                        w.cached_yolo_jpeg = None
+                        w.vehicle_tracks.clear()
+                        w.recent_detections.clear()
+                        w.persisted_tracks.clear()
+                        w.fusion = TemporalOCRFusion()
+                        w.status_label = "INITIALIZING"
+                        w.active_vehicle_data = {
+                            "camera_id": w.camera_id,
+                            "camera_name": w.name,
+                            "observation_id": f"TRACE-{w.camera_id.upper()}-01",
+                            "track_id": "TRK-001",
+                            "plate_number": "NOT READ",
+                            "ocr_confidence": None,
+                            "ocr_status": "NOT READ",
+                            "detection_confidence": None,
+                            "vehicle_type": "CAR",
+                            "color": "WHITE",
+                            "timestamp": time.strftime("%I:%M:%S %p"),
+                            "is_moving": False,
+                            "status": "MONITORING",
+                            "recent_detections": [],
+                        }
+
+                self.active_dataset = clean_key
+                self.recompute_max_duration()
+
+                # 6. Start new camera workers
+                for w in self.cameras.values():
+                    w.start()
+
+                # 7. Persist authoritative selection
+                set_active_dataset_key(clean_key)
+                self.save_configuration()
+                logger.info(f"Dataset switch completed successfully: now running {clean_key}")
+                return self.get_active_dataset_info()
+
+            except Exception as e:
+                logger.error(f"Error during dataset switch to {clean_key}: {e}. Rolling back to {prev_dataset}...")
+                try:
+                    rollback_profile = get_dataset_profile(prev_dataset)
+                    for cid in REQUIRED_CAMERAS:
+                        w = self.cameras.get(cid)
+                        if not w:
+                            continue
+                        cam_info = rollback_profile["cameras"][cid]
+                        with w._lock:
+                            w.source_path = cam_info["source_path"]
+                            w.source_type = cam_info.get("source_type", "video")
+                            w.scenario = prev_dataset
+                            w.name = cam_info["name"]
+                            w.location = cam_info["location"]
+                            w.latitude = cam_info["latitude"]
+                            w.longitude = cam_info["longitude"]
+                            w.fps = cam_info.get("fps", 10.0)
+                            w.sync_offset_s = cam_info.get("sync_offset_s", 0.0)
+                    self.active_dataset = prev_dataset
+                    for w in self.cameras.values():
+                        w.start()
+                except Exception as rb_err:
+                    logger.critical(f"Critical error during dataset rollback: {rb_err}")
+                raise RuntimeError(f"Failed to switch dataset to '{clean_key}': {e}")
 
     def list_cameras(self) -> List[Dict[str, Any]]:
         with self._lock:

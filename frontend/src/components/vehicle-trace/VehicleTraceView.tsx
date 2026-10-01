@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useDataset } from '../../context/DatasetContext';
 import { VehicleTraceDataPayload } from '../../types/vehicleTrace';
 import {
   Map,
@@ -7,7 +8,7 @@ import {
   MarkerTooltip,
   MapRoute,
 } from "@/components/ui/map";
-import { snapTrajectoryToRoads } from '../../data/roadGeometry';
+import { snapTrajectoryToRoads, matchCameraId } from '../../data/roadGeometry';
 
 export interface CrossCameraPathItem {
   vehicle_id: string;
@@ -18,13 +19,20 @@ export interface CrossCameraPathItem {
   is_corridor: boolean;
 }
 
-const DEFAULT_CROSS_PATHS: CrossCameraPathItem[] = [
+const DEFAULT_CITYFLOW_PATHS: CrossCameraPathItem[] = [
   { vehicle_id: '334', label: 'Vehicle 334 (4-Cam Corridor)', description: 'c020 → c023 → c028 → c029', camera_count: 4, cameras: ['c020', 'c023', 'c028', 'c029'], is_corridor: true },
   { vehicle_id: '396', label: 'Vehicle 396 (4-Cam Corridor)', description: 'c020 → c023 → c028 → c029', camera_count: 4, cameras: ['c020', 'c023', 'c028', 'c029'], is_corridor: true },
   { vehicle_id: '336', label: 'Vehicle 336 (4-Cam Corridor)', description: 'c020 → c023 → c028 → c029', camera_count: 4, cameras: ['c020', 'c023', 'c028', 'c029'], is_corridor: true },
   { vehicle_id: '354', label: 'Vehicle 354 (4-Cam Corridor)', description: 'c020 → c023 → c028 → c029', camera_count: 4, cameras: ['c020', 'c023', 'c028', 'c029'], is_corridor: true },
   { vehicle_id: '420', label: 'Vehicle 420 (c020 → c023 → c028)', description: 'c020 → c023 → c028', camera_count: 3, cameras: ['c020', 'c023', 'c028'], is_corridor: false },
   { vehicle_id: '486', label: 'Vehicle 486 (c028 → c029)', description: 'c028 → c029', camera_count: 2, cameras: ['c028', 'c029'], is_corridor: false },
+];
+
+const DEFAULT_CBE_PATHS: CrossCameraPathItem[] = [
+  { vehicle_id: 'TN47A1507', label: 'Bus TN47A1507 (Palghat Rd Corridor)', description: 'c020 → c023 → c028', camera_count: 3, cameras: ['c020', 'c023', 'c028'], is_corridor: true },
+  { vehicle_id: 'TN38BE5544', label: 'Vehicle TN38BE5544 (Kovaipudur Cutoff)', description: 'c029 → c023 → c020', camera_count: 3, cameras: ['c029', 'c023', 'c020'], is_corridor: true },
+  { vehicle_id: 'TN37CY1234', label: 'Vehicle TN37CY1234 (4-Cam Corridor)', description: 'c020 → c023 → c028 → c029', camera_count: 4, cameras: ['c020', 'c023', 'c028', 'c029'], is_corridor: true },
+  { vehicle_id: 'KL09AP2311', label: 'Vehicle KL09AP2311 (c020 → c023)', description: 'c020 → c023', camera_count: 2, cameras: ['c020', 'c023'], is_corridor: false },
 ];
 
 interface VehicleTraceViewProps {
@@ -36,14 +44,26 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
   data, 
   onSearchPlate 
 }) => {
-  const [searchQuery, setSearchQuery] = useState(data.searchedPlate || '');
+  const { activeDataset, mapProfile } = useDataset();
+  const isCbe = mapProfile.id === 'coimbatore' || activeDataset === 'CBE';
+  const defaultPaths = isCbe ? DEFAULT_CBE_PATHS : DEFAULT_CITYFLOW_PATHS;
+
+  const [searchQuery, setSearchQuery] = useState(data.searchedPlate || (isCbe ? 'TN47A1507' : '334'));
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [selectedTimestamps, setSelectedTimestamps] = useState<string[]>(['24 hrs ago']);
-  const [crossCameraPaths, setCrossCameraPaths] = useState<CrossCameraPathItem[]>(DEFAULT_CROSS_PATHS);
+  const [crossCameraPaths, setCrossCameraPaths] = useState<CrossCameraPathItem[]>(defaultPaths);
+
+  // Sync cross-camera paths when active dataset changes
+  React.useEffect(() => {
+    setCrossCameraPaths(isCbe ? DEFAULT_CBE_PATHS : DEFAULT_CITYFLOW_PATHS);
+    setSearchQuery(data.searchedPlate || (isCbe ? 'TN47A1507' : '334'));
+  }, [activeDataset, isCbe]);
 
   // Keep search input synced if searchedPlate updates from parent
   React.useEffect(() => {
-    setSearchQuery(data.searchedPlate || '');
+    if (data.searchedPlate) {
+      setSearchQuery(data.searchedPlate);
+    }
   }, [data.searchedPlate]);
 
   // Fetch active cross-camera paths dynamically from backend
@@ -64,7 +84,7 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [activeDataset]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([
     'North Highway 16',
     'North Highway 15',
@@ -82,29 +102,97 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (onSearchPlate && searchQuery.trim()) {
+    if (onSearchPlate) {
       onSearchPlate(searchQuery.trim());
     }
   };
 
-  // Extract route coordinates and stops dynamically from chronology
-  const validStops = data.chronology
-    .filter((item) => typeof item.longitude === 'number' && typeof item.latitude === 'number')
-    .map((item) => ({
-      name: `${item.cameraName} (${item.timestamp})`,
-      cameraName: item.cameraName,
-      lng: item.longitude as number,
-      lat: item.latitude as number,
-      statusType: item.statusType,
-      plateNumber: item.plateNumber,
-    }));
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    if (onSearchPlate) {
+      onSearchPlate('');
+    }
+  };
+
+  // Helper to parse observation timestamps for chronological ordering
+  const parseObsTime = (t?: string): number => {
+    if (!t) return 0;
+    const parsed = Date.parse(t);
+    if (!isNaN(parsed)) return parsed;
+    const match = t.match(/(\d+):(\d+)(?::(\d+))?(?:\.(\d+))?\s*(am|pm)?/i);
+    if (match) {
+      let hours = parseInt(match[1], 10);
+      const mins = parseInt(match[2], 10);
+      const secs = match[3] ? parseInt(match[3], 10) : (match[4] ? parseInt(match[4], 10) : 0);
+      const isPm = match[5] && match[5].toLowerCase() === 'pm';
+      const isAm = match[5] && match[5].toLowerCase() === 'am';
+      if (isPm && hours < 12) hours += 12;
+      if (isAm && hours === 12) hours = 0;
+      return hours * 3600 + mins * 60 + secs;
+    }
+    return 0;
+  };
+
+  const resolveCameraId = (camName?: string, lng?: number, lat?: number): string => {
+    if (camName) {
+      const s = camName.toLowerCase();
+      if (s.includes('020') || s.includes('c020') || s.includes('20')) return 'c020';
+      if (s.includes('023') || s.includes('c023') || s.includes('23')) return 'c023';
+      if (s.includes('028') || s.includes('c028') || s.includes('28')) return 'c028';
+      if (s.includes('029') || s.includes('c029') || s.includes('29')) return 'c029';
+    }
+    if (typeof lng === 'number' && typeof lat === 'number') {
+      const matched = matchCameraId(lng, lat, camName);
+      if (matched) return matched;
+    }
+    return 'c020';
+  };
+
+  const hasVehicleSelected = Boolean(searchQuery.trim() || data.searchedPlate?.trim()) && data.chronology.length > 0;
+
+  // Sort observations strictly by observation timestamp order
+  const sortedChronology = [...data.chronology].sort((a, b) => {
+    const tA = parseObsTime(a.timestamp);
+    const tB = parseObsTime(b.timestamp);
+    return tA - tB;
+  });
+
+  const startingCameraId = hasVehicleSelected && sortedChronology.length > 0
+    ? resolveCameraId(sortedChronology[0].cameraName, sortedChronology[0].longitude, sortedChronology[0].latitude)
+    : null;
+
+  // Extract route coordinates and stops dynamically from chronological observations
+  const validStops = hasVehicleSelected
+    ? sortedChronology.map((item) => {
+        const camId = resolveCameraId(item.cameraName, item.longitude, item.latitude);
+        const camConfig = mapProfile.cameras[camId];
+        const lng = camConfig?.lng ?? (typeof item.longitude === 'number' ? item.longitude : mapProfile.center[0]);
+        const lat = camConfig?.lat ?? (typeof item.latitude === 'number' ? item.latitude : mapProfile.center[1]);
+        const shortCamId = camId.replace('c0', '').replace('c', '');
+
+        return {
+          id: item.id,
+          name: `${item.cameraName} (${item.timestamp})`,
+          cameraName: item.cameraName,
+          camId,
+          shortCamId,
+          lng,
+          lat,
+          statusType: item.statusType,
+          plateNumber: item.plateNumber,
+          timestamp: item.timestamp,
+          ocrConfidence: item.ocrConfidence,
+          statusMessage: item.statusMessage,
+        };
+      })
+    : [];
 
   // Snap route dynamically along real physical street centerlines and curves
-  const dynamicRoute: [number, number][] = snapTrajectoryToRoads(validStops);
+  const dynamicRoute: [number, number][] = hasVehicleSelected && validStops.length >= 2
+    ? snapTrajectoryToRoads(validStops, mapProfile.roadSegments)
+    : [];
 
-  const mapCenter: [number, number] = validStops.length > 0
-    ? [validStops[0].lng, validStops[0].lat]
-    : [-90.6847, 42.4991];
+  const mapCenter: [number, number] = mapProfile.center;
 
   return (
     <div className="space-y-4 max-w-[1600px] mx-auto pb-6 select-none font-body bg-[#000000]">
@@ -117,9 +205,19 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search Vehicle ID (e.g. 334, 396, 336, 420) or Plate Number"
-              className="w-full bg-[#000000] focus:border-[#F2D04E] text-white placeholder-[#A0A0A0] text-sm rounded-[3px] py-3 pl-4 pr-12 outline-none font-body transition-all"
+              placeholder={isCbe ? "Search Vehicle Plate (e.g. TN47A1507, TN38BE5544) or ID" : "Search Vehicle ID (e.g. 334, 396, 336, 420) or Plate Number"}
+              className="w-full bg-[#000000] focus:border-[#F2D04E] text-white placeholder-[#A0A0A0] text-sm rounded-[3px] py-3 pl-4 pr-16 outline-none font-body transition-all"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                className="absolute right-10 top-1/2 -translate-y-1/2 p-1 text-[#A0A0A0] hover:text-white transition-colors text-xs"
+                title="Clear Selection"
+              >
+                ✕
+              </button>
+            )}
             <button
               type="submit"
               className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:opacity-80 transition-opacity"
@@ -212,8 +310,12 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
                 key={path.vehicle_id}
                 type="button"
                 onClick={() => {
-                  setSearchQuery(path.vehicle_id);
-                  onSearchPlate && onSearchPlate(path.vehicle_id);
+                  if (isSelected) {
+                    handleClearSearch();
+                  } else {
+                    setSearchQuery(path.vehicle_id);
+                    onSearchPlate && onSearchPlate(path.vehicle_id);
+                  }
                 }}
                 className={`px-2.5 py-1 rounded-[3px] text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
                   isSelected
@@ -330,69 +432,96 @@ export const VehicleTraceView: React.FC<VehicleTraceViewProps> = ({
 
         {/* Right Column: GIS ROUTE MAP (7/12 width) */}
         <div className="lg:col-span-7 bg-[#151515] rounded-[3px] p-4 flex flex-col justify-between relative overflow-hidden min-h-[500px]">
-          {/* Top Map Legends Overlay Row */}
+          {/* Top Map Status / Route Summary Row (Plain informational text, no marker-colour legends) */}
           <div className="flex items-center justify-between mb-3 z-10 select-none flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Scanned Legend (#1B7A43) */}
-              <div className="bg-[#000000] px-3 py-1.5 rounded-[3px] flex items-center gap-2 text-xs font-body text-[#1B7A43]">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#1B7A43]" />
-                <span>Scanned</span>
-              </div>
-
-              {/* Trajectory Legend */}
-              <div className="bg-[#000000] px-3 py-1.5 rounded-[3px] flex items-center gap-2 text-xs font-body text-[#F2D04E]">
-                <span className="w-4 h-0.5 bg-[#F2D04E]" />
-                <span>Trajectory</span>
-              </div>
-
-              {/* Anomaly / Blacklisted Legend (#971D1B) */}
-              <div className="bg-[#000000] px-3 py-1.5 rounded-[3px] flex items-center gap-2 text-xs font-body text-[#971D1B]">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#971D1B]" />
-                <span>Anomaly / Blacklisted</span>
-              </div>
+              <span className="text-xs text-[#AEA793] font-semibold uppercase tracking-wider">
+                {isCbe ? 'Coimbatore Grid (Cameras 20, 23, 28, 29)' : 'CityFlow Grid (Cameras 20, 23, 28, 29)'}
+              </span>
             </div>
 
-            {/* Trajectory Route Status Badge */}
-            {dynamicRoute.length >= 2 ? (
-              <span className="bg-[#F2D04E]/10 border border-[#F2D04E]/40 text-[#F2D04E] text-[11px] font-bold px-2.5 py-1 rounded-[3px] flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#1B7A43]" />
-                <span>Cross-Camera Route ({validStops.length} Camera Sightings)</span>
+            {/* Trajectory Route Status Informational Text */}
+            {hasVehicleSelected && dynamicRoute.length >= 2 ? (
+              <span className="bg-[#1E1E1E] border border-white/15 text-white/90 text-[11px] font-medium px-3 py-1 rounded-[3px]">
+                Cross-Camera Route: {validStops.map(s => s.shortCamId).join(' → ')} ({validStops.length} Camera Sightings)
               </span>
-            ) : validStops.length === 1 ? (
-              <span className="bg-white/5 border border-white/15 text-[#AEA793] text-[11px] font-medium px-2.5 py-1 rounded-[3px]">
-                Single Camera Detection
+            ) : hasVehicleSelected && validStops.length === 1 ? (
+              <span className="bg-[#1E1E1E] border border-white/10 text-[#AEA793] text-[11px] font-medium px-2.5 py-1 rounded-[3px]">
+                Single Camera Sighting at Camera {validStops[0].shortCamId}
               </span>
             ) : (
-              <span className="bg-white/5 border border-white/10 text-[#666666] text-[11px] font-medium px-2.5 py-1 rounded-[3px]">
-                No Route Points
+              <span className="bg-[#1E1E1E] border border-white/10 text-[#777777] text-[11px] font-medium px-2.5 py-1 rounded-[3px]">
+                No Vehicle Selected
               </span>
             )}
           </div>
 
           {/* Map Display Surface (MapCN Route Map) */}
           <div className="relative flex-1 bg-[#000000] rounded-[3px] overflow-hidden h-[450px] min-h-[450px]">
-            <Map center={mapCenter} zoom={validStops.length === 1 ? 14.5 : 13.0} className="h-full w-full rounded-[3px]">
-              {dynamicRoute.length >= 2 && (
+            <Map 
+              center={mapCenter} 
+              zoom={mapProfile.zoom} 
+              key={`trace-map-${mapProfile.id}-${activeDataset}`} 
+              className="h-full w-full rounded-[3px]"
+            >
+              {hasVehicleSelected && dynamicRoute.length >= 2 && (
                 <MapRoute coordinates={dynamicRoute} color="#F2D04E" width={4} opacity={0.85} />
               )}
 
-              {validStops.map((stop, index) => {
-                const isAnomaly = stop.statusType === 'anomaly' || stop.statusType === 'blacklisted';
+              {/* Exactly Four Camera Markers Labelled: 20, 23, 28, 29 */}
+              {Object.values(mapProfile.cameras).map((cam) => {
+                const shortNum = cam.id.replace('c0', '').replace('c', '');
+                const isStartingCam = hasVehicleSelected && startingCameraId === cam.id;
+                const obs = validStops.find(s => s.camId === cam.id);
+
                 return (
-                  <MapMarker key={`${stop.name}-${index}`} longitude={stop.lng} latitude={stop.lat}>
+                  <MapMarker 
+                    key={`cam-marker-${cam.id}-${mapProfile.id}`} 
+                    longitude={cam.lng} 
+                    latitude={cam.lat}
+                    anchor="center"
+                  >
                     <MarkerContent>
                       <div
-                        className={`flex size-5 items-center justify-center rounded-full border-2 border-white text-[11px] font-bold shadow-lg transition-transform hover:scale-125 ${
-                          isAnomaly ? 'bg-[#971D1B] text-white' : index === 0 ? 'bg-[#1B7A43] text-white' : 'bg-[#F2D04E] text-[#151515]'
-                        }`}
+                        className={`flex size-7 items-center justify-center rounded-full border-2 border-white shadow-lg transition-transform hover:scale-125 cursor-pointer ${
+                          isStartingCam 
+                            ? 'bg-[#1B7A43] text-white font-bold' 
+                            : 'bg-[#F2D04E] text-black font-bold'
+                        } text-xs`}
+                        title={cam.name}
                       >
-                        {index + 1}
+                        {shortNum}
                       </div>
                     </MarkerContent>
                     <MarkerTooltip>
-                      <div className="text-xs p-1">
-                        <p className="font-bold">{stop.plateNumber}</p>
-                        <p>{stop.name}</p>
+                      <div className="text-xs p-2 space-y-1 bg-[#151515] text-white rounded border border-white/20 shadow-xl max-w-xs">
+                        <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-1">
+                          <span className="font-bold text-[#F2D04E]">{cam.name}</span>
+                          <span className="text-[10px] text-[#A0A0A0] font-mono">{cam.id.toUpperCase()}</span>
+                        </div>
+                        {obs ? (
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] pt-1">
+                            <span className="text-[#A0A0A0]">Plate:</span>
+                            <span className="font-bold text-white">{obs.plateNumber}</span>
+                            <span className="text-[#A0A0A0]">Timestamp:</span>
+                            <span className="text-white">{obs.timestamp}</span>
+                            <span className="text-[#A0A0A0]">OCR Conf:</span>
+                            <span className="text-[#1B7A43] font-bold">{obs.ocrConfidence}%</span>
+                            <span className="text-[#A0A0A0]">Status:</span>
+                            <span className={obs.statusType === 'blacklisted' || obs.statusType === 'anomaly' ? 'text-[#971D1B] font-bold' : 'text-[#F2D04E] font-medium'}>
+                              {obs.statusType.toUpperCase()}
+                            </span>
+                            {obs.statusMessage && (
+                              <>
+                                <span className="text-[#A0A0A0]">Details:</span>
+                                <span className="text-[#A0A0A0] truncate">{obs.statusMessage}</span>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-[#888888] italic pt-1">No sightings for selected vehicle</p>
+                        )}
+                        <p className="text-[10px] text-[#A0A0A0] pt-1 border-t border-white/10">{cam.location}</p>
                       </div>
                     </MarkerTooltip>
                   </MapMarker>

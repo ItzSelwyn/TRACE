@@ -994,6 +994,13 @@ export const ROAD_SEGMENTS: Record<string, [number, number][]> = {
   ]
 };
 
+export const CBE_CAMERAS: Record<string, [number, number]> = {
+  "c020": [76.951820, 10.939350],
+  "c023": [76.951040, 10.936340],
+  "c028": [76.949870, 10.933350],
+  "c029": [76.948940, 10.937430],
+};
+
 export function matchCameraId(lng: number, lat: number, cameraName?: string): string | null {
   if (cameraName) {
     const s = cameraName.toLowerCase();
@@ -1011,13 +1018,25 @@ export function matchCameraId(lng: number, lat: number, cameraName?: string): st
       closest = cid;
     }
   }
+  for (const [cid, [cLng, cLat]] of Object.entries(CBE_CAMERAS)) {
+    const dist = Math.hypot(lng - cLng, lat - cLat);
+    if (dist < 0.008 && dist < minDist) {
+      minDist = dist;
+      closest = cid;
+    }
+  }
   return closest;
 }
 
-export function getRoadSegment(fromCam: string, toCam: string): [number, number][] {
+export function getRoadSegment(
+  fromCam: string,
+  toCam: string,
+  customSegments?: Record<string, [number, number][]>
+): [number, number][] {
+  const segments = customSegments || ROAD_SEGMENTS;
   const directKey = `${fromCam}_${toCam}`;
-  if (ROAD_SEGMENTS[directKey]) {
-    return ROAD_SEGMENTS[directKey];
+  if (segments[directKey]) {
+    return segments[directKey];
   }
 
   // Multi-hop path resolution through camera sequence
@@ -1031,7 +1050,7 @@ export function getRoadSegment(fromCam: string, toCam: string): [number, number]
     for (let curr = iFrom; curr !== iTo; curr += step) {
       const nxt = curr + step;
       const segKey = `${order[curr]}_${order[nxt]}`;
-      const segCoords = ROAD_SEGMENTS[segKey];
+      const segCoords = segments[segKey];
       if (segCoords) {
         if (result.length === 0) {
           result.push(...segCoords);
@@ -1044,8 +1063,8 @@ export function getRoadSegment(fromCam: string, toCam: string): [number, number]
   }
 
   // Fallback direct segment
-  const fromCoord = CORRIDOR_CAMERAS[fromCam];
-  const toCoord = CORRIDOR_CAMERAS[toCam];
+  const fromCoord = customSegments ? CBE_CAMERAS[fromCam] || CORRIDOR_CAMERAS[fromCam] : CORRIDOR_CAMERAS[fromCam];
+  const toCoord = customSegments ? CBE_CAMERAS[toCam] || CORRIDOR_CAMERAS[toCam] : CORRIDOR_CAMERAS[toCam];
   if (fromCoord && toCoord) {
     return [fromCoord, toCoord];
   }
@@ -1053,7 +1072,8 @@ export function getRoadSegment(fromCam: string, toCam: string): [number, number]
 }
 
 export function snapTrajectoryToRoads(
-  stops: { lng: number; lat: number; cameraName?: string }[]
+  stops: { lng: number; lat: number; cameraName?: string }[],
+  customSegments?: Record<string, [number, number][]>
 ): [number, number][] {
   if (stops.length < 2) {
     return stops.map((s) => [s.lng, s.lat]);
@@ -1069,7 +1089,7 @@ export function snapTrajectoryToRoads(
     const camB = matchCameraId(next.lng, next.lat, next.cameraName);
 
     if (camA && camB && camA !== camB) {
-      const roadWaypoints = getRoadSegment(camA, camB);
+      const roadWaypoints = getRoadSegment(camA, camB, customSegments);
       if (roadWaypoints.length > 0) {
         if (snappedPath.length === 0) {
           snappedPath.push(...roadWaypoints);

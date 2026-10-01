@@ -42,6 +42,35 @@ class DebugImageRequest(BaseModel):
     image_path: str = Field(..., description="Path under data/ to test image")
 
 
+class DatasetSwitchRequest(BaseModel):
+    dataset: str = Field(..., description="'S04', 'S05', or 'CBE'")
+
+
+@router.get("/dataset")
+def get_active_dataset():
+    """Return the currently active dataset and available options."""
+    mgr = get_camera_manager()
+    return mgr.get_active_dataset_info()
+
+
+@router.put("/dataset")
+def switch_active_dataset(req: DatasetSwitchRequest):
+    """Switch the global active dataset to S04, S05, or CBE."""
+    mgr = get_camera_manager()
+    try:
+        updated_info = mgr.switch_dataset(req.dataset)
+        return updated_info
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except FileNotFoundError as fe:
+        raise HTTPException(status_code=400, detail=str(fe))
+    except RuntimeError as re:
+        raise HTTPException(status_code=500, detail=str(re))
+    except Exception as e:
+        logger.error(f"Failed to switch dataset to '{req.dataset}': {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error switching dataset: {e}")
+
+
 @router.get("/cameras")
 def list_cameras():
     """Return all managed cameras and their runtime status."""
@@ -204,4 +233,41 @@ def update_playback_settings(req: PlaybackSettingsUpdateRequest):
         "status": "ok",
         "playback": status,
     }
+
+
+class DemoFallbackUpdateRequest(BaseModel):
+    enabled: Optional[bool] = Field(None, description="Enable or disable synthetic fallback plates")
+    fallback_rate: Optional[float] = Field(None, ge=0.0, le=1.0, description="Fallback rate fraction (0.0 to 1.0)")
+    min_track_frames: Optional[int] = Field(None, ge=1, description="Minimum track lifetime frames before fallback")
+    default_state: Optional[str] = Field(None, description="Default 2-letter state code e.g. TN")
+
+
+@router.get("/anpr/demo-fallback")
+def get_anpr_demo_fallback():
+    """Retrieve current runtime configuration for controlled demo fallback plates."""
+    from app.modules.perception.demo_fallback import get_fallback_config
+    cfg = get_fallback_config()
+    return {
+        "status": "ok",
+        "config": cfg.to_dict(),
+        "warning": "Generated plates are visual estimates and are strictly excluded from database persistence, verified evidence, and enforcement actions."
+    }
+
+
+@router.put("/anpr/demo-fallback")
+def update_anpr_demo_fallback(req: DemoFallbackUpdateRequest):
+    """Update runtime configuration for controlled demo fallback plates."""
+    from app.modules.perception.demo_fallback import update_fallback_config
+    updated = update_fallback_config(
+        enabled=req.enabled,
+        fallback_rate=req.fallback_rate,
+        min_track_frames=req.min_track_frames,
+        default_state=req.default_state,
+    )
+    return {
+        "status": "ok",
+        "config": updated.to_dict(),
+        "warning": "Generated plates are visual estimates and are strictly excluded from database persistence, verified evidence, and enforcement actions."
+    }
+
 

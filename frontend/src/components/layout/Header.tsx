@@ -1,4 +1,5 @@
 import React from 'react';
+import { useDataset } from '../../context/DatasetContext';
 
 interface HeaderProps {
   currentRoute: string;
@@ -7,6 +8,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ currentRoute, onNavigate }) => {
   const isHome = currentRoute === 'home';
+  const { activeDataset, label, switchDataset, availableDatasets, isSwitching } = useDataset();
 
   return (
     /* Top header with full-width yellow bottom border */
@@ -26,6 +28,31 @@ export const Header: React.FC<HeaderProps> = ({ currentRoute, onNavigate }) => {
 
       {/* Right Header Section */}
       <div className="flex items-center gap-4">
+        {/* Active Dataset Selector Dropdown */}
+        <div 
+          className="flex items-center gap-2 px-3 py-1.5 rounded-[3px] bg-[#1E1E1E] border border-[#F2D04E]/40 text-xs font-semibold tracking-wider font-body"
+          title={`Active Perception Dataset: ${label}`}
+        >
+          <span className="w-2 h-2 rounded-full bg-[#1B7A43] animate-pulse" />
+          <span className="text-[#AEA793] uppercase text-[10px] tracking-widest hidden sm:inline">DATASET:</span>
+          <select
+            value={activeDataset}
+            onChange={(e) => switchDataset(e.target.value)}
+            disabled={isSwitching}
+            className="bg-transparent text-[#F2D04E] uppercase font-bold text-[11px] focus:outline-none cursor-pointer border-none pr-1"
+            title="Switch Active Perception Dataset"
+          >
+            {availableDatasets.map((ds) => (
+              <option key={ds.id} value={ds.id} className="bg-[#151515] text-[#F2D04E] py-1">
+                {ds.label || ds.id}
+              </option>
+            ))}
+          </select>
+          {isSwitching && (
+            <span className="text-[10px] text-[#AEA793] animate-pulse">Switching...</span>
+          )}
+        </div>
+
         {/* Home Page Icon Button */}
         <button
           onClick={() => onNavigate('home')}

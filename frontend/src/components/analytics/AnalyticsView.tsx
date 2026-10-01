@@ -9,6 +9,7 @@ import {
   HeatmapPoint,
 } from '@/components/ui/map';
 import { ROAD_SEGMENTS } from '@/data/roadGeometry';
+import { useDataset } from '../../context/DatasetContext';
 
 export type AnalyticsTab = 'HEATMAP' | 'OD_MATRIX' | 'SEGMENT_DETAIL';
 export type TimeFilter = 'LIVE' | '1hr' | '6hrs' | '12hrs' | '24hrs';
@@ -85,8 +86,8 @@ const SegmentSpeedChart: React.FC<{ filter: TimeFilter; segmentName: string }> =
 
   // Dynamic sample data based on time filter & segment congestion
   const getFilterData = () => {
-    const isBottleneck = segmentName.includes('028') || segmentName.includes('Roundabout');
-    const isModerate = segmentName.includes('023') || segmentName.includes('Nevada');
+    const isBottleneck = segmentName.includes('028') || segmentName.includes('Roundabout') || segmentName.includes('South');
+    const isModerate = segmentName.includes('023') || segmentName.includes('Nevada') || segmentName.includes('Junction') || segmentName.includes('029') || segmentName.includes('Kovaipudur');
     // Offset speed to reflect actual flow condition at this camera node
     const offset = isBottleneck ? -25 : isModerate ? -8 : 15;
     const clamp = (val: number) => Math.max(18, Math.min(95, val));
@@ -285,6 +286,9 @@ const SegmentSpeedChart: React.FC<{ filter: TimeFilter; segmentName: string }> =
 };
 
 export const AnalyticsView: React.FC = () => {
+  const { activeDataset, mapProfile } = useDataset();
+  const isCbe = activeDataset === 'CBE' || mapProfile.id === 'coimbatore';
+
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('HEATMAP');
   const [activeFilter, setActiveFilter] = useState<TimeFilter>('LIVE');
   const [selectedSegmentId, setSelectedSegmentId] = useState<number>(1);
@@ -298,8 +302,8 @@ export const AnalyticsView: React.FC = () => {
     const fetchAnalytics = async () => {
       try {
         const [heatmapRes, odRes] = await Promise.all([
-          fetch(`/analytics/heatmap?filter=${activeFilter}`),
-          fetch(`/analytics/od-matrix?filter=${activeFilter}`),
+          fetch(`/analytics/heatmap?filter=${activeFilter}&dataset=${activeDataset}`),
+          fetch(`/analytics/od-matrix?filter=${activeFilter}&dataset=${activeDataset}`),
         ]);
         if (heatmapRes.ok) {
           const json = await heatmapRes.json();
@@ -329,10 +333,44 @@ export const AnalyticsView: React.FC = () => {
       isMounted = false;
       if (pollTimer) clearInterval(pollTimer);
     };
-  }, [activeFilter]);
+  }, [activeFilter, activeDataset]);
 
-  // Default CityFlow S05 road traffic segments connecting the corridor cameras
-  const DEFAULT_ROAD_SEGMENTS: TrafficRoadSegment[] = [
+  // Default road traffic segments connecting the corridor cameras
+  const DEFAULT_ROAD_SEGMENTS: TrafficRoadSegment[] = isCbe ? [
+    {
+      from_camera_id: 'c020',
+      to_camera_id: 'c023',
+      name: 'Palghat Rd (North to Junction)',
+      density: 22,
+      congestion_status: 'Optimal',
+      avg_speed_kmph: 56.5,
+      color: '#1B7A43',
+      vehicle_count: 32,
+      coordinates: mapProfile.roadSegments['c020_c023'] || [],
+    },
+    {
+      from_camera_id: 'c023',
+      to_camera_id: 'c028',
+      name: 'Palghat Rd (Junction to South)',
+      density: 26,
+      congestion_status: 'Optimal',
+      avg_speed_kmph: 53.5,
+      color: '#1B7A43',
+      vehicle_count: 38,
+      coordinates: mapProfile.roadSegments['c023_c028'] || [],
+    },
+    {
+      from_camera_id: 'c023',
+      to_camera_id: 'c029',
+      name: 'Kovaipudur Rd (Junction to Kovaipudur)',
+      density: 45,
+      congestion_status: 'Moderate',
+      avg_speed_kmph: 43.0,
+      color: '#F2D04E',
+      vehicle_count: 46,
+      coordinates: mapProfile.roadSegments['c023_c029'] || [],
+    },
+  ] : [
     {
       from_camera_id: 'c020',
       to_camera_id: 'c023',
@@ -342,7 +380,7 @@ export const AnalyticsView: React.FC = () => {
       avg_speed_kmph: 56.5,
       color: '#1B7A43',
       vehicle_count: 32,
-      coordinates: ROAD_SEGMENTS['c020_c023'] || [],
+      coordinates: mapProfile.roadSegments['c020_c023'] || ROAD_SEGMENTS['c020_c023'] || [],
     },
     {
       from_camera_id: 'c023',
@@ -353,7 +391,7 @@ export const AnalyticsView: React.FC = () => {
       avg_speed_kmph: 53.5,
       color: '#1B7A43',
       vehicle_count: 38,
-      coordinates: ROAD_SEGMENTS['c023_c028'] || [],
+      coordinates: mapProfile.roadSegments['c023_c028'] || ROAD_SEGMENTS['c023_c028'] || [],
     },
     {
       from_camera_id: 'c028',
@@ -364,7 +402,7 @@ export const AnalyticsView: React.FC = () => {
       avg_speed_kmph: 43.0,
       color: '#F2D04E',
       vehicle_count: 46,
-      coordinates: ROAD_SEGMENTS['c028_c029'] || [],
+      coordinates: mapProfile.roadSegments['c028_c029'] || ROAD_SEGMENTS['c028_c029'] || [],
     },
   ];
 
@@ -373,7 +411,9 @@ export const AnalyticsView: React.FC = () => {
         ...seg,
         coordinates: (seg.coordinates && seg.coordinates.length > 1)
           ? seg.coordinates
-          : (ROAD_SEGMENTS[`${seg.from_camera_id}_${seg.to_camera_id}`] ||
+          : (mapProfile.roadSegments[`${seg.from_camera_id}_${seg.to_camera_id}`] ||
+             mapProfile.roadSegments[`${seg.from_camera_id.slice(0, 4)}_${seg.to_camera_id.slice(0, 4)}`] ||
+             ROAD_SEGMENTS[`${seg.from_camera_id}_${seg.to_camera_id}`] ||
              ROAD_SEGMENTS[`${seg.from_camera_id.slice(0, 4)}_${seg.to_camera_id.slice(0, 4)}`] ||
              DEFAULT_ROAD_SEGMENTS.find(d => d.name === seg.name)?.coordinates || []),
       }))
@@ -382,26 +422,150 @@ export const AnalyticsView: React.FC = () => {
   // Heatmap Point Data for Maplibre/mapcn fallback
   const heatmapPoints: HeatmapPoint[] = (heatmapData?.heatmap_points && heatmapData.heatmap_points.length > 0)
     ? heatmapData.heatmap_points
-    : [
+    : (isCbe ? [
+        { lng: 76.951820, lat: 10.939350, weight: 0.35 },
+        { lng: 76.951040, lat: 10.936340, weight: 0.32 },
+        { lng: 76.949870, lat: 10.933350, weight: 0.28 },
+        { lng: 76.948940, lat: 10.937430, weight: 0.55 },
+      ] : [
         { lng: -90.688350, lat: 42.498360, weight: 0.35 },
         { lng: -90.681350, lat: 42.499140, weight: 0.32 },
         { lng: -90.675620, lat: 42.499860, weight: 0.28 },
         { lng: -90.693500, lat: 42.499190, weight: 0.55 },
-      ];
+      ]);
 
-  // OD Matrix Zones & Data Structure for CityFlow S05 Corridor
-  const zones = odMatrixData?.zones || ['CAM-020 (Walnut)', 'CAM-023 (Nevada)', 'CAM-028 (Roundabout)', 'CAM-029 (Alta Pl)'];
+  // OD Matrix Zones & Data Structure
+  const defaultZones = isCbe
+    ? ['CAM-020 (Palghat Rd N)', 'CAM-023 (Junction)', 'CAM-028 (Palghat Rd S)', 'CAM-029 (Kovaipudur Rd)']
+    : ['CAM-020 (Walnut)', 'CAM-023 (Nevada)', 'CAM-028 (Roundabout)', 'CAM-029 (Alta Pl)'];
+
+  const zones = odMatrixData?.zones || defaultZones;
+
+  const defaultMatrix: Record<string, Record<string, number | null>> = isCbe ? {
+    'CAM-020 (Palghat Rd N)': { 'CAM-020 (Palghat Rd N)': null, 'CAM-023 (Junction)': 165, 'CAM-028 (Palghat Rd S)': 140, 'CAM-029 (Kovaipudur Rd)': 95 },
+    'CAM-023 (Junction)': { 'CAM-020 (Palghat Rd N)': 150, 'CAM-023 (Junction)': null, 'CAM-028 (Palghat Rd S)': 175, 'CAM-029 (Kovaipudur Rd)': 120 },
+    'CAM-028 (Palghat Rd S)': { 'CAM-020 (Palghat Rd N)': 135, 'CAM-023 (Junction)': 170, 'CAM-028 (Palghat Rd S)': null, 'CAM-029 (Kovaipudur Rd)': 235 },
+    'CAM-029 (Kovaipudur Rd)': { 'CAM-020 (Palghat Rd N)': 90, 'CAM-023 (Junction)': 125, 'CAM-028 (Palghat Rd S)': 225, 'CAM-029 (Kovaipudur Rd)': null },
+  } : {
+    'CAM-020 (Walnut)': { 'CAM-020 (Walnut)': null, 'CAM-023 (Nevada)': 165, 'CAM-028 (Roundabout)': 140, 'CAM-029 (Alta Pl)': 95 },
+    'CAM-023 (Nevada)': { 'CAM-020 (Walnut)': 150, 'CAM-023 (Nevada)': null, 'CAM-028 (Roundabout)': 175, 'CAM-029 (Alta Pl)': 120 },
+    'CAM-028 (Roundabout)': { 'CAM-020 (Walnut)': 135, 'CAM-023 (Nevada)': 170, 'CAM-028 (Roundabout)': null, 'CAM-029 (Alta Pl)': 235 },
+    'CAM-029 (Alta Pl)': { 'CAM-020 (Walnut)': 90, 'CAM-023 (Nevada)': 125, 'CAM-028 (Roundabout)': 225, 'CAM-029 (Alta Pl)': null },
+  };
 
   const matrixData: Record<string, Record<string, number | null>> = (odMatrixData?.matrix && Object.keys(odMatrixData.matrix).length > 0)
     ? odMatrixData.matrix
-    : {
-        'CAM-020 (Walnut)': { 'CAM-020 (Walnut)': null, 'CAM-023 (Nevada)': 165, 'CAM-028 (Roundabout)': 140, 'CAM-029 (Alta Pl)': 95 },
-        'CAM-023 (Nevada)': { 'CAM-020 (Walnut)': 150, 'CAM-023 (Nevada)': null, 'CAM-028 (Roundabout)': 175, 'CAM-029 (Alta Pl)': 120 },
-        'CAM-028 (Roundabout)': { 'CAM-020 (Walnut)': 135, 'CAM-023 (Nevada)': 170, 'CAM-028 (Roundabout)': null, 'CAM-029 (Alta Pl)': 235 },
-        'CAM-029 (Alta Pl)': { 'CAM-020 (Walnut)': 90, 'CAM-023 (Nevada)': 125, 'CAM-028 (Roundabout)': 225, 'CAM-029 (Alta Pl)': null },
-      };
+    : defaultMatrix;
 
   // Monitored Segments List based on dynamic corridor camera stats
+  const defaultMonitoredSegments: MonitoredSegment[] = isCbe ? [
+    {
+      id: 1,
+      title: 'Camera 020 (Palghat Rd North)',
+      shortName: 'CAM-020 (Palghat Rd N)',
+      statusColor: 'green',
+      vehiclesTravelling: 14,
+      maxCapacity: 200,
+      timestamp: '10:23:01 am',
+      congestionIndex: 'Optimal',
+      congestionColor: 'green',
+      lng: 76.951820,
+      lat: 10.939350,
+    },
+    {
+      id: 2,
+      title: 'Camera 023 (Palghat Rd Junction)',
+      shortName: 'CAM-023 (Junction)',
+      statusColor: 'green',
+      vehiclesTravelling: 18,
+      maxCapacity: 200,
+      timestamp: '10:23:01 am',
+      congestionIndex: 'Optimal',
+      congestionColor: 'green',
+      lng: 76.951040,
+      lat: 10.936340,
+    },
+    {
+      id: 3,
+      title: 'Camera 028 (Palghat Rd South)',
+      shortName: 'CAM-028 (Palghat Rd S)',
+      statusColor: 'green',
+      vehiclesTravelling: 20,
+      maxCapacity: 240,
+      timestamp: '10:23:01 am',
+      congestionIndex: 'Optimal',
+      congestionColor: 'green',
+      lng: 76.949870,
+      lat: 10.933350,
+    },
+    {
+      id: 4,
+      title: 'Camera 029 (Kovaipudur Rd)',
+      shortName: 'CAM-029 (Kovaipudur Rd)',
+      statusColor: 'yellow',
+      vehiclesTravelling: 26,
+      maxCapacity: 200,
+      timestamp: '10:23:01 am',
+      congestionIndex: 'Moderate',
+      congestionColor: 'yellow',
+      lng: 76.948940,
+      lat: 10.937430,
+    },
+  ] : [
+    {
+      id: 1,
+      title: 'Camera 020 (University Ave & Walnut)',
+      shortName: 'CAM-020 (Walnut)',
+      statusColor: 'green',
+      vehiclesTravelling: 14,
+      maxCapacity: 200,
+      timestamp: '10:23:01 am',
+      congestionIndex: 'Optimal',
+      congestionColor: 'green',
+      lng: -90.675620,
+      lat: 42.499860,
+    },
+    {
+      id: 2,
+      title: 'Camera 023 (University Ave & Nevada)',
+      shortName: 'CAM-023 (Nevada)',
+      statusColor: 'green',
+      vehiclesTravelling: 18,
+      maxCapacity: 200,
+      timestamp: '10:23:01 am',
+      congestionIndex: 'Optimal',
+      congestionColor: 'green',
+      lng: -90.681350,
+      lat: 42.499140,
+    },
+    {
+      id: 3,
+      title: 'Camera 028 (Grandview Roundabout)',
+      shortName: 'CAM-028 (Roundabout)',
+      statusColor: 'green',
+      vehiclesTravelling: 20,
+      maxCapacity: 240,
+      timestamp: '10:23:01 am',
+      congestionIndex: 'Optimal',
+      congestionColor: 'green',
+      lng: -90.688350,
+      lat: 42.498360,
+    },
+    {
+      id: 4,
+      title: 'Camera 029 (University Ave & Alta Pl)',
+      shortName: 'CAM-029 (Alta Pl)',
+      statusColor: 'yellow',
+      vehiclesTravelling: 26,
+      maxCapacity: 200,
+      timestamp: '10:23:01 am',
+      congestionIndex: 'Moderate',
+      congestionColor: 'yellow',
+      lng: -90.693500,
+      lat: 42.499190,
+    },
+  ];
+
   const monitoredSegments: MonitoredSegment[] = (heatmapData?.camera_stats && heatmapData.camera_stats.length > 0)
     ? heatmapData.camera_stats.map((cam, idx) => {
         const color: 'red' | 'yellow' | 'green' = 
@@ -421,60 +585,7 @@ export const AnalyticsView: React.FC = () => {
           lat: cam.latitude,
         };
       })
-    : [
-        {
-          id: 1,
-          title: 'Camera 020 (University Ave & Walnut)',
-          shortName: 'CAM-020 (Walnut)',
-          statusColor: 'green',
-          vehiclesTravelling: 14,
-          maxCapacity: 200,
-          timestamp: '10:23:01 am',
-          congestionIndex: 'Optimal',
-          congestionColor: 'green',
-          lng: -90.675620,
-          lat: 42.499860,
-        },
-        {
-          id: 2,
-          title: 'Camera 023 (University Ave & Nevada)',
-          shortName: 'CAM-023 (Nevada)',
-          statusColor: 'green',
-          vehiclesTravelling: 18,
-          maxCapacity: 200,
-          timestamp: '10:23:01 am',
-          congestionIndex: 'Optimal',
-          congestionColor: 'green',
-          lng: -90.681350,
-          lat: 42.499140,
-        },
-        {
-          id: 3,
-          title: 'Camera 028 (Grandview Roundabout)',
-          shortName: 'CAM-028 (Roundabout)',
-          statusColor: 'green',
-          vehiclesTravelling: 20,
-          maxCapacity: 240,
-          timestamp: '10:23:01 am',
-          congestionIndex: 'Optimal',
-          congestionColor: 'green',
-          lng: -90.688350,
-          lat: 42.498360,
-        },
-        {
-          id: 4,
-          title: 'Camera 029 (University Ave & Alta Pl)',
-          shortName: 'CAM-029 (Alta Pl)',
-          statusColor: 'yellow',
-          vehiclesTravelling: 26,
-          maxCapacity: 200,
-          timestamp: '10:23:01 am',
-          congestionIndex: 'Moderate',
-          congestionColor: 'yellow',
-          lng: -90.693500,
-          lat: 42.499190,
-        },
-      ];
+    : defaultMonitoredSegments;
 
   const selectedSegment = monitoredSegments.find((s) => s.id === selectedSegmentId) || monitoredSegments[0];
 
@@ -592,7 +703,7 @@ export const AnalyticsView: React.FC = () => {
               <div className="flex items-center gap-3">
                 <img src="/assets/heatmap_location.svg" alt="Location Pin" className="w-6 h-7 object-contain" />
                 <h1 className="text-2xl md:text-3xl font-bold font-heading text-white tracking-wide">
-                  {heatmapData?.corridor_name || 'University Ave Corridor (S05)'}
+                  {heatmapData?.corridor_name || (isCbe ? 'Palghat Rd & Kovaipudur Rd Corridor (CBE)' : (activeDataset === 'S04' ? 'University Ave Corridor (S04)' : 'University Ave Corridor (S05)'))}
                 </h1>
               </div>
 
@@ -618,7 +729,9 @@ export const AnalyticsView: React.FC = () => {
 
             {/* Corridor Subtitle */}
             <p className="text-xs md:text-sm font-body text-[#A0A0A0] max-w-4xl leading-relaxed">
-              {heatmapData?.subtitle || 'Flow velocity is optimal across cameras 020, 023, 028 with moderate traffic near Cam 029. University Ave corridor monitored across 4 synchronized cameras.'}
+              {heatmapData?.subtitle || (isCbe
+                ? 'Flow velocity is optimal across cameras 020, 023, 028 with moderate traffic near Cam 029. Palghat Rd corridor monitored across 4 synchronized cameras.'
+                : 'Flow velocity is optimal across cameras 020, 023, 028 with moderate traffic near Cam 029. University Ave corridor monitored across 4 synchronized cameras.')}
             </p>
 
             {/* Info Metrics Grid Row */}
@@ -626,7 +739,11 @@ export const AnalyticsView: React.FC = () => {
               <div className="text-xs md:text-sm font-body text-[#AEA793] space-y-2">
                 <div className="flex items-center gap-2">
                   <img src="/assets/heatmap_camera.svg" alt="Cameras" className="w-4 h-4 object-contain" />
-                  <span>{heatmapData?.cameras_label || 'Camera 020, Camera 023, Camera 028, Camera 029'}</span>
+                  <span>
+                    {heatmapData?.cameras_label || (isCbe
+                      ? 'Palghat Rd North (C020), Palghat Rd Junction (C023), Palghat Rd South (C028), Kovaipudur Rd (C029)'
+                      : 'Camera 020, Camera 023, Camera 028, Camera 029')}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <img src="/assets/heatmap_vehicles.svg" alt="Vehicles" className="w-4 h-4 object-contain" />
@@ -647,7 +764,7 @@ export const AnalyticsView: React.FC = () => {
 
           {/* Interactive Google Maps-Style Traffic Corridor (Dual-Layer Vector Routes) */}
           <div className="relative rounded-[3px] overflow-hidden bg-[#000000] h-[520px] w-full">
-            <Map center={[-90.6847, 42.4991]} zoom={14.8}>
+            <Map center={mapProfile.center} zoom={mapProfile.zoom} key={`analytics-map-${mapProfile.id}-${activeDataset}`}>
               {/* 1. Google Maps Vector Traffic Routes on University Ave */}
               {roadSegments.map((seg, idx) => {
                 const segColor = seg.color || (
@@ -782,7 +899,7 @@ export const AnalyticsView: React.FC = () => {
               <div className="flex items-center gap-3">
                 <img src="/assets/heatmap_location.svg" alt="Location Pin" className="w-6 h-7 object-contain" />
                 <h1 className="text-2xl md:text-3xl font-bold font-heading text-white tracking-wide">
-                  {odMatrixData?.corridor_name || heatmapData?.corridor_name || 'University Ave Corridor (S05)'}
+                  {odMatrixData?.corridor_name || heatmapData?.corridor_name || (isCbe ? 'Palghat Rd & Kovaipudur Rd Corridor (CBE)' : (activeDataset === 'S04' ? 'University Ave Corridor (S04)' : 'University Ave Corridor (S05)'))}
                 </h1>
               </div>
 

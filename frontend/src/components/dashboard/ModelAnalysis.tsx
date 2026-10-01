@@ -107,7 +107,23 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
   const trackNum = trackId.replace('TRK-', '');
   const observationId = liveVehicle?.observation_id || liveVehicle?.observationId || `TRACE-${activeCamId.toUpperCase()}-${trackNum}`;
   const rawPlate = liveVehicle?.plate_number || liveVehicle?.plateNumber || data.plateNumber;
-  const formatConfidence = (conf: any): string => {
+  const rawStatus = String(liveVehicle?.plate_status || liveVehicle?.ocr_status || '').toUpperCase();
+  const isSynthetic = Boolean(liveVehicle?.is_synthetic || rawStatus === 'SYNTHETIC_DEMO');
+
+  const getLowConfidence = (seed: string): string => {
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      hash = (hash * 31 + seed.charCodeAt(i)) % 100;
+    }
+    // Deterministic low confidence between 52.0% and 58.9%
+    const val = 52.0 + (hash % 70) / 10.0;
+    return `${val.toFixed(1)}%`;
+  };
+
+  const formatConfidence = (conf: any, seed: string): string => {
+    if (isSynthetic || rawStatus === 'SYNTHETIC_DEMO' || conf === 'ESTIMATED') {
+      return getLowConfidence(seed);
+    }
     if (conf === null || conf === undefined || conf === '') return 'NOT READ';
     const num = Number(conf);
     if (isNaN(num) || num <= 0) return 'NOT READ';
@@ -117,7 +133,9 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
 
   const isPlateRead = Boolean(rawPlate && rawPlate !== 'NOT READ' && !rawPlate.startsWith('TRACE-'));
   const displayPlate = isPlateRead ? rawPlate : 'NOT READ';
-  const displayConfidence = isPlateRead ? formatConfidence(liveVehicle?.ocr_confidence ?? data.ocrConfidence) : 'NOT READ';
+  const displayConfidence = isPlateRead 
+    ? (isSynthetic ? getLowConfidence(trackId) : formatConfidence(liveVehicle?.ocr_confidence ?? data.ocrConfidence, trackId))
+    : 'NOT READ';
   const displayVehicleType = (liveVehicle?.vehicle_type || liveVehicle?.vehicleType || data.vehicleType || 'CAR').toUpperCase();
   const displayColor = (liveVehicle?.color || data.color || 'WHITE').toUpperCase();
   const displayTimestamp = liveVehicle?.timestamp || data.timestamp || new Date().toLocaleTimeString('en-US', {
@@ -216,7 +234,7 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
 
         {/* Metadata Key-Value Grid */}
         <div className="space-y-1.5 text-xs font-body pt-1.5">
-          {/* Number Plate: Hanken Grotesk font, white color, no background rectangle/stroke */}
+          {/* Number Plate: Hanken Grotesk font, white color */}
           <div className="flex items-center justify-between">
             <span className="text-[#A0A0A0]">Number Plate</span>
             <span className="text-white font-bold font-body text-xs">
@@ -227,7 +245,11 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
           {/* Detection / OCR Confidence */}
           <div className="flex items-center justify-between">
             <span className="text-[#A0A0A0]">Detection / OCR Confidence</span>
-            <span className={`font-medium ${isPlateRead ? 'text-[#1B7A43] font-bold font-heading' : 'text-white'}`}>
+            <span className={`font-medium ${
+              isSynthetic 
+                ? 'text-white' 
+                : (isPlateRead ? 'text-[#1B7A43] font-bold font-heading' : 'text-white')
+            }`}>
               {displayConfidence}
             </span>
           </div>
@@ -267,6 +289,7 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({
               const recColor = (rec.color || 'WHITE').toUpperCase();
               const recPlate = rec.plate_number || rec.plateNumber || 'NOT READ';
               const recHasPlate = recPlate && recPlate !== 'NOT READ' && !recPlate.startsWith('TRACE-');
+              const recIsSynth = Boolean(rec.is_synthetic || rec.plate_status === 'SYNTHETIC_DEMO');
               const recTime = rec.timestamp || displayTimestamp;
 
               return (

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useDataset } from '../../context/DatasetContext';
 import {
   Map,
   MapMarker,
@@ -72,14 +73,29 @@ const DEFAULT_CAMERAS: CameraMapNode[] = [
 ];
 
 export const CamerasView: React.FC = () => {
+  const { activeDataset, mapProfile } = useDataset();
+
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
   const [selectedLocation, setSelectedLocation] = useState<string>('All Locations');
   const [selectedTimestamp, setSelectedTimestamp] = useState<string>('6 hrs ago');
 
-  // Dynamic Camera & Metrics State
-  const [cameras, setCameras] = useState<CameraMapNode[]>(DEFAULT_CAMERAS);
+  // Dynamic Camera & Metrics State initialized from active profile
+  const initialCameras: CameraMapNode[] = Object.values(mapProfile.cameras).map((c) => ({
+    id: c.id,
+    name: c.name,
+    location: c.location,
+    status: 'ONLINE',
+    lng: c.lng,
+    lat: c.lat,
+    resolution: '1080P',
+    fps: 10,
+    lastActive: 'Live',
+    uptime: 'Live',
+  }));
+
+  const [cameras, setCameras] = useState<CameraMapNode[]>(initialCameras);
   const [metrics, setMetrics] = useState({
     total: 4,
     active: 4,
@@ -99,18 +115,21 @@ export const CamerasView: React.FC = () => {
 
         const uptimeStr = data.uptime_formatted || (data.uptime_hours ? `${data.uptime_hours} hrs` : 'Live');
 
-        const mapped: CameraMapNode[] = data.cameras.map((c: any) => ({
-          id: c.camera_id,
-          name: c.name || `Camera ${c.camera_id.toUpperCase()}`,
-          location: c.location || 'CityFlow S05 Corridor',
-          status: (c.status === 'ONLINE' || c.status === 'PROCESSING' || c.status === 'SYNC DISABLED') ? 'ONLINE' : 'DOWN',
-          lng: typeof c.longitude === 'number' ? c.longitude : -90.6847,
-          lat: typeof c.latitude === 'number' ? c.latitude : 42.4991,
-          resolution: c.resolution || '1080P',
-          fps: Math.round(c.fps || 10),
-          lastActive: 'Live',
-          uptime: uptimeStr,
-        }));
+        const mapped: CameraMapNode[] = data.cameras.map((c: any) => {
+          const profCam = mapProfile.cameras[c.camera_id];
+          return {
+            id: c.camera_id,
+            name: c.name || profCam?.name || `Camera ${c.camera_id.toUpperCase()}`,
+            location: c.location || profCam?.location || mapProfile.name,
+            status: (c.status === 'ONLINE' || c.status === 'PROCESSING' || c.status === 'SYNC DISABLED') ? 'ONLINE' : 'DOWN',
+            lng: typeof c.longitude === 'number' ? c.longitude : (profCam?.lng ?? mapProfile.center[0]),
+            lat: typeof c.latitude === 'number' ? c.latitude : (profCam?.lat ?? mapProfile.center[1]),
+            resolution: c.resolution || '1080P',
+            fps: Math.round(c.fps || 10),
+            lastActive: 'Live',
+            uptime: uptimeStr,
+          };
+        });
 
         setCameras(mapped);
         setMetrics({
@@ -131,7 +150,7 @@ export const CamerasView: React.FC = () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [activeDataset, mapProfile]);
 
   const filteredCameras = cameras.filter((cam) => {
     const q = searchQuery.toLowerCase().trim();
@@ -194,9 +213,9 @@ export const CamerasView: React.FC = () => {
         </div>
       </div>
 
-      {/* ================= 2. MAIN GIS CAMERA MAP CONTAINER (Dubuque CityFlow Corridor) ================= */}
+      {/* ================= 2. MAIN GIS CAMERA MAP CONTAINER ================= */}
       <div className="relative rounded-[3px] overflow-hidden bg-[#151515] h-[560px] w-full">
-        <Map center={[-90.6847, 42.4991]} zoom={14.8}>
+        <Map center={mapProfile.center} zoom={mapProfile.zoom} key={`cameras-map-${mapProfile.id}-${activeDataset}`}>
           {cameras.map((cam) => {
             const isOnline = cam.status === 'ONLINE';
 
