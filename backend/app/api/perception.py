@@ -12,8 +12,10 @@ from typing import Any, Dict, Generator, List, Optional, Set
 
 import cv2
 import numpy as np
+from ultralytics.utils.plotting import Annotator, colors
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
@@ -54,6 +56,8 @@ from app.modules.perception.persistence import (
 )
 from app.modules.perception.plate_localizer import extract_plate_crop
 from app.modules.perception.temporal_fusion import TemporalOCRFusion
+from app.modules.perception.metrics import get_performance_metrics
+from app.modules.perception.preprocessing_variants import generate_preprocessing_variants
 
 router = APIRouter()
 
@@ -67,6 +71,7 @@ _VIDEO_DIR = _PROJECT_ROOT / "data" / "footage"
 # Cache YOLO model instance for fast frame inference
 _YOLO_MODEL: Optional[Any] = None
 _YOLO_LOCK = threading.Lock()
+_YOLO_INFERENCE_LOCK = threading.Lock()
 
 
 def _get_yolo_model() -> Optional[Any]:
@@ -90,6 +95,8 @@ def _get_yolo_model() -> Optional[Any]:
                 model_file = next((c for c in candidates if c.exists()), None)
                 if model_file:
                     _YOLO_MODEL = YOLO(str(model_file))
+                else:
+                    _YOLO_MODEL = YOLO("yolov8n.pt")
             except Exception as e:
                 print(f"Warning: Could not load YOLO model: {e}")
                 _YOLO_MODEL = None
@@ -112,8 +119,22 @@ def _create_yolo_model() -> Optional[Any]:
             Path.cwd() / "yolo8n.pt",
         ]
         model_file = next((c for c in candidates if c.exists()), None)
-        if model_file:
-            return YOLO(str(model_file))
+        m = YOLO(str(model_file)) if model_file else YOLO("yolov8n.pt")
+        yolo_dev = getattr(settings, "YOLO_DEVICE", "auto")
+        if yolo_dev == "auto":
+            import torch
+            yolo_dev = "cuda:0" if torch.cuda.is_available() else "cpu"
+        try:
+            m.to(yolo_dev)
+            dummy = np.zeros((360, 640, 3), dtype=np.uint8)
+            m.track(dummy, persist=True, tracker="bytetrack.yaml", classes=[2, 3, 5, 7], device=yolo_dev, verbose=False)
+            if hasattr(m, "predictor") and m.predictor:
+                trackers = getattr(m.predictor, "trackers", [])
+                for t in trackers:
+                    t.reset()
+        except Exception:
+            pass
+        return m
     except Exception as e:
         print(f"Warning: Could not load YOLO model: {e}")
     return None
@@ -151,13 +172,14 @@ class MasterCameraCapture:
     def __init__(self, camera_id: str, video_path: Path):
         self.camera_id = camera_id.lower()
         self.video_path = str(video_path)
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._frame_cond = threading.Condition(self._lock)
         self.vehicle_tracks: Dict[int, Dict[str, Any]] = {}
         self.next_track_id = 1
         self.current_frame_idx = 0
         self.cached_raw_jpeg: Optional[bytes] = None
         self.cached_yolo_jpeg: Optional[bytes] = None
+        self._cached_plot_boxes: List[Any] = []
         self.recent_detections: List[Dict[str, Any]] = []
         self.fusion = TemporalOCRFusion()
         self.persisted_tracks: Set[int] = set()
@@ -256,41 +278,63 @@ class MasterCameraCapture:
                 model = self.model or _get_yolo_model()
 
             num_detected = 0
-            if model is not None:
+            stride = max(1, int(getattr(settings, "YOLO_FRAME_STRIDE", 1)))
+            cam_phase = sum(ord(c) for c in self.camera_id) % stride
+            is_yolo_frame = (stride == 1) or (self.current_frame_idx % stride == cam_phase)
+            perf_metrics = get_performance_metrics()
+
+            if not is_yolo_frame:
+                perf_metrics.record_video_frame(yolo_ran=False)
+                perf_metrics.check_and_log_summary()
+                if hasattr(self, "_cached_plot_boxes") and self._cached_plot_boxes:
+                    annotator = Annotator(yolo_frame, line_width=2, pil=False)
+                    for b_box, b_lbl, b_col in self._cached_plot_boxes:
+                        annotator.box_label(b_box, b_lbl, color=b_col)
+                    yolo_frame = annotator.result()
+            elif model is not None:
                 try:
-                    results = model.track(
-                        resized_raw,
-                        persist=True,
-                        tracker="bytetrack.yaml",
-                        classes=[2, 3, 5, 7],
-                        conf=0.25,
-                        verbose=False,
-                    )[0]
+                    import torch
+                    yolo_dev = getattr(settings, "YOLO_DEVICE", "auto")
+                    if yolo_dev == "auto":
+                        yolo_dev = 0 if torch.cuda.is_available() else "cpu"
+
+                    with _YOLO_INFERENCE_LOCK:
+                        t_yolo_start = time.perf_counter()
+                        results = model.track(
+                            resized_raw,
+                            persist=True,
+                            tracker="bytetrack.yaml",
+                            classes=[2, 3, 5, 7],
+                            conf=0.25,
+                            device=yolo_dev,
+                            verbose=False,
+                        )[0]
+                        yolo_latency_ms = (time.perf_counter() - t_yolo_start) * 1000.0
                     yolo_annotated = results.plot()
                     yolo_frame = yolo_annotated
+                    perf_metrics.record_video_frame(yolo_ran=True, latency_ms=yolo_latency_ms)
+                    perf_metrics.check_and_log_summary()
 
+                    new_cached_boxes = []
                     ocr_runs_this_frame = 0
                     if results.boxes is not None and len(results.boxes) > 0:
                         num_detected = len(results.boxes)
-                        for box in results.boxes:
+                        for i, box in enumerate(results.boxes):
                             cls_id = int(box.cls[0]) if box.cls is not None else 2
                             if cls_id not in [2, 3, 5, 7]:
                                 continue
 
-                            if box.id is None:
-                                continue
-
-                            matched_id = int(box.id[0])
+                            matched_id = int(box.id[0]) if box.id is not None else (i + 1)
                             conf = float(box.conf[0]) if box.conf is not None else 0.85
-                            bbox = box.xyxy[0].tolist()
-                            x1, y1, x2, y2 = [int(v) for v in bbox]
+                            bbox = [int(v) for v in box.xyxy[0].tolist()]
+                            x1, y1, x2, y2 = bbox
                             cx = (bbox[0] + bbox[2]) / 2
                             cy = (bbox[1] + bbox[3]) / 2
 
-                            # Extract color from vehicle crop
-                            veh_crop = resized_raw[max(0, y1):min(resized_raw.shape[0], y2), max(0, x1):min(resized_raw.shape[1], x2)]
-                            color_detected = _detect_crop_color(veh_crop)
                             cls_type = "CAR" if cls_id == 2 else "TRUCK" if cls_id == 7 else "BUS" if cls_id == 5 else "MOTORCYCLE"
+                            box_color = colors(cls_id, True)
+                            box_label = f"id:{matched_id} {cls_type.lower()} {conf:.2f}"
+                            new_cached_boxes.append((bbox, box_label, box_color))
 
                             current_time_str = time.strftime("%I:%M:%S %p")
                             if matched_id in self.vehicle_tracks:
@@ -369,6 +413,7 @@ class MasterCameraCapture:
                                 and not is_confirmed
                                 and not has_enough_reads
                                 and track_ocr_attempts < 8
+                                and trk["frames"] >= 2
                                 and veh_crop.size > 0
                                 and veh_crop.shape[1] >= 65
                                 and veh_crop.shape[0] >= 45
@@ -380,10 +425,42 @@ class MasterCameraCapture:
                                 trk["ocr_attempts"] = track_ocr_attempts + 1
                                 ocr_runs_this_frame += 1
                                 try:
+                                    t_ocr_start = time.perf_counter()
                                     plate_crop = extract_plate_crop(veh_crop)
-                                    ocr_res = read_plate_image(plate_crop, min_confidence=0.20) if plate_crop is not None and plate_crop.size > 0 else None
+                                    ocr_conf_thresh = float(getattr(settings, "OCR_CONFIDENCE_THRESHOLD", 0.50))
+                                    short_circuited = False
+                                    fallbacks_run = 0
+                                    ocr_res = None
+
+                                    if plate_crop is not None and plate_crop.size > 0:
+                                        orig_vars = generate_preprocessing_variants(plate_crop, limit_variants=["ORIGINAL"])
+                                        orig_img = orig_vars[0][1] if orig_vars else plate_crop
+                                        ocr_res = read_plate_image(orig_img, min_confidence=0.20)
+                                        if ocr_res and any(x.get("confidence", 0.0) >= ocr_conf_thresh for x in ocr_res):
+                                            short_circuited = True
+                                        else:
+                                            fallback_vars = generate_preprocessing_variants(
+                                                plate_crop, limit_variants=["UPSCALE_2X", "CLAHE", "DENOISED_SHARPEN", "ADAPTIVE_THRESH"]
+                                            )
+                                            for _, f_img in fallback_vars:
+                                                fallbacks_run += 1
+                                                f_res = read_plate_image(f_img, min_confidence=0.20)
+                                                if f_res:
+                                                    ocr_res = f_res
+                                                    if any(x.get("confidence", 0.0) >= ocr_conf_thresh for x in f_res):
+                                                        break
+
                                     if not ocr_res and veh_crop is not None and veh_crop.size > 0:
+                                        fallbacks_run += 1
                                         ocr_res = read_plate_image(veh_crop, min_confidence=0.20)
+
+                                    ocr_lat = (time.perf_counter() - t_ocr_start) * 1000.0
+                                    perf_metrics.record_ocr_attempt(
+                                        latency_ms=ocr_lat,
+                                        short_circuited=short_circuited,
+                                        fallbacks_count=fallbacks_run,
+                                        plate_found=bool(ocr_res),
+                                    )
                                     if ocr_res:
                                         best_ocr = max(ocr_res, key=lambda x: x["confidence"])
                                         trk["ocr_success_count"] = trk.get("ocr_success_count", 0) + 1
@@ -488,14 +565,17 @@ class MasterCameraCapture:
                                             record_db_error(str(db_err))
                                 elif trk.get("obs_uuid") and settings.APPEARANCE_REID_ENABLED:
                                     needs_initial_emb = not trk.get("has_embedding", False)
-                                    is_significant_upgrade = crop_score > (trk.get("last_embedded_score", 0.0) + 0.15)
-                                    if (needs_initial_emb or is_significant_upgrade) and veh_crop is not None and veh_crop.size > 0:
+                                    needs_reverification = trk.get("needs_reid_verification", False)
+                                    if (needs_initial_emb or needs_reverification) and veh_crop is not None and veh_crop.size > 0:
                                         try:
+                                            t_reid_start = time.perf_counter()
                                             from app.modules.appearance import get_appearance_extractor
                                             extractor = get_appearance_extractor()
                                             upg_emb, upg_reason = extractor.extract_with_reason(
                                                 veh_crop, min_size=settings.APPEARANCE_MIN_CROP_SIZE
                                             )
+                                            reid_lat_ms = (time.perf_counter() - t_reid_start) * 1000.0
+                                            perf_metrics.record_reid_call(latency_ms=reid_lat_ms, reused=False)
                                             if upg_emb is not None:
                                                 with Session(self._db_engine) as session:
                                                     upsert_observation_embedding(
@@ -509,6 +589,8 @@ class MasterCameraCapture:
                                                 trk["last_embedded_score"] = crop_score
                                         except Exception:
                                             pass
+                                    elif trk.get("has_embedding", False):
+                                        perf_metrics.record_reid_call(latency_ms=0.0, reused=True)
 
                             # Motion score prioritizing passing cars
                             motion_score = (1000.0 if is_moving else 0.0) + disp + (conf * 10)
@@ -566,8 +648,9 @@ class MasterCameraCapture:
                             for st in stale:
                                 self.vehicle_tracks.pop(st, None)
 
-                except Exception:
-                    pass
+                    self._cached_plot_boxes = new_cached_boxes
+                except Exception as e:
+                    print(f"MasterCameraCapture perception error: {e}")
 
             cv2.putText(
                 yolo_frame,
@@ -667,12 +750,16 @@ def _get_master_capture(camera_id: str) -> Optional[Any]:
         return _MASTER_CAPTURES[clean_id]
 
 
-# Pre-warm managed cameras on module load
+# Pre-warm managed cameras and models on module load
 def _prewarm_all_cameras():
     try:
+        from app.modules.perception.ocr_engine import get_ocr_engine
+        from app.modules.appearance import get_appearance_extractor
+        get_ocr_engine()
+        get_appearance_extractor()
         get_camera_manager()
     except Exception as e:
-        print(f"Warning: Could not pre-warm camera manager: {e}")
+        print(f"Warning: Could not pre-warm perception pipeline: {e}")
 
 _prewarm_all_cameras()
 
@@ -714,21 +801,25 @@ async def get_perception_status(
                         continue
                     cam_dict = cam.to_dict()
                     is_active = cam.enabled and cam_dict.get("status") not in ["DISABLED", "FAILED", "OFFLINE", "DOWN"]
-                    live_status = "online" if is_active else "down"
+                    live_status = "online" if is_active else ("standby" if not cam.enabled else "down")
 
                     if cid not in camera_results:
                         camera_results[cid] = {
                             "camera_id": cid,
                             "camera_status": live_status,
+                            "enabled": cam.enabled,
                             "processed_at": datetime.now(timezone.utc).isoformat(),
                             "observations": [],
                             "ocr_reads": [],
-                            "warning": None if is_active else f"Camera {cam_dict.get('status', 'DOWN')}",
+                            "warning": None if is_active else ("STANDBY (MODEL PROCESSING OFF)" if not cam.enabled else f"Camera {cam_dict.get('status', 'DOWN')}"),
                         }
                     else:
                         camera_results[cid]["camera_status"] = live_status
+                        camera_results[cid]["enabled"] = cam.enabled
                         if is_active:
                             camera_results[cid]["warning"] = None
+                        elif not cam.enabled:
+                            camera_results[cid]["warning"] = "STANDBY (MODEL PROCESSING OFF)"
 
                     # If camera results observations is empty, populate from live camera worker state
                     if not camera_results[cid].get("observations"):
@@ -788,6 +879,8 @@ async def get_perception_status(
             "uptime_formatted": uptime_formatted,
             "camera_count": len(camera_results),
             "cameras": camera_results,
+            "active_camera_count": mgr.get_active_camera_count() if mgr else 4,
+            "active_camera_mode": mgr.get_active_camera_mode_info() if mgr else {},
             "pipeline_status": {
                 "yolo": "healthy",
                 "bytetrack": "healthy",
@@ -802,6 +895,25 @@ async def get_perception_status(
             "error": str(e),
             "traceback": traceback.format_exc(),
         }
+
+
+class CameraModeRequest(BaseModel):
+    count: int
+    primary_camera_id: Optional[str] = None
+
+
+@router.get("/perception/cameras/mode")
+def get_perception_camera_mode():
+    """Return the current active camera count and list of active / standby cameras."""
+    mgr = get_camera_manager()
+    return mgr.get_active_camera_mode_info()
+
+
+@router.post("/perception/cameras/mode")
+def set_perception_camera_mode(payload: CameraModeRequest):
+    """Dynamically set the number of cameras actively running models (2 or 4) to reduce processing load."""
+    mgr = get_camera_manager()
+    return mgr.set_active_camera_count(payload.count, payload.primary_camera_id)
 
 
 @router.get("/perception/cameras")
@@ -819,6 +931,8 @@ def get_perception_cameras():
         "total_cameras": len(cams),
         "active_cameras": active,
         "down_cameras": down,
+        "active_camera_count": mgr.get_active_camera_count(),
+        "active_camera_mode": mgr.get_active_camera_mode_info(),
         "uptime_seconds": uptime_secs,
         "uptime_formatted": uptime_formatted,
         "uptime_hours": uptime_hours,

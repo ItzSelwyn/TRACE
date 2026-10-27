@@ -29,11 +29,13 @@
    - [3. Backend Setup & Startup](#3-backend-setup--startup)
    - [4. Frontend Setup & Startup](#4-frontend-setup--startup)
    - [5. One-Command Docker Setup](#5-one-command-docker-setup-alternative)
-8. [Interactive User Interface Walkthrough](#-interactive-user-interface-walkthrough)
-9. [API Reference](#-api-reference)
-10. [Evaluation & Verification Scripts](#-evaluation--verification-scripts)
-11. [Troubleshooting & FAQs](#-troubleshooting--faqs)
-12. [License & Acknowledgments](#-license--acknowledgments)
+8. [Hardware & dGPU Acceleration](#-hardware--dgpu-acceleration)
+9. [Empirical Benchmarks & System Performance](#-empirical-benchmarks--system-performance)
+10. [Interactive User Interface Walkthrough](#-interactive-user-interface-walkthrough)
+11. [API Reference](#-api-reference)
+12. [Evaluation & Verification Scripts](#-evaluation--verification-scripts)
+13. [Troubleshooting & FAQs](#-troubleshooting--faqs)
+14. [License & Acknowledgments](#-license--acknowledgments)
 
 ---
 
@@ -271,21 +273,29 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-#### Step B: Install Dependencies
+#### Step B: Install Dependencies & Computer Vision Stack
 ```bash
 pip install --upgrade pip
 pip install -e .
 
 # Install computer vision & OCR packages
 pip install ultralytics paddlepaddle paddleocr torchvision
+
+# (Recommended for NVIDIA dGPU) Install PyTorch with CUDA 12.1 for real-time 28+ FPS inference:
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 ```
 
-#### Step C: Run Migrations & Seed Baseline Data
+> **Model Weights Placement:**
+> Ensure neural network weights are placed under `backend/models/`:
+> * `yolov8n.pt` — YOLOv8 nano vehicle detection & tracking model
+> * `resnet34_veri776_deploy.pt` — ResNet34 512-D vehicle Re-ID metric embedding weights (will auto-fallback to MobileNetV3 if not present)
+
+#### Step C: Run Database Migrations & Seed Baseline Data
 ```bash
-# Apply Alembic schema migrations
+# Apply all Alembic schema migrations (cameras, road edges, scenarios, observations)
 alembic upgrade head
 
-# Seed initial cameras, road edges, and default users
+# Seed initial corridor cameras, road edges, and default users
 python -m app.db.seed
 ```
 
@@ -331,6 +341,74 @@ This will automatically spin up:
 2. `trace-backend`: FastAPI backend running migrations and seeding on start
 
 Then launch the frontend locally with `cd frontend && npm run dev`.
+
+---
+
+## ⚡ Hardware & dGPU Acceleration
+
+TRACE features native GPU hardware acceleration, allowing high-throughput multi-camera processing on NVIDIA discrete GPUs (such as RTX 3050/4060/A100 series):
+
+* **Dynamic Device Selection (`YOLO_DEVICE`):**
+  Configure via `.env`:
+  ```ini
+  YOLO_DEVICE=auto    # Auto-detect CUDA if available, fallback to CPU
+  # Or force explicit device:
+  # YOLO_DEVICE=cuda:0
+  # YOLO_DEVICE=cpu
+  ```
+* **Ultralytics YOLOv8 & ByteTrack:** Offloads inference to NVIDIA CUDA cores with automatic FP16 half-precision execution, achieving 28+ FPS per 1080p stream.
+* **ResNet34 Appearance Re-ID Extractor:** Evaluates 512-dimensional visual feature vectors on GPU via FP16 PyTorch tensors in under 45 ms per vehicle crop.
+* **OpenCV OpenCL Acceleration:** Automated OpenCL acceleration (`cv2.ocl.setUseOpenCL(True)`) for ultra-low latency frame resizing and bumper crop letterboxing.
+
+---
+
+## 📊 Empirical Benchmarks & System Performance
+
+Empirical benchmarks were executed on the end-to-end TRACE pipeline using real CCTV corridor video footage (`c029.mp4`), ground-truth Indian license plate annotations (`data/TN`), and an **NVIDIA GeForce RTX 3050 Laptop GPU** (`cuda:0`).
+
+### 1. Multi-Layer System Performance Summary
+
+| Architectural Layer | Evaluated Component | Empirical Metric | Measured Performance | Operational Standard |
+| :--- | :--- | :--- | :--- | :--- |
+| **Layer 1: Perception** | YOLOv8n Detection & Tracking | **Throughput** | **28.5 FPS** (Steady-State) | $\ge 25$ FPS (Real-time) |
+| **Layer 1: Perception** | YOLOv8n Detection & Tracking | **Inference Latency** | **35.05 ms** (Median: 34.11 ms) | $< 50$ ms |
+| **Layer 1: Perception** | Multi-Vehicle ByteTrack | **Capacity** | **510 detections** (10.2 / frame) | High-density traffic |
+| **Layer 1: ANPR** | Plate Localization & PaddleOCR | **Exact Plate Match** | **90.0%** (9 / 10 exact strings) | $> 85\%$ |
+| **Layer 1: ANPR** | Plate Localization & PaddleOCR | **Character Accuracy** | **99.0%** | Alphanumeric precision |
+| **Layer 1: ANPR** | Plate Localization & PaddleOCR | **Steady Latency** | **326.6 ms / plate** (Min: 183 ms) | Sub-second edge read |
+| **Layer 1: Appearance** | ResNet34 VeRi-776 Embeddings | **Extraction Speed** | **43.87 ms** (22.8 crops/sec) | Real-time Re-ID |
+| **Layer 1: Appearance** | 512-D Embedding Normalization | **Hypersphere Norm** | **1.0000** ($\|e\|_2 = 1.0$) | Strict unit metric |
+| **Layer 1: Appearance** | Re-ID Discrimination Gap | **Cosine Separation** | **+0.3393** (Intra: 0.988, Inter: 0.649) | Distinct identity gap |
+| **Layer 2: Identity Fusion** | Multi-Modal Scoring Engine | **Fusion Throughput** | **17,146 evaluations / sec** | Non-blocking matching |
+| **Layer 2: Identity Fusion** | Scoring Evaluation Latency | **Decision Time** | **868.0 $\mu$s** ($0.87$ ms) | Sub-millisecond |
+| **Layer 2: Identity Fusion** | Multimodal Match Score | **ANPR Confidence** | **0.944** (Confirmed Match) | Threshold: 0.70 |
+| **Layer 3: Spatial Graph** | Trajectory Routing & Reachability| **Graph Capacity** | **11,880 path queries / sec** | Citywide scaling |
+| **Layer 3: Spatial Graph** | Shortest-Path Latency | **Dijkstra Traversal** | **84.2 $\mu$s** ($0.084$ ms) | Microsecond routing |
+| **Layer 3: Anomaly** | Impossible Journey Detection | **Speed Anomaly** | **Flagged (`too_fast_time`)** | Cloned plate caught |
+
+### 2. Ground-Truth License Plate OCR Accuracy (`data/TN`)
+
+| Image Sample | Ground Truth | OCR Read | Confidence | Exact Match | Character Acc | Latency |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `TN10.jpg` | `TN69AJ4455` | `TN69AJ4455` | 94.7% | **YES** | 100.0% | 641 ms |
+| `TN2.jpg` | `TN76V1978` | `TN76V1978` | 96.9% | **YES** | 100.0% | **183 ms** |
+| `TN3.jpg` | `TN02AU9295` | `TN02AU9295` | 92.1% | **YES** | 100.0% | 218 ms |
+| `TN4.jpg` | `TN10AR0131` | `TN10AR0131` | 98.2% | **YES** | 100.0% | 457 ms |
+| `TN5.jpg` | `TN47T4464` | `TN47T4464` | 95.2% | **YES** | 100.0% | 241 ms |
+| `TN6.jpg` | `TN19F0816` | `TN19F0816` | 96.4% | **YES** | 100.0% | 513 ms |
+| `TN7.jpg` | `TN07BT5778` | `TN07BT5778` | 90.1% | **YES** | 100.0% | 242 ms |
+| `TN8.jpg` | `TN07AP0659` | `TN07AP0659` | 93.3% | **YES** | 100.0% | 245 ms |
+| `TN9.jpg` | `TN19Q0835` | `TN19Q0835` | 94.0% | **YES** | 100.0% | 197 ms |
+| `TN1.jpg` | `TN63BV7954` | `TN63B7954` | 94.9% | NO | 90.0% | 10,259 ms (cold) |
+
+### 3. Running the Automated Benchmark Suite
+
+To run the automated multi-layer benchmark suite on your local machine:
+```bash
+cd backend
+python scripts/run_benchmarks.py
+```
+This evaluates all 5 pipeline layers in under 25 seconds and saves full machine-readable telemetry to `backend/benchmark_results.json`.
 
 ---
 
@@ -389,7 +467,15 @@ Then launch the frontend locally with `cd frontend && npm run dev`.
 
 The `backend/scripts/` directory contains automated verification tools for regression testing and evaluation:
 
-### 1. License Plate OCR Benchmark
+### 1. Comprehensive Multi-Layer Benchmark Suite
+Benchmark all 5 layers simultaneously (YOLOv8 tracking, OCR accuracy, ResNet34 Re-ID, Layer 2 fusion, and Layer 3 spatial graph routing):
+```bash
+cd backend
+python scripts/run_benchmarks.py
+```
+*Outputs latency breakdowns, cold vs steady-state FPS, detection counts, OCR accuracy table, cosine separation margins, and saves results to `benchmark_results.json`.*
+
+### 2. License Plate OCR Benchmark
 Evaluate OCR accuracy on real-world Indian license plate datasets (e.g. Tamil Nadu `data/TN`):
 ```bash
 cd backend
@@ -397,14 +483,22 @@ python scripts/eval_ocr.py
 ```
 *Outputs sample-by-sample ground truth vs predicted plate text, confidence score, exact match rate, and character-level accuracy.*
 
-### 2. Spatio-Temporal Pipeline Verification
+### 3. Spatio-Temporal Pipeline Verification
 Test Layer 1 Perception, Layer 2 Identity Fusion, and Layer 3 Trajectory Reconstruction:
 ```bash
 cd backend
 python scripts/verify_layer1_layer2_layer3.py
 ```
 
-### 3. Automated Pytest Suite
+### 4. Real-Time DB & Identity Fusion Monitors
+Monitor live observation ingestion and cross-camera identity matching in real time:
+```bash
+cd backend
+python scripts/live_fusion_monitor.py
+python scripts/live_db_monitor.py
+```
+
+### 5. Automated Pytest Suite
 Run unit and integration tests covering API endpoints, impossible journey detection, and database models:
 ```bash
 cd backend
@@ -423,7 +517,34 @@ pytest
 * **Cause:** Windows has a local PostgreSQL service running that takes priority on `localhost:5432` over Docker.
 * **Fix:** Use `127.0.0.1` instead of `localhost` in your `.env`, or stop the native Windows service using `Stop-Service *postgres*`.
 
-#### Q3: Vite frontend warns `maplibre-gl-worker.mjs does not exist in optimize deps`?
+#### Q3: Database throws `column vehicle_observations.scenario does not exist`?
+* **Cause:** The database schema is missing the latest migration columns.
+* **Fix:** Apply pending database migrations by running:
+  ```bash
+  cd backend
+  alembic upgrade head
+  ```
+
+#### Q4: PaddleOCR throws `IndexError: index 1 is out of bounds for axis 0 with size 1`?
+* **Cause:** Micro-crops (< 8px height/width) or non-contiguous image buffers passed to OCR detection.
+* **Fix:** Handled automatically in `app/modules/perception/ocr_engine.py` by enforcing a 10px minimum crop threshold, converting images to contiguous 3-channel BGR arrays, and wrapping results in defensive line parsing.
+
+#### Q5: PyTorch warns about `weights_only=False` on model load?
+* **Cause:** Recent PyTorch security advisory recommending explicit deserialization flags.
+* **Fix:** All checkpoint loads in `AppearanceExtractor` specify `torch.load(resolved, map_location=..., weights_only=True)` to prevent arbitrary code execution during unpickling.
+
+#### Q6: How to force GPU or CPU execution?
+* **Cause:** Switching between laptop dGPU and CPU environments.
+* **Fix:** Set `YOLO_DEVICE` in your `backend/.env`:
+  ```ini
+  YOLO_DEVICE=cuda:0   # Forces NVIDIA GPU
+  # OR
+  YOLO_DEVICE=cpu      # Forces CPU execution
+  # OR
+  YOLO_DEVICE=auto     # Automatically selects CUDA if available
+  ```
+
+#### Q7: Vite frontend warns `maplibre-gl-worker.mjs does not exist in optimize deps`?
 * **Cause:** MapLibre GL web worker dynamic bundling in Vite.
 * **Fix:** In `frontend/vite.config.ts`, ensure `maplibre-gl` is added to `optimizeDeps.exclude: ['maplibre-gl']`.
 

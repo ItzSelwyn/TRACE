@@ -92,6 +92,26 @@ def list_cameras():
     }
 
 
+
+class CameraModeRequest(BaseModel):
+    count: int = Field(..., description="Number of active cameras running models (2 or 4)")
+    primary_camera_id: Optional[str] = Field(None, description="Preferred primary camera to keep active")
+
+
+@router.get("/cameras/mode")
+def get_camera_mode():
+    """Return active camera count and active camera IDs."""
+    mgr = get_camera_manager()
+    return mgr.get_active_camera_mode_info()
+
+
+@router.post("/cameras/mode")
+def set_camera_mode(req: CameraModeRequest):
+    """Set active camera mode to 2 or 4 cameras to adjust compute load."""
+    mgr = get_camera_manager()
+    return mgr.set_active_camera_count(req.count, req.primary_camera_id)
+
+
 @router.get("/sources")
 def get_discovered_sources():
     """Scan and return all available video and image assets under data/."""

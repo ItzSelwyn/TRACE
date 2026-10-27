@@ -47,6 +47,7 @@ const transformPerceptionStatus = (
       timestamp: latestObservation?.captured_at ? formatTime(latestObservation.captured_at) : 'Live',
       feedImageUrl: '/assets/Dashboard.png',
       status,
+      enabled: camera?.enabled !== false && rawStatus !== 'disabled',
     };
   });
 
@@ -135,6 +136,7 @@ const transformPerceptionStatus = (
       camerasDown: downCount,
       totalCameras: cameras.length || 4,
     },
+    activeCameraCount: payload?.active_camera_count ?? 4,
   };
 };
 

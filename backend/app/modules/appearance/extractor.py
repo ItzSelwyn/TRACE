@@ -56,6 +56,9 @@ class AppearanceExtractor:
         # Model resolution and loading
         self.model, self.embedding_dim, self.input_size = self._load_model()
         self.model.to(self.device)
+        self.use_half = bool(self.device.type == "cuda")
+        if self.use_half:
+            self.model.half()
         self.model.eval()
 
         self.transform = create_transform(self.input_size)
@@ -87,26 +90,32 @@ class AppearanceExtractor:
         """Load the specified model backbone and weights."""
         if self.model_name == "resnet34_veri776":
             resolved = self._resolve_model_path(self.model_path)
-            if not resolved or not resolved.exists():
-                logger.warning(
-                    f"ResNet34 VeRi-776 weights not found at {self.model_path}. "
-                    f"Falling back to MobileNetV3-Small."
-                )
-                return self._load_mobilenet()
+            if resolved and resolved.exists():
+                try:
+                    model = models.resnet34(weights=None)
+                    model.fc = torch.nn.Identity()
+                    try:
+                        ckpt = torch.load(resolved, map_location="cpu", weights_only=True)
+                    except Exception:
+                        ckpt = torch.load(resolved, map_location="cpu", weights_only=False)
+                    sd = ckpt["state_dict"] if isinstance(ckpt, dict) and "state_dict" in ckpt else ckpt
+                    model.load_state_dict(sd, strict=False)
+                    logger.info(f"Loaded ResNet34 weights from {resolved}")
+                    return model, 512, (256, 256)
+                except Exception as e:
+                    logger.warning(f"Error loading checkpoint from {resolved}: {e}")
 
-            model = models.resnet34(weights=None)
+            # Pre-trained ResNet34 fallback (512-dim embedding)
+            logger.info("Using torchvision pre-trained ResNet34 backbone (512-dim embedding).")
+            model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
             model.fc = torch.nn.Identity()
-
-            ckpt = torch.load(resolved, map_location="cpu")
-            sd = ckpt["state_dict"] if isinstance(ckpt, dict) and "state_dict" in ckpt else ckpt
-            model.load_state_dict(sd, strict=False)
-            return model, 512, (256, 256)
+            return model, 512, (224, 224)
 
         elif self.model_name == "mobilenet_v3_small":
             return self._load_mobilenet()
 
         else:
-            logger.warning(f"Unknown appearance model {self.model_name}, defaulting to mobilenet_v3_small")
+            logger.info(f"Appearance model {self.model_name} -> using mobilenet_v3_small")
             return self._load_mobilenet()
 
     def _load_mobilenet(self) -> Tuple[torch.nn.Module, int, Tuple[int, int]]:
@@ -134,8 +143,10 @@ class AppearanceExtractor:
 
         try:
             tensor = preprocess_crop(valid_bgr, self.transform).to(self.device)
+            if getattr(self, "use_half", False):
+                tensor = tensor.half()
             with torch.no_grad():
-                feat = self.model(tensor).squeeze(0).cpu().numpy().flatten().astype(np.float32)
+                feat = self.model(tensor).squeeze(0).float().cpu().numpy().flatten().astype(np.float32)
 
             if len(feat) != self.embedding_dim:
                 return None, f"dimension_mismatch_{len(feat)}_expected_{self.embedding_dim}"

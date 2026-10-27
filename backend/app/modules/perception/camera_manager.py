@@ -16,6 +16,13 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
+import torch
+from ultralytics.utils.plotting import Annotator, colors
+
+try:
+    cv2.ocl.setUseOpenCL(True)
+except Exception:
+    pass
 
 from app.config import settings
 from app.modules.appearance.preprocessing import score_crop_quality
@@ -52,6 +59,7 @@ from app.modules.perception.source_discovery import (
     load_cityflow_sync_metadata,
 )
 from app.modules.perception.temporal_fusion import TemporalOCRFusion
+from app.modules.perception.metrics import get_performance_metrics
 
 logger = logging.getLogger("trace.perception.camera_manager")
 
@@ -127,6 +135,8 @@ def letterbox_image(
 
 _YOLO_MODEL: Optional[Any] = None
 _YOLO_LOCK = threading.Lock()
+_YOLO_INFERENCE_LOCK = threading.Lock()
+_GLOBAL_PERCEPTION_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="trace-perception-bg")
 
 
 def _get_yolo_model() -> Optional[Any]:
@@ -150,6 +160,8 @@ def _get_yolo_model() -> Optional[Any]:
                 model_file = next((c for c in candidates if c.exists()), None)
                 if model_file:
                     _YOLO_MODEL = YOLO(str(model_file))
+                else:
+                    _YOLO_MODEL = YOLO("yolov8n.pt")
             except Exception as e:
                 logger.warning(f"Could not load YOLO model: {e}")
                 _YOLO_MODEL = None
@@ -172,8 +184,22 @@ def _create_yolo_model() -> Optional[Any]:
             Path.cwd() / "yolo8n.pt",
         ]
         model_file = next((c for c in candidates if c.exists()), None)
-        if model_file:
-            return YOLO(str(model_file))
+        m = YOLO(str(model_file)) if model_file else YOLO("yolov8n.pt")
+        yolo_dev = getattr(settings, "YOLO_DEVICE", "auto")
+        if yolo_dev == "auto":
+            yolo_dev = "cuda:0" if torch.cuda.is_available() else "cpu"
+        try:
+            m.to(yolo_dev)
+            # Pre-warm ByteTrack predictor so video playback never hits 13s cold-start latency
+            dummy = np.zeros((360, 640, 3), dtype=np.uint8)
+            m.track(dummy, persist=True, tracker="bytetrack.yaml", classes=[2, 3, 5, 7], device=yolo_dev, verbose=False)
+            if hasattr(m, "predictor") and m.predictor:
+                trackers = getattr(m.predictor, "trackers", [])
+                for t in trackers:
+                    t.reset()
+        except Exception:
+            pass
+        return m
     except Exception as e:
         logger.warning(f"Could not load YOLO model: {e}")
     return None
@@ -274,7 +300,7 @@ class ManagedCameraWorker:
     def __init__(self, camera_id: str, config: Dict[str, Any], controller: CameraPlaybackController):
         self.camera_id = camera_id.lower()
         self.controller = controller
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._running = False
         self._generation: int = 0
         self.dataset_generation: int = 0
@@ -310,7 +336,7 @@ class ManagedCameraWorker:
         self.persisted_tracks: set[int] = set()
         self.fusion = TemporalOCRFusion()
         self.last_seek_version: int = 0
-        self.model: Optional[Any] = _create_yolo_model()
+        self.model: Optional[Any] = _create_yolo_model() if self.enabled else None
         self.current_detection_count: int = 0
 
         # Fast live traffic metrics cache (lock-free read for analytics)
@@ -345,7 +371,7 @@ class ManagedCameraWorker:
         self._frame_cond = threading.Condition(self._lock)
 
         # Dedicated background executor for non-blocking perception tasks (PaddleOCR, ResNet, DB persistence)
-        self._bg_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix=f"cam-{self.camera_id}-bg")
+        self._bg_executor = _GLOBAL_PERCEPTION_EXECUTOR
 
         # DB Engine for persistence
         from sqlalchemy import create_engine
@@ -354,11 +380,28 @@ class ManagedCameraWorker:
         except Exception:
             self._db_engine = None
 
+        if not self.enabled:
+            self.status_label = "DISABLED"
+            self._render_disabled_frame()
+
         # Start worker
         self.start()
 
+    def _submit_bg_task(self, fn, *args) -> bool:
+        """Safely submit a task to the background thread pool without crashing video inference if shutting down."""
+        try:
+            executor = getattr(self, "_bg_executor", None) or _GLOBAL_PERCEPTION_EXECUTOR
+            if executor is not None and not getattr(executor, "_shutdown", False):
+                executor.submit(fn, *args)
+                return True
+        except Exception as e:
+            logger.debug(f"Could not submit background task: {e}")
+        return False
+
     def start(self):
         with self._lock:
+            if not hasattr(self, "_bg_executor") or self._bg_executor is None:
+                self._bg_executor = _GLOBAL_PERCEPTION_EXECUTOR
             if self._running and self._thread and self._thread.is_alive():
                 return
             self._running = True
@@ -385,14 +428,8 @@ class ManagedCameraWorker:
             thread_to_join = self._thread
             self._thread = None
 
-        if hasattr(self, "_bg_executor"):
-            try:
-                self._bg_executor.shutdown(wait=False)
-            except Exception:
-                pass
-
         if thread_to_join and thread_to_join.is_alive():
-            thread_to_join.join(timeout=1.0)
+            thread_to_join.join(timeout=0.25)
 
     def to_dict(self) -> Dict[str, Any]:
         with self._lock:
@@ -499,7 +536,9 @@ class ManagedCameraWorker:
                 if not self.enabled:
                     with self._lock:
                         self.status_label = "DISABLED"
-                    stop_event.wait(0.2)
+                        if self.cached_raw_jpeg is None:
+                            self._render_disabled_frame()
+                    stop_event.wait(0.25)
                     continue
 
                 master_time = self.controller.master_time_s
@@ -622,33 +661,96 @@ class ManagedCameraWorker:
 
     def _render_waiting_frame(self, countdown: float):
         """Render a clean camera standby frame while waiting for CityFlow sync start."""
-        img = np.zeros((360, 640, 3), dtype=np.uint8)
-        cv2.putText(
-            img,
-            f"CAM {self.camera_id.upper()} — STANDBY",
-            (160, 160),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (242, 208, 78),
-            2,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            img,
-            f"Starts at Master T+{self.sync_offset_s:.1f}s (in {countdown:.1f}s)",
-            (140, 200),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            (180, 180, 180),
-            1,
-            cv2.LINE_AA,
-        )
-        _, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+        img = np.full((360, 640, 3), (12, 12, 14), dtype=np.uint8)
+
+        # Tactical corner brackets (monochrome dark slate)
+        bracket_len = 16
+        bracket_color = (55, 55, 58)
+        cv2.line(img, (20, 20), (20 + bracket_len, 20), bracket_color, 1)
+        cv2.line(img, (20, 20), (20, 20 + bracket_len), bracket_color, 1)
+        cv2.line(img, (620, 20), (620 - bracket_len, 20), bracket_color, 1)
+        cv2.line(img, (620, 20), (620, 20 + bracket_len), bracket_color, 1)
+        cv2.line(img, (20, 340), (20 + bracket_len, 340), bracket_color, 1)
+        cv2.line(img, (20, 340), (20, 340 - bracket_len), bracket_color, 1)
+        cv2.line(img, (620, 340), (620 - bracket_len, 340), bracket_color, 1)
+        cv2.line(img, (620, 340), (620, 340 - bracket_len), bracket_color, 1)
+
+        # Minimalist central sensor crosshair
+        center_x, center_y = 320, 130
+        cv2.circle(img, (center_x, center_y), 24, (45, 45, 48), 1, cv2.LINE_AA)
+        cv2.circle(img, (center_x, center_y), 3, (80, 80, 85), -1, cv2.LINE_AA)
+        cv2.line(img, (center_x, center_y - 34), (center_x, center_y - 28), (70, 70, 75), 1)
+        cv2.line(img, (center_x, center_y + 28), (center_x, center_y + 34), (70, 70, 75), 1)
+        cv2.line(img, (center_x - 34, center_y), (center_x - 28, center_y), (70, 70, 75), 1)
+        cv2.line(img, (center_x + 28, center_y), (center_x + 34, center_y), (70, 70, 75), 1)
+
+        # Header OSD info
+        cv2.putText(img, f"TRACE SURVEILLANCE // {self.camera_id.upper()}", (35, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.36, (90, 90, 95), 1, cv2.LINE_AA)
+        cv2.putText(img, "[WAITING]", (550, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.36, (130, 130, 135), 1, cv2.LINE_AA)
+
+        def _draw_centered(text: str, y: int, font_scale: float, color: Tuple[int, int, int], thickness: int):
+            (tw, _), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+            x = max(10, (640 - tw) // 2)
+            cv2.putText(img, text, (x, y), cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness, cv2.LINE_AA)
+
+        _draw_centered(f"CAM {self.camera_id.upper()} - SYNC WAIT", 195, 0.68, (240, 240, 245), 2)
+        _draw_centered(f"Starts at Master T+{self.sync_offset_s:.1f}s (in {countdown:.1f}s)", 228, 0.44, (160, 160, 165), 1)
+        _draw_centered("CityFlow Multi-Camera Playback Synchronization", 255, 0.38, (100, 100, 105), 1)
+
+        _, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
         if _:
             raw_bytes = buf.tobytes()
             with self._lock:
                 self.cached_raw_jpeg = raw_bytes
                 self.cached_yolo_jpeg = raw_bytes
+
+    def _render_disabled_frame(self):
+        """Render a clean camera standby frame when camera is disabled or in 2-camera mode."""
+        img = np.full((360, 640, 3), (12, 12, 14), dtype=np.uint8)
+
+        # Tactical corner brackets (monochrome dark slate)
+        bracket_len = 16
+        bracket_color = (55, 55, 58)
+        cv2.line(img, (20, 20), (20 + bracket_len, 20), bracket_color, 1)
+        cv2.line(img, (20, 20), (20, 20 + bracket_len), bracket_color, 1)
+        cv2.line(img, (620, 20), (620 - bracket_len, 20), bracket_color, 1)
+        cv2.line(img, (620, 20), (620, 20 + bracket_len), bracket_color, 1)
+        cv2.line(img, (20, 340), (20 + bracket_len, 340), bracket_color, 1)
+        cv2.line(img, (20, 340), (20, 340 - bracket_len), bracket_color, 1)
+        cv2.line(img, (620, 340), (620 - bracket_len, 340), bracket_color, 1)
+        cv2.line(img, (620, 340), (620, 340 - bracket_len), bracket_color, 1)
+
+        # Minimalist central sensor crosshair (subtle black & white)
+        center_x, center_y = 320, 130
+        cv2.circle(img, (center_x, center_y), 24, (45, 45, 48), 1, cv2.LINE_AA)
+        cv2.circle(img, (center_x, center_y), 3, (80, 80, 85), -1, cv2.LINE_AA)
+        cv2.line(img, (center_x, center_y - 34), (center_x, center_y - 28), (70, 70, 75), 1)
+        cv2.line(img, (center_x, center_y + 28), (center_x, center_y + 34), (70, 70, 75), 1)
+        cv2.line(img, (center_x - 34, center_y), (center_x - 28, center_y), (70, 70, 75), 1)
+        cv2.line(img, (center_x + 28, center_y), (center_x + 34, center_y), (70, 70, 75), 1)
+
+        # Header OSD info
+        cv2.putText(img, f"TRACE SURVEILLANCE // {self.camera_id.upper()}", (35, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.36, (90, 90, 95), 1, cv2.LINE_AA)
+        cv2.putText(img, "[STANDBY]", (550, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.36, (130, 130, 135), 1, cv2.LINE_AA)
+
+        # Centered professional typography (Pure ASCII, Black & White)
+        def _draw_centered(text: str, y: int, font_scale: float, color: Tuple[int, int, int], thickness: int):
+            (tw, _), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+            x = max(10, (640 - tw) // 2)
+            cv2.putText(img, text, (x, y), cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness, cv2.LINE_AA)
+
+        _draw_centered(f"CAM {self.camera_id.upper()} - STANDBY", 195, 0.68, (240, 240, 245), 2)
+        _draw_centered("MODEL PROCESSING PAUSED (2-CAM MODE)", 228, 0.44, (160, 160, 165), 1)
+        _draw_centered("Click to select or toggle 4 CAMS to activate", 255, 0.38, (100, 100, 105), 1)
+
+        _, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+        if _:
+            raw_bytes = buf.tobytes()
+            with self._lock:
+                self.cached_raw_jpeg = raw_bytes
+                self.cached_yolo_jpeg = raw_bytes
+            with self._frame_cond:
+                self._frame_cond.notify_all()
 
     def _run_image_loop(self, image_path: Path, generation: int, stop_event: threading.Event):
         """Execution loop for Still Image camera sources."""
@@ -749,26 +851,80 @@ class ManagedCameraWorker:
             with self._lock:
                 self.cached_raw_jpeg = raw_bytes
 
-        # 2. YOLO + ByteTrack Inference
+        # 2. YOLO + ByteTrack Inference (with Configurable Frame Stride)
         yolo_frame = resized_raw.copy()
+        if self.model is None:
+            self.model = _create_yolo_model() or _get_yolo_model()
         model = self.model or _get_yolo_model()
         active_veh = None
         top_motion_score = -1.0
         num_detected = 0
 
+        stride = max(1, int(getattr(settings, "YOLO_FRAME_STRIDE", 1)))
+        cam_phase = sum(ord(c) for c in self.camera_id) % stride
+        is_yolo_frame = (stride == 1) or (frame_id % stride == cam_phase)
+        perf_metrics = get_performance_metrics()
+
+        if not is_yolo_frame:
+            # Video frame update only (Skip YOLO inference): maintain target video FPS smoothly
+            perf_metrics.record_video_frame(yolo_ran=False)
+            perf_metrics.check_and_log_summary()
+
+            if hasattr(self, "_cached_plot_boxes") and self._cached_plot_boxes:
+                annotator = Annotator(yolo_frame, line_width=2, pil=False)
+                for b_box, b_lbl, b_col in self._cached_plot_boxes:
+                    annotator.box_label(b_box, b_lbl, color=b_col)
+                yolo_frame = annotator.result()
+
+            cv2.putText(
+                yolo_frame,
+                f"CAM {self.camera_id.upper()} [AI LIVE] - {time.strftime('%H:%M:%S')}",
+                (12, 24),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (0, 242, 254),
+                1,
+                cv2.LINE_AA,
+            )
+            _, yolo_buf = cv2.imencode(".jpg", yolo_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            yolo_bytes = yolo_buf.tobytes() if _ else None
+
+            with self._lock:
+                if (stop_event is not None and (stop_event.is_set() or self._generation != generation)) or not self._running:
+                    return
+                if raw_bytes is not None:
+                    self.cached_raw_jpeg = raw_bytes
+                if yolo_bytes is not None:
+                    self.cached_yolo_jpeg = yolo_bytes
+                self.current_frame_idx = frame_id
+                self._frame_cond.notify_all()
+            return
+
         if model is not None:
             try:
-                results = model.track(
-                    resized_raw,
-                    persist=True,
-                    tracker="bytetrack.yaml",
-                    classes=[2, 3, 5, 7],
-                    conf=0.25,
-                    verbose=False,
-                )[0]
+                yolo_dev = getattr(settings, "YOLO_DEVICE", "auto")
+                if yolo_dev == "auto":
+                    yolo_dev = 0 if torch.cuda.is_available() else "cpu"
+
+                with _YOLO_INFERENCE_LOCK:
+                    t_yolo_start = time.perf_counter()
+                    results = model.track(
+                        resized_raw,
+                        persist=True,
+                        tracker="bytetrack.yaml",
+                        classes=[2, 3, 5, 7],
+                        conf=0.25,
+                        device=yolo_dev,
+                        verbose=False,
+                    )[0]
+                    yolo_time_ms = (time.perf_counter() - t_yolo_start) * 1000.0
+                perf_metrics.record_video_frame(yolo_ran=True, latency_ms=yolo_time_ms)
+                perf_metrics.check_and_log_summary()
+
                 yolo_frame = results.plot()
 
                 ocr_runs_this_frame = 0
+                new_cached_boxes = []
                 if results.boxes is not None and len(results.boxes) > 0:
                     num_detected = len(results.boxes)
                     sorted_boxes = sorted(
@@ -779,24 +935,25 @@ class ManagedCameraWorker:
                         ),
                         reverse=True,
                     )
-                    for box in sorted_boxes:
+                    for i, box in enumerate(sorted_boxes):
                         cls_id = int(box.cls[0]) if box.cls is not None else 2
                         if cls_id not in [2, 3, 5, 7]:
                             continue
 
-                        if box.id is None:
-                            continue
-
-                        matched_id = int(box.id[0])
+                        matched_id = int(box.id[0]) if box.id is not None else (i + 1)
                         conf = float(box.conf[0]) if box.conf is not None else 0.85
                         bbox = [int(v) for v in box.xyxy[0].tolist()]
                         x1, y1, x2, y2 = bbox
                         cx = (x1 + x2) / 2.0
                         cy = (y1 + y2) / 2.0
 
-                        veh_crop = resized_raw[max(0, y1):min(resized_raw.shape[0], y2), max(0, x1):min(resized_raw.shape[1], x2)]
-                        color_detected = _detect_crop_color(veh_crop)
                         cls_type = "CAR" if cls_id == 2 else "TRUCK" if cls_id == 7 else "BUS" if cls_id == 5 else "MOTORCYCLE"
+                        # Cache unified box with identical Ultralytics color palette and label format
+                        box_color = colors(cls_id, True)
+                        box_label = f"id:{matched_id} {cls_type.lower()} {conf:.2f}"
+                        new_cached_boxes.append((bbox, box_label, box_color))
+
+                        veh_crop = resized_raw[max(0, y1):min(resized_raw.shape[0], y2), max(0, x1):min(resized_raw.shape[1], x2)]
 
                         current_time_str = time.strftime("%I:%M:%S %p")
                         if matched_id in self.vehicle_tracks:
@@ -808,14 +965,13 @@ class ManagedCameraWorker:
                             disp = math.hypot(cx - trk["start_cx"], cy - trk["start_cy"])
                             trk["displacement"] = disp
                             is_moving = disp > 12.0
-                            trk["types"].append(cls_type)
-                            trk["colors"].append(color_detected)
-                            if len(trk["types"]) > 30:
-                                trk["types"].pop(0)
-                            if len(trk["colors"]) > 30:
-                                trk["colors"].pop(0)
+                            if len(trk["types"]) < 10:
+                                trk["types"].append(cls_type)
+                            if len(trk["colors"]) < 5 and veh_crop.size > 0:
+                                trk["colors"].append(_detect_crop_color(veh_crop))
                             is_new = False
                         else:
+                            color_detected = _detect_crop_color(veh_crop) if veh_crop.size > 0 else "WHITE"
                             is_moving = False
                             disp = 0.0
                             is_new = True
@@ -833,6 +989,7 @@ class ManagedCameraWorker:
                                 "crops": [],
                                 "best_crop": veh_crop.copy() if (veh_crop is not None and veh_crop.size > 0 and veh_crop.shape[0] >= 24 and veh_crop.shape[1] >= 24) else None,
                                 "best_crop_score": 0.0,
+                                "best_crop_size": veh_crop.size if veh_crop is not None else 0,
                                 "obs_uuid": None,
                                 "has_embedding": False,
                                 "last_embedded_score": 0.0,
@@ -845,19 +1002,23 @@ class ManagedCameraWorker:
                             }
                             trk = self.vehicle_tracks[matched_id]
 
-                        # Score crop quality and maintain track's best crop
+                        # Score crop quality only when necessary (early frames or substantially larger crop)
                         crop_score = 0.0
                         if veh_crop is not None and veh_crop.size > 0:
-                            crop_score = score_crop_quality(
-                                crop=veh_crop,
-                                bbox=[x1, y1, x2, y2],
-                                frame_shape=resized_raw.shape,
-                                conf=conf,
-                            )
-                            if crop_score > trk.get("best_crop_score", 0.0) or trk.get("best_crop") is None:
-                                if veh_crop.shape[0] >= 24 and veh_crop.shape[1] >= 24:
-                                    trk["best_crop"] = veh_crop.copy()
-                                    trk["best_crop_score"] = crop_score
+                            if trk["frames"] <= 6 or veh_crop.size > (trk.get("best_crop_size", 0) * 1.25):
+                                crop_score = score_crop_quality(
+                                    crop=veh_crop,
+                                    bbox=[x1, y1, x2, y2],
+                                    frame_shape=resized_raw.shape,
+                                    conf=conf,
+                                )
+                                if crop_score > trk.get("best_crop_score", 0.0) or trk.get("best_crop") is None:
+                                    if veh_crop.shape[0] >= 24 and veh_crop.shape[1] >= 24:
+                                        trk["best_crop"] = veh_crop.copy()
+                                        trk["best_crop_score"] = crop_score
+                                        trk["best_crop_size"] = veh_crop.size
+                            else:
+                                crop_score = trk.get("best_crop_score", 0.0)
 
                         # Collect high-quality vehicle crops for track appearance embedding
                         if "crops" not in trk:
@@ -879,44 +1040,50 @@ class ManagedCameraWorker:
                         has_enough_reads = trk.get("ocr_success_count", 0) >= 3
                         in_ocr = trk.get("ocr_in_flight", False)
 
-                        # Rank plate candidate crop
-                        plate_crop = extract_plate_crop(veh_crop) if veh_crop is not None and veh_crop.size > 0 else None
-                        cand_eval = score_candidate_frame(
-                            crop=plate_crop,
-                            bbox=[x1, y1, x2, y2],
-                            frame_shape=resized_raw.shape,
-                            det_conf=conf,
-                        )
-                        trk["best_candidate_score"] = max(trk.get("best_candidate_score", 0.0), cand_eval["composite_score"])
+                        # Pre-filter before expensive plate localization
+                        plate_crop = None
+                        cand_eval = {"composite_score": 0.5, "is_promising": True}
 
-                        should_ocr = (
-                            ocr_runs_this_frame < 2
+                        can_try_ocr = (
+                            ocr_runs_this_frame < 1
                             and not is_confirmed
                             and not has_enough_reads
                             and not in_ocr
-                            and track_ocr_attempts < 10
-                            and (cand_eval["is_promising"] or track_ocr_attempts < 3 or is_new)
+                            and track_ocr_attempts < 6
+                            and trk["frames"] >= 2
                             and veh_crop.size > 0
                             and veh_crop.shape[1] >= 50
                             and veh_crop.shape[0] >= 35
-                            and (frame_id - last_ocr >= 8 or is_new)
+                            and (frame_id - last_ocr >= 10 or is_new)
                         )
 
-                        if should_ocr:
-                            trk["last_ocr_frame"] = frame_id
-                            trk["ocr_attempts"] = track_ocr_attempts + 1
-                            trk["ocr_in_flight"] = True
-                            ocr_runs_this_frame += 1
-                            self._bg_executor.submit(
-                                self._async_ocr_task,
-                                matched_id,
-                                track_id_str,
-                                frame_id,
-                                plate_crop.copy() if plate_crop is not None and plate_crop.size > 0 else None,
-                                veh_crop.copy() if veh_crop is not None and veh_crop.size > 0 else None,
-                                self.dataset_generation,
-                                cand_eval["composite_score"],
+                        if can_try_ocr:
+                            plate_crop = extract_plate_crop(veh_crop)
+                            cand_eval = score_candidate_frame(
+                                crop=plate_crop,
+                                bbox=[x1, y1, x2, y2],
+                                frame_shape=resized_raw.shape,
+                                det_conf=conf,
                             )
+                            trk["best_candidate_score"] = max(trk.get("best_candidate_score", 0.0), cand_eval["composite_score"])
+
+                            if cand_eval["is_promising"] or track_ocr_attempts < 2:
+                                trk["last_ocr_frame"] = frame_id
+                                trk["ocr_attempts"] = track_ocr_attempts + 1
+                                trk["ocr_in_flight"] = True
+                                if self._submit_bg_task(
+                                    self._async_ocr_task,
+                                    matched_id,
+                                    track_id_str,
+                                    frame_id,
+                                    plate_crop.copy() if plate_crop is not None and plate_crop.size > 0 else None,
+                                    veh_crop.copy() if veh_crop is not None and veh_crop.size > 0 else None,
+                                    self.dataset_generation,
+                                    cand_eval["composite_score"],
+                                ):
+                                    ocr_runs_this_frame += 1
+                                else:
+                                    trk["ocr_in_flight"] = False
 
                         fused_record = self.fusion.fuse_track(
                             camera_id=self.camera_id,
@@ -1011,7 +1178,7 @@ class ManagedCameraWorker:
                                     trk["persist_in_flight"] = True
                                     best_crop_copy = trk.get("best_crop").copy() if trk.get("best_crop") is not None else None
                                     crops_copy = [c.copy() for c in trk.get("crops", [])]
-                                    self._bg_executor.submit(
+                                    if not self._submit_bg_task(
                                         self._async_persist_observation,
                                         matched_id,
                                         track_id_str,
@@ -1024,21 +1191,26 @@ class ManagedCameraWorker:
                                         crops_copy,
                                         trk.get("best_crop_score", 0.0),
                                         self.dataset_generation,
-                                    )
+                                    ):
+                                        trk["persist_in_flight"] = False
                             elif trk.get("obs_uuid") and settings.APPEARANCE_REID_ENABLED and not trk.get("emb_in_flight", False):
-                                # Continuous upgrade: If track lacks embedding or current crop is significantly better (+0.15 score)
+                                # Re-ID optimization: Only run Re-ID if initial embedding is missing or track needs identity verification
                                 needs_initial_emb = not trk.get("has_embedding", False)
-                                is_significant_upgrade = crop_score > (trk.get("last_embedded_score", 0.0) + 0.15)
-                                if (needs_initial_emb or is_significant_upgrade) and veh_crop is not None and veh_crop.size > 0:
+                                needs_reverification = trk.get("needs_reid_verification", False)
+                                if (needs_initial_emb or needs_reverification) and veh_crop is not None and veh_crop.size > 0:
                                     trk["emb_in_flight"] = True
-                                    self._bg_executor.submit(
+                                    if not self._submit_bg_task(
                                         self._async_upgrade_embedding,
                                         matched_id,
                                         trk["obs_uuid"],
                                         veh_crop.copy(),
                                         crop_score,
                                         self.dataset_generation,
-                                    )
+                                    ):
+                                        trk["emb_in_flight"] = False
+                                elif trk.get("has_embedding", False):
+                                    # Stable track: reuse existing embedding
+                                    perf_metrics.record_reid_call(latency_ms=0.0, reused=True)
 
                         box_w = max(1, x2 - x1)
                         box_h = max(1, y2 - y1)
@@ -1064,6 +1236,8 @@ class ManagedCameraWorker:
                                 "status": "PASSING BY" if is_moving else "MONITORING",
                             }
 
+                    self._cached_plot_boxes = new_cached_boxes
+
                     # Finalize tracks that have exited the field of view (not seen in 30 frames)
                     stale_ids = [
                         tid for tid, t in self.vehicle_tracks.items()
@@ -1082,13 +1256,14 @@ class ManagedCameraWorker:
                         ):
                             t["emb_in_flight"] = True
                             best_crop_copy = t.get("best_crop").copy() if t.get("best_crop") is not None else None
-                            self._bg_executor.submit(
+                            if not self._submit_bg_task(
                                 self._async_finalize_embedding,
                                 st_id,
                                 t["obs_uuid"],
                                 best_crop_copy,
                                 self.dataset_generation,
-                            )
+                            ):
+                                t["emb_in_flight"] = False
 
                     # Prune stale tracks when tracking table grows too large
                     if len(self.vehicle_tracks) > 300:
@@ -1102,7 +1277,7 @@ class ManagedCameraWorker:
                             get_demo_generator().clear_track(getattr(self, "scenario", "S05") or "S05", self.camera_id, f"TRK-{st:03d}")
 
             except Exception as e:
-                pass
+                logger.warning(f"YOLO tracking error in camera {self.camera_id}: {e}")
 
         cv2.putText(
             yolo_frame,
@@ -1119,6 +1294,8 @@ class ManagedCameraWorker:
 
         with self._lock:
             if (stop_event is not None and (stop_event.is_set() or self._generation != generation)) or not self._running:
+                return
+            if not self.enabled:
                 return
             if raw_bytes is not None:
                 self.cached_raw_jpeg = raw_bytes
@@ -1153,28 +1330,57 @@ class ManagedCameraWorker:
 
             now_iso = datetime.now(timezone.utc).isoformat()
             detected_candidates: List[Tuple[Dict[str, Any], str]] = []
+            ocr_conf_thresh = float(getattr(settings, "OCR_CONFIDENCE_THRESHOLD", 0.50))
+            short_circuited = False
+            fallbacks_run = 0
+            t_ocr_start = time.perf_counter()
 
-            # 1. Generate and test controlled preprocessing variants
-            if plate_crop is not None and plate_crop.size > 0:
-                variants = generate_preprocessing_variants(
+            # 1. ALWAYS try ORIGINAL crop first (Short-Circuit Strategy)
+            if plate_crop is not None and plate_crop.size > 0 and plate_crop.shape[1] >= 24 and plate_crop.shape[0] >= 10:
+                orig_variants = generate_preprocessing_variants(
                     plate_crop,
-                    limit_variants=["ORIGINAL", "UPSCALE_2X", "CLAHE", "DENOISED_SHARPEN", "ADAPTIVE_THRESH"],
+                    limit_variants=["ORIGINAL"],
                 )
-                for var_name, var_img in variants:
-                    var_ocr = read_plate_image(var_img, min_confidence=0.20)
-                    if var_ocr:
-                        for item in var_ocr:
-                            detected_candidates.append((item, var_name))
-                        # If a very high confidence read is obtained, stop testing remaining variants
-                        if any(item.get("confidence", 0.0) >= 0.80 for item in var_ocr):
-                            break
+                orig_img = orig_variants[0][1] if orig_variants else plate_crop
+                orig_ocr = read_plate_image(orig_img, min_confidence=0.20)
+                if orig_ocr:
+                    for item in orig_ocr:
+                        detected_candidates.append((item, "ORIGINAL"))
+                    best_orig_conf = max((float(item.get("confidence", 0.0)) for item in orig_ocr), default=0.0)
+                    if best_orig_conf >= ocr_conf_thresh:
+                        short_circuited = True
 
-            # 2. Fallback to vehicle crop if plate crop yielded no detections
-            if not detected_candidates and veh_crop is not None and veh_crop.size > 0:
+                # 2. If ORIGINAL failed or confidence was below threshold, execute fallback variants
+                if not short_circuited:
+                    fallback_variants = generate_preprocessing_variants(
+                        plate_crop,
+                        limit_variants=["UPSCALE_2X", "CLAHE", "DENOISED_SHARPEN", "ADAPTIVE_THRESH"],
+                    )
+                    for var_name, var_img in fallback_variants:
+                        fallbacks_run += 1
+                        var_ocr = read_plate_image(var_img, min_confidence=0.20)
+                        if var_ocr:
+                            for item in var_ocr:
+                                detected_candidates.append((item, var_name))
+                            # If a high-confidence read is achieved during fallbacks, stop trying further variants
+                            if any(float(item.get("confidence", 0.0)) >= ocr_conf_thresh for item in var_ocr):
+                                break
+
+            # 3. Fallback to vehicle crop only if plate crop was absent and vehicle is sufficiently large
+            if not detected_candidates and (plate_crop is None or plate_crop.size == 0) and veh_crop is not None and veh_crop.size > 0 and veh_crop.shape[1] >= 100 and veh_crop.shape[0] >= 75:
+                fallbacks_run += 1
                 veh_ocr = read_plate_image(veh_crop, min_confidence=0.20)
                 if veh_ocr:
                     for item in veh_ocr:
                         detected_candidates.append((item, "VEH_CROP"))
+
+            ocr_latency_ms = (time.perf_counter() - t_ocr_start) * 1000.0
+            get_performance_metrics().record_ocr_attempt(
+                latency_ms=ocr_latency_ms,
+                short_circuited=short_circuited,
+                fallbacks_count=fallbacks_run,
+                plate_found=bool(detected_candidates),
+            )
 
             # 3. Add all valid candidate readings into the track temporal consensus
             for ocr_item, var_name in detected_candidates:
@@ -1383,6 +1589,7 @@ class ManagedCameraWorker:
                 try:
                     from app.modules.appearance import get_appearance_extractor
                     extractor = get_appearance_extractor()
+                    t_reid_start = time.perf_counter()
                     if best_crop is not None:
                         appearance_embedding, emb_reason = extractor.extract_with_reason(
                             best_crop, min_size=settings.APPEARANCE_MIN_CROP_SIZE
@@ -1394,7 +1601,9 @@ class ManagedCameraWorker:
                     else:
                         emb_reason = "crop_pending_better_frame"
 
+                    reid_dt = (time.perf_counter() - t_reid_start) * 1000.0
                     if appearance_embedding is not None:
+                        get_performance_metrics().record_reid_call(latency_ms=reid_dt, reused=False)
                         emb_status = "complete"
                         emb_reason = None
                 except Exception as emb_err:
@@ -1431,6 +1640,7 @@ class ManagedCameraWorker:
                             self.persisted_tracks.add(matched_id)
                             if appearance_embedding is not None:
                                 trk["has_embedding"] = True
+                                trk["appearance_embedding"] = appearance_embedding
                                 trk["last_embedded_score"] = crop_score
                             pending_update = trk.pop("pending_plate_update", None)
                     if pending_update:
@@ -1464,8 +1674,11 @@ class ManagedCameraWorker:
                 return
             from app.modules.appearance import get_appearance_extractor
             extractor = get_appearance_extractor()
+            t_reid_start = time.perf_counter()
             upg_emb, upg_reason = extractor.extract_with_reason(crop, min_size=settings.APPEARANCE_MIN_CROP_SIZE)
+            reid_dt = (time.perf_counter() - t_reid_start) * 1000.0
             if upg_emb is not None:
+                get_performance_metrics().record_reid_call(latency_ms=reid_dt, reused=False)
                 from sqlalchemy.orm import Session
                 with Session(self._db_engine) as session:
                     upsert_observation_embedding(
@@ -1479,6 +1692,7 @@ class ManagedCameraWorker:
                     trk = self.vehicle_tracks.get(matched_id)
                     if trk:
                         trk["has_embedding"] = True
+                        trk["appearance_embedding"] = upg_emb
                         trk["last_embedded_score"] = crop_score
         except Exception as upg_err:
             logger.debug(f"Async embedding upgrade error: {upg_err}")
@@ -1497,9 +1711,13 @@ class ManagedCameraWorker:
             fin_reason = "crop_too_small_or_empty"
             if best_crop is not None:
                 from app.modules.appearance import get_appearance_extractor
+                t_reid_start = time.perf_counter()
                 fin_emb, fin_reason = get_appearance_extractor().extract_with_reason(
                     best_crop, min_size=settings.APPEARANCE_MIN_CROP_SIZE
                 )
+                reid_dt = (time.perf_counter() - t_reid_start) * 1000.0
+                if fin_emb is not None:
+                    get_performance_metrics().record_reid_call(latency_ms=reid_dt, reused=False)
             from sqlalchemy.orm import Session
             with Session(self._db_engine) as session:
                 if fin_emb is not None:
@@ -1529,6 +1747,11 @@ class ManagedCameraWorker:
     def get_next_frame(self, last_frame_idx: int, annotate: bool = False, timeout: float = 0.2) -> Tuple[Optional[bytes], int]:
         """Thread-safe condition-driven frame waiter that eliminates polling, duplicate frames, and video stutter."""
         with self._frame_cond:
+            if not self.enabled:
+                if self.cached_raw_jpeg is None:
+                    self._render_disabled_frame()
+                self._frame_cond.wait(timeout=timeout)
+                return (self.cached_yolo_jpeg or self.cached_raw_jpeg), last_frame_idx
             if self.current_frame_idx == last_frame_idx or self.current_frame_idx <= 0:
                 self._frame_cond.wait(timeout=timeout)
             frame = (self.cached_yolo_jpeg or self.cached_raw_jpeg) if annotate else self.cached_raw_jpeg
@@ -1558,6 +1781,7 @@ class CameraScenarioManager:
         self.controller = CameraPlaybackController()
         self.cameras: Dict[str, ManagedCameraWorker] = {}
         self.active_dataset: str = "S05"
+        self.active_camera_count: int = getattr(settings, "ACTIVE_CAMERA_COUNT", 4)
         self._dataset_generation: int = 0
         self._bg_timer_thread = threading.Thread(target=self._clock_tick_loop, daemon=True)
         self._bg_timer_running = True
@@ -1600,9 +1824,18 @@ class CameraScenarioManager:
         if saved_configs.get("sync_mode"):
             self.controller.sync_mode = saved_configs["sync_mode"]
 
+        # Active camera count (from saved config or settings)
+        saved_active_count = saved_configs.get("active_camera_count")
+        if saved_active_count in [2, 4]:
+            self.active_camera_count = int(saved_active_count)
+        else:
+            self.active_camera_count = getattr(settings, "ACTIVE_CAMERA_COUNT", 4)
+
         cameras_data = saved_configs.get("cameras", {})
-        for cid in REQUIRED_CAMERAS:
+        for idx, cid in enumerate(REQUIRED_CAMERAS):
             prof_cam = profile["cameras"][cid]
+            # In 2-camera mode, enable only the first 2 cameras unless configured otherwise
+            is_enabled_default = (idx < self.active_camera_count)
             default_item = {
                 "camera_id": cid,
                 "name": prof_cam["name"],
@@ -1614,11 +1847,13 @@ class CameraScenarioManager:
                 "latitude": prof_cam["latitude"],
                 "longitude": prof_cam["longitude"],
                 "location": prof_cam["location"],
-                "enabled": True,
+                "enabled": is_enabled_default,
             }
             cfg = cameras_data.get(cid, default_item)
             if cfg.get("scenario") != active_ds:
                 cfg = default_item
+            else:
+                cfg["enabled"] = is_enabled_default
             w = ManagedCameraWorker(cid, cfg, self.controller)
             w.dataset_generation = self._dataset_generation
             self.cameras[cid] = w
@@ -1645,6 +1880,7 @@ class CameraScenarioManager:
         try:
             data = {
                 "active_dataset": self.active_dataset,
+                "active_camera_count": self.active_camera_count,
                 "sync_mode": self.controller.sync_mode,
                 "loop_scenario": self.controller.loop_scenario,
                 "cameras": {cid: worker.to_dict() for cid, worker in self.cameras.items()},
@@ -1698,7 +1934,7 @@ class CameraScenarioManager:
 
             # 5. Flush and reconfigure each camera worker
             try:
-                for cid in REQUIRED_CAMERAS:
+                for idx, cid in enumerate(REQUIRED_CAMERAS):
                     w = self.cameras.get(cid)
                     if not w:
                         continue
@@ -1722,7 +1958,12 @@ class CameraScenarioManager:
                         w.recent_detections.clear()
                         w.persisted_tracks.clear()
                         w.fusion = TemporalOCRFusion()
-                        w.status_label = "INITIALIZING"
+                        w.enabled = (idx < self.active_camera_count)
+                        if not w.enabled:
+                            w.status_label = "DISABLED"
+                            w._render_disabled_frame()
+                        else:
+                            w.status_label = "INITIALIZING"
                         w.active_vehicle_data = {
                             "camera_id": w.camera_id,
                             "camera_name": w.name,
@@ -1868,8 +2109,67 @@ class CameraScenarioManager:
         with worker._lock:
             worker.enabled = bool(enabled)
             worker.status_label = "PROCESSING" if worker.enabled else "DISABLED"
+            if not worker.enabled:
+                worker._render_disabled_frame()
+        with worker._frame_cond:
+            worker._frame_cond.notify_all()
         self.save_configuration()
         return worker.to_dict()
+
+    def get_active_camera_count(self) -> int:
+        with self._lock:
+            return self.active_camera_count
+
+    def get_active_camera_mode_info(self) -> Dict[str, Any]:
+        with self._lock:
+            active_cams = [cid for cid, w in self.cameras.items() if w.enabled]
+            disabled_cams = [cid for cid, w in self.cameras.items() if not w.enabled]
+            return {
+                "active_camera_count": self.active_camera_count,
+                "active_cameras": active_cams,
+                "disabled_cameras": disabled_cams,
+                "total_cameras": len(self.cameras),
+            }
+
+    def set_active_camera_count(self, count: int, primary_cam_id: Optional[str] = None) -> Dict[str, Any]:
+        """Dynamically switch between 2-camera and 4-camera modes to reduce processing load."""
+        with self._lock:
+            if count not in [2, 4]:
+                count = 2 if count <= 2 else 4
+            self.active_camera_count = count
+
+            clean_primary = (primary_cam_id or "").lower().strip()
+
+            if count == 4:
+                active_ids = set(REQUIRED_CAMERAS)
+            else:
+                # 2-camera mode: if primary camera is c028 or c029, activate [c028, c029]; else [c020, c023]
+                if clean_primary in ["c028", "c029"]:
+                    active_ids = {"c028", "c029"}
+                elif clean_primary in ["c020", "c023"]:
+                    active_ids = {"c020", "c023"}
+                else:
+                    active_ids = set(REQUIRED_CAMERAS[:2])
+
+            for cid in REQUIRED_CAMERAS:
+                worker = self.cameras.get(cid)
+                if not worker:
+                    continue
+                is_enabled = cid in active_ids
+                with worker._lock:
+                    prev_enabled = worker.enabled
+                    worker.enabled = is_enabled
+                    if not is_enabled:
+                        worker.status_label = "DISABLED"
+                        worker._render_disabled_frame()
+                    elif not prev_enabled:
+                        worker.status_label = "PROCESSING"
+                with worker._frame_cond:
+                    worker._frame_cond.notify_all()
+
+            self.save_configuration()
+            logger.info(f"Active camera mode set to {count}-camera mode. Active: {sorted(list(active_ids))}")
+            return self.get_active_camera_mode_info()
 
     def update_camera_settings(
         self,

@@ -41,6 +41,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             cameras={data.cameras}
             selectedCameraId={selectedCameraId}
             onSelectCamera={onSelectCamera}
+            activeCameraCount={data.activeCameraCount}
           />
 
           {/* 2. Recent Alerts Section (Beneath Cameras Section) */}

@@ -45,6 +45,11 @@ class Settings(BaseSettings):
 
     # Perception / Detection model
     YOLO_MODEL_PATH: str = "models/yolov8n.pt"
+    YOLO_DEVICE: str = "auto"  # "auto", "cpu", "cuda", "0"
+    YOLO_HALF_PRECISION: bool = True  # FP16 half-precision on Tensor Cores for 2x faster GPU inference
+    YOLO_FRAME_STRIDE: int = 1  # 1 = every frame, 2 = every 2nd frame, 3 = every 3rd frame
+    OCR_CONFIDENCE_THRESHOLD: float = 0.50  # Short-circuit confidence threshold for PaddleOCR
+    ACTIVE_CAMERA_COUNT: int = 4  # Number of cameras actively running models (2 or 4)
 
     model_config = {
         "env_file": [".env", "../.env"],

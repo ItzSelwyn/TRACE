@@ -1,0 +1,159 @@
+{
+  "timestamp": "2026-10-18 23:33:10",
+  "total_elapsed_time_s": 20.86,
+  "perception_yolo": {
+    "frames_evaluated": 50,
+    "cold_start_latency_ms": 2055.04,
+    "steady_state_latency_ms": 35.05,
+    "steady_state_fps": 28.5,
+    "mean_latency_ms": 75.45,
+    "median_latency_ms": 34.11,
+    "min_latency_ms": 30.29,
+    "max_latency_ms": 2055.04,
+    "throughput_fps": 13.3,
+    "total_detections": 510,
+    "avg_detections_per_frame": 10.2,
+    "mean_confidence": 0.6241,
+    "unique_tracks": 19,
+    "class_breakdown": {
+      "CAR": 509,
+      "TRUCK": 1,
+      "BUS": 0,
+      "MOTORCYCLE": 0
+    }
+  },
+  "perception_ocr": {
+    "samples_evaluated": 10,
+    "exact_match_accuracy_pct": 90.0,
+    "exact_matches_count": 9,
+    "character_level_accuracy_pct": 99.0,
+    "mean_confidence_pct": 94.5,
+    "cold_start_latency_ms": 10258.7,
+    "steady_state_latency_ms": 326.6,
+    "mean_latency_ms": 1319.8,
+    "samples": [
+      {
+        "image": "TN1.jpg",
+        "ground_truth": "TN63BV7954",
+        "predicted": "TN63B7954",
+        "confidence": 0.949,
+        "exact_match": false,
+        "character_accuracy": 0.9,
+        "latency_ms": 10258.7
+      },
+      {
+        "image": "TN10.jpg",
+        "ground_truth": "TN69AJ4455",
+        "predicted": "TN69AJ4455",
+        "confidence": 0.947,
+        "exact_match": true,
+        "character_accuracy": 1.0,
+        "latency_ms": 641.4
+      },
+      {
+        "image": "TN2.jpg",
+        "ground_truth": "TN76V1978",
+        "predicted": "TN76V1978",
+        "confidence": 0.969,
+        "exact_match": true,
+        "character_accuracy": 1.0,
+        "latency_ms": 183.4
+      },
+      {
+        "image": "TN3.jpg",
+        "ground_truth": "TN02AU9295",
+        "predicted": "TN02AU9295",
+        "confidence": 0.925,
+        "exact_match": true,
+        "character_accuracy": 1.0,
+        "latency_ms": 218.3
+      },
+      {
+        "image": "TN4.jpg",
+        "ground_truth": "TN10AR0131",
+        "predicted": "TN10AR0131",
+        "confidence": 0.979,
+        "exact_match": true,
+        "character_accuracy": 1.0,
+        "latency_ms": 457.0
+      },
+      {
+        "image": "TN5.jpg",
+        "ground_truth": "TN47T4464",
+        "predicted": "TN47T4464",
+        "confidence": 0.953,
+        "exact_match": true,
+        "character_accuracy": 1.0,
+        "latency_ms": 241.5
+      },
+      {
+        "image": "TN6.jpg",
+        "ground_truth": "TN19F0816",
+        "predicted": "TN19F0816",
+        "confidence": 0.965,
+        "exact_match": true,
+        "character_accuracy": 1.0,
+        "latency_ms": 513.3
+      },
+      {
+        "image": "TN7.jpg",
+        "ground_truth": "TN07BT5778",
+        "predicted": "TN07BT5778",
+        "confidence": 0.905,
+        "exact_match": true,
+        "character_accuracy": 1.0,
+        "latency_ms": 241.9
+      },
+      {
+        "image": "TN8.jpg",
+        "ground_truth": "TN07AP0659",
+        "predicted": "TN07AP0659",
+        "confidence": 0.926,
+        "exact_match": true,
+        "character_accuracy": 1.0,
+        "latency_ms": 245.0
+      },
+      {
+        "image": "TN9.jpg",
+        "ground_truth": "TN19Q0835",
+        "predicted": "TN19Q0835",
+        "confidence": 0.936,
+        "exact_match": true,
+        "character_accuracy": 1.0,
+        "latency_ms": 197.2
+      }
+    ]
+  },
+  "appearance_reid": {
+    "embedding_dim": 512,
+    "mean_latency_ms": 43.87,
+    "throughput_crops_per_sec": 22.8,
+    "mean_l2_norm": 1.0,
+    "intra_vehicle_cosine_sim": 0.9881,
+    "inter_vehicle_cosine_sim": 0.6489,
+    "separation_margin": 0.3393
+  },
+  "identity_fusion": {
+    "matching_score": 0.944,
+    "matching_status": "CONFIRMED",
+    "non_matching_score": 0.537,
+    "non_matching_status": "LOW_CONFIDENCE",
+    "anomaly_flag_verified": true,
+    "anomaly_implied_speed_kmph": null,
+    "mean_latency_microseconds": 868.0,
+    "throughput_evals_per_sec": 17146.0
+  },
+  "spatial_graph": {
+    "topology_nodes": 14,
+    "topology_edges": 19,
+    "sample_shortest_path": [
+      "c1000000-0000-0000-0000-000000000001",
+      "c2000000-0000-0000-0000-000000000002",
+      "c3000000-0000-0000-0000-000000000003",
+      "c4000000-0000-0000-0000-000000000004"
+    ],
+    "min_travel_time_s": 60,
+    "mean_query_latency_us": 84.2,
+    "throughput_queries_per_sec": 11880.0
+  }
+}

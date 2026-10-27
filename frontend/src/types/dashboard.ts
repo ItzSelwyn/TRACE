@@ -20,6 +20,7 @@ export interface CameraFeedItem {
   timestamp: string;
   feedImageUrl: string;
   status: 'online' | 'degraded' | 'down';
+  enabled?: boolean;
 }
 
 export interface RecentDetectionItem {
@@ -77,4 +78,5 @@ export interface DashboardDataPayload {
   modelAnalysis: ModelAnalysisData;
   recentAlerts: DashboardAlertItem[];
   networkStats: NetworkAnalysisStats;
+  activeCameraCount?: number;
 }
